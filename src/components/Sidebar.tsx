@@ -13,7 +13,6 @@ import {
   Globe, 
   BarChart3, 
   Settings, 
-  CreditCard,
   LogOut,
   ExternalLink,
   Menu,
@@ -41,7 +40,6 @@ const menuItems = [
   { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/report", label: "レポート", icon: BarChart3 },
   { href: "/shop", label: "設定", icon: Settings },
-  { href: "/bill", label: "請求", icon: CreditCard },
 ];
 
 export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
