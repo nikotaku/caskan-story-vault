@@ -81,19 +81,40 @@ export default function Report() {
 
   const fetchCastStats = async () => {
     try {
-      const { data: casts, error } = await supabase
-        .from('casts')
-        .select('name, month_sales, work_days')
-        .order('month_sales', { ascending: false })
-        .limit(10);
+      // 予約データからキャストごとの売上を計算
+      const { data: reservations, error: resError } = await supabase
+        .from('reservations')
+        .select('cast_id, price, casts(name)')
+        .in('status', ['confirmed', 'completed']);
 
-      if (error) throw error;
+      if (resError) throw resError;
 
-      setCastStats(casts?.map(c => ({
-        name: c.name,
-        sales: c.month_sales,
-        workDays: c.work_days,
-      })) || []);
+      // キャストごとに売上を集計
+      const castSalesMap = new Map<string, { name: string; sales: number; count: number }>();
+      
+      reservations?.forEach(r => {
+        if (r.casts && Array.isArray(r.casts) && r.casts[0]) {
+          const castName = r.casts[0].name;
+          const current = castSalesMap.get(castName) || { name: castName, sales: 0, count: 0 };
+          castSalesMap.set(castName, {
+            name: castName,
+            sales: current.sales + r.price,
+            count: current.count + 1,
+          });
+        }
+      });
+
+      // 売上順にソート
+      const sortedStats = Array.from(castSalesMap.values())
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10)
+        .map(c => ({
+          name: c.name,
+          sales: c.sales,
+          workDays: c.count,
+        }));
+
+      setCastStats(sortedStats);
     } catch (error) {
       console.error('Error fetching cast stats:', error);
     }

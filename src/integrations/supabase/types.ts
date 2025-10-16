@@ -16,55 +16,58 @@ export type Database = {
     Tables: {
       casts: {
         Row: {
-          age: number
           created_at: string
+          execution_date_end: string | null
+          execution_date_start: string | null
+          hp_notice: string | null
           id: string
           join_date: string
-          measurements: string | null
-          month_sales: number
           name: string
           photo: string | null
+          photos: string[] | null
           profile: string | null
+          room: string | null
           status: string
-          total_sales: number
           type: string
           updated_at: string
-          waiting_time: string | null
-          work_days: number
+          upload_check: string | null
+          x_account: string | null
         }
         Insert: {
-          age: number
           created_at?: string
+          execution_date_end?: string | null
+          execution_date_start?: string | null
+          hp_notice?: string | null
           id?: string
           join_date?: string
-          measurements?: string | null
-          month_sales?: number
           name: string
           photo?: string | null
+          photos?: string[] | null
           profile?: string | null
+          room?: string | null
           status?: string
-          total_sales?: number
           type: string
           updated_at?: string
-          waiting_time?: string | null
-          work_days?: number
+          upload_check?: string | null
+          x_account?: string | null
         }
         Update: {
-          age?: number
           created_at?: string
+          execution_date_end?: string | null
+          execution_date_start?: string | null
+          hp_notice?: string | null
           id?: string
           join_date?: string
-          measurements?: string | null
-          month_sales?: number
           name?: string
           photo?: string | null
+          photos?: string[] | null
           profile?: string | null
+          room?: string | null
           status?: string
-          total_sales?: number
           type?: string
           updated_at?: string
-          waiting_time?: string | null
-          work_days?: number
+          upload_check?: string | null
+          x_account?: string | null
         }
         Relationships: []
       }

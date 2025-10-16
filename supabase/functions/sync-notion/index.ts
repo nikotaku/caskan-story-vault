@@ -59,38 +59,41 @@ serve(async (req) => {
       try {
         const props = page.properties;
 
-        // プロパティから値を抽出（Notionのプロパティ名に応じて調整が必要）
+        // プロパティから値を抽出
         const name = props.名前?.title?.[0]?.plain_text || props.Name?.title?.[0]?.plain_text || '';
-        const age = props.年齢?.number || props.Age?.number || 23;
-        const type = props.ランク?.select?.name || props.Type?.select?.name || 'スタンダード';
-        const price = props.料金?.number || props.Price?.number || 12000;
-        const measurements = props.スリーサイズ?.rich_text?.[0]?.plain_text || props.Measurements?.rich_text?.[0]?.plain_text || '';
+        const room = props.ルーム?.select?.name || props.Room?.select?.name || null;
+        const type = props.type?.select?.name || props.Type?.select?.name || 'インルーム';
+        const status = props.ステータス?.select?.name || props.Status?.select?.name || '未着手';
         const profile = props.プロフィール?.rich_text?.[0]?.plain_text || props.Profile?.rich_text?.[0]?.plain_text || '';
-        const phone = props.電話番号?.phone_number || props.Phone?.phone_number || null;
         
-        // 画像URLを取得（複数の方法で試行）
-        let photo = null;
-        
-        // 方法1: Filesプロパティから
-        if (props.写真?.files?.[0]) {
-          const file = props.写真.files[0];
-          photo = file.type === 'external' ? file.external.url : file.file.url;
-        } else if (props.Photo?.files?.[0]) {
-          const file = props.Photo.files[0];
-          photo = file.type === 'external' ? file.external.url : file.file.url;
+        // 実行日の日付範囲を取得
+        let execution_date_start = null;
+        let execution_date_end = null;
+        if (props.実行日?.date || props['Execution Date']?.date) {
+          const dateField = props.実行日?.date || props['Execution Date']?.date;
+          execution_date_start = dateField.start || null;
+          execution_date_end = dateField.end || null;
         }
         
-        // 方法2: URLプロパティから
-        if (!photo && props.画像URL?.url) {
-          photo = props.画像URL.url;
-        } else if (!photo && props.ImageURL?.url) {
-          photo = props.ImageURL.url;
+        // HPのノティックとアップロードチェックのステータス
+        const hp_notice = props.HPのノティック?.select?.name || props['HP Notice']?.select?.name || null;
+        const upload_check = props.エスタジフトチェック?.select?.name || props['Upload Check']?.select?.name || null;
+        
+        // Xアカウント
+        const x_account = props.Xアカウント?.url || props['X Account']?.url || null;
+        
+        // 写真5枚（複数の画像URLを配列として取得）
+        const photos: string[] = [];
+        if (props.写真5枚?.files || props['5 Photos']?.files) {
+          const photoFiles = props.写真5枚?.files || props['5 Photos']?.files || [];
+          for (const file of photoFiles.slice(0, 5)) { // 最大5枚
+            const url = file.type === 'external' ? file.external.url : file.file.url;
+            if (url) photos.push(url);
+          }
         }
         
-        // 方法3: ページのカバー画像から
-        if (!photo && page.cover) {
-          photo = page.cover.type === 'external' ? page.cover.external.url : page.cover.file.url;
-        }
+        // 後方互換性のため、最初の写真をphotoフィールドにも設定
+        const photo = photos[0] || null;
 
         if (!name) {
           console.warn(`Skipping page ${page.id}: no name found`);
@@ -102,15 +105,17 @@ serve(async (req) => {
           .from('casts')
           .upsert({
             name,
-            age,
+            room,
             type,
-            price,
-            measurements,
+            status,
             profile,
-            phone,
-            photo,
-            status: 'offline',
-            rating: 0,
+            execution_date_start,
+            execution_date_end,
+            hp_notice,
+            upload_check,
+            photos,
+            x_account,
+            photo, // 後方互換性のため
           }, {
             onConflict: 'name',
             ignoreDuplicates: false,

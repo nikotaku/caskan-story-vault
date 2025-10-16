@@ -9,13 +9,15 @@ import { Star, Calendar, ArrowLeft, Phone } from "lucide-react";
 interface Cast {
   id: string;
   name: string;
-  age: number;
   type: string;
   status: string;
   photo: string | null;
+  photos: string[] | null;
   profile: string | null;
-  measurements: string | null;
-  waiting_time: string | null;
+  room: string | null;
+  x_account: string | null;
+  execution_date_start: string | null;
+  execution_date_end: string | null;
 }
 
 const CastDetail = () => {
@@ -164,27 +166,32 @@ const CastDetail = () => {
                     <div className="flex items-center gap-4 mb-2">
                       <h1 className="text-3xl font-bold">{cast.name}</h1>
                       <Badge variant="outline" className="text-base">
-                        {cast.type}
+                        {cast.room || cast.type}
                       </Badge>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-muted-foreground">{cast.age}歳</span>
                     </div>
                   </div>
 
-                  {cast.measurements && (
+                  {(cast.execution_date_start || cast.execution_date_end) && (
                     <div>
-                      <h3 className="font-bold mb-2">スリーサイズ</h3>
-                      <p className="text-muted-foreground">{cast.measurements}</p>
+                      <h3 className="font-bold mb-2">実行期間</h3>
+                      <p className="text-muted-foreground">
+                        {cast.execution_date_start && new Date(cast.execution_date_start).toLocaleDateString('ja-JP')}
+                        {cast.execution_date_end && ` → ${new Date(cast.execution_date_end).toLocaleDateString('ja-JP')}`}
+                      </p>
                     </div>
                   )}
 
-                  {cast.waiting_time && cast.status === "waiting" && (
+                  {cast.x_account && (
                     <div>
-                      <h3 className="font-bold mb-2">案内可能時間</h3>
-                      <p className="text-lg text-green-600 font-medium">
-                        {cast.waiting_time}
-                      </p>
+                      <h3 className="font-bold mb-2">Xアカウント</h3>
+                      <a 
+                        href={cast.x_account} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        {cast.x_account}
+                      </a>
                     </div>
                   )}
 

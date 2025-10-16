@@ -19,17 +19,18 @@ import { supabase } from "@/integrations/supabase/client";
 interface Cast {
   id: string;
   name: string;
-  age: number;
   type: string;
-  status: "waiting" | "busy" | "offline";
+  status: string;
   photo: string | null;
+  photos: string[] | null;
   profile: string | null;
-  measurements: string | null;
-  total_sales: number;
-  month_sales: number;
-  work_days: number;
+  room: string | null;
+  execution_date_start: string | null;
+  execution_date_end: string | null;
+  hp_notice: string | null;
+  upload_check: string | null;
+  x_account: string | null;
   join_date: string;
-  waiting_time?: string | null;
 }
 
 export default function Staff() {
@@ -44,9 +45,9 @@ export default function Staff() {
   // フォーム用の状態
   const [formData, setFormData] = useState({
     name: "",
-    age: 23,
-    type: "スタンダード",
-    measurements: "",
+    type: "インルーム",
+    room: "インルーム",
+    status: "未着手",
     profile: "",
     photo: "",
   });
@@ -131,15 +132,11 @@ export default function Staff() {
         .from('casts')
         .insert([{
           name: formData.name,
-          age: formData.age,
           type: formData.type,
-          measurements: formData.measurements,
+          room: formData.room,
+          status: formData.status,
           profile: formData.profile,
           photo: formData.photo || null,
-          status: 'offline',
-          total_sales: 0,
-          month_sales: 0,
-          work_days: 0,
         }]);
 
       if (error) throw error;
@@ -152,9 +149,9 @@ export default function Staff() {
       setIsAddDialogOpen(false);
       setFormData({
         name: "",
-        age: 23,
-        type: "スタンダード",
-        measurements: "",
+        type: "インルーム",
+        room: "インルーム",
+        status: "未着手",
         profile: "",
         photo: "",
       });
@@ -200,7 +197,7 @@ export default function Staff() {
     }
   };
 
-  const handleStatusChange = async (id: string, newStatus: "waiting" | "busy" | "offline") => {
+  const handleStatusChange = async (id: string, newStatus: string) => {
     if (!isAdmin) {
       toast({
         title: "権限エラー",
@@ -218,8 +215,7 @@ export default function Staff() {
 
       if (error) throw error;
 
-      const statusText = newStatus === "waiting" ? "待機中" : 
-                        newStatus === "busy" ? "接客中" : "退勤";
+      const statusText = newStatus;
       toast({
         title: "ステータス変更",
         description: `ステータスを「${statusText}」に変更しました`,
@@ -236,19 +232,11 @@ export default function Staff() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "waiting": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      case "busy": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-      case "offline": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+      case "派遣中": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+      case "リピート予定": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+      case "残タスク": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
+      case "未着手": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
       default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "waiting": return "待機中";
-      case "busy": return "接客中";
-      case "offline": return "退勤";
-      default: return "不明";
     }
   };
 
@@ -292,57 +280,49 @@ export default function Staff() {
                       <DialogTitle>新しいキャストを追加</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="name">キャスト名</Label>
-                          <Input 
-                            id="name" 
-                            placeholder="美咲"
-                            value={formData.name}
-                            onChange={(e) => setFormData({...formData, name: e.target.value})}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="age">年齢</Label>
-                          <Input 
-                            id="age" 
-                            type="number" 
-                            placeholder="23" 
-                            min="18" 
-                            max="50"
-                            value={formData.age}
-                            onChange={(e) => setFormData({...formData, age: parseInt(e.target.value)})}
-                          />
-                        </div>
+                      <div>
+                        <Label htmlFor="name">セラピスト名</Label>
+                        <Input 
+                          id="name" 
+                          placeholder="名前を入力"
+                          value={formData.name}
+                          onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        />
                       </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="type">ランク</Label>
+                          <Label htmlFor="room">ルーム</Label>
                           <Select 
-                            value={formData.type}
-                            onValueChange={(value) => setFormData({...formData, type: value})}
+                            value={formData.room}
+                            onValueChange={(value) => setFormData({...formData, room: value})}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="ランクを選択" />
+                              <SelectValue placeholder="ルームを選択" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="スタンダード">スタンダード</SelectItem>
-                              <SelectItem value="プレミアム">プレミアム</SelectItem>
-                              <SelectItem value="VIP">VIP</SelectItem>
+                              <SelectItem value="インルーム">インルーム</SelectItem>
+                              <SelectItem value="ラスルーム">ラスルーム</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="measurements">スリーサイズ</Label>
-                        <Input 
-                          id="measurements" 
-                          placeholder="B85-W58-H86"
-                          value={formData.measurements}
-                          onChange={(e) => setFormData({...formData, measurements: e.target.value})}
-                        />
+                        <div>
+                          <Label htmlFor="status">ステータス</Label>
+                          <Select 
+                            value={formData.status}
+                            onValueChange={(value) => setFormData({...formData, status: value})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="ステータスを選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="派遣中">派遣中</SelectItem>
+                              <SelectItem value="リピート予定">リピート予定</SelectItem>
+                              <SelectItem value="残タスク">残タスク</SelectItem>
+                              <SelectItem value="未着手">未着手</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       
                       <div>
@@ -400,10 +380,9 @@ export default function Staff() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">全ランク</SelectItem>
-                      <SelectItem value="スタンダード">スタンダード</SelectItem>
-                      <SelectItem value="プレミアム">プレミアム</SelectItem>
-                      <SelectItem value="VIP">VIP</SelectItem>
+                      <SelectItem value="all">全タイプ</SelectItem>
+                      <SelectItem value="インルーム">インルーム</SelectItem>
+                      <SelectItem value="ラスルーム">ラスルーム</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -411,10 +390,11 @@ export default function Staff() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">全状態</SelectItem>
-                      <SelectItem value="waiting">待機中</SelectItem>
-                      <SelectItem value="busy">接客中</SelectItem>
-                      <SelectItem value="offline">退勤</SelectItem>
+                      <SelectItem value="all">全ステータス</SelectItem>
+                      <SelectItem value="派遣中">派遣中</SelectItem>
+                      <SelectItem value="リピート予定">リピート予定</SelectItem>
+                      <SelectItem value="残タスク">残タスク</SelectItem>
+                      <SelectItem value="未着手">未着手</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -439,11 +419,11 @@ export default function Staff() {
                     )}
                     <div className="absolute top-2 right-2">
                       <Badge className={getStatusColor(cast.status)}>
-                        {getStatusText(cast.status)}
+                        {cast.status}
                       </Badge>
                     </div>
                     <div className="absolute top-2 left-2">
-                      <Badge variant="secondary">{cast.type}</Badge>
+                      <Badge variant="secondary">{cast.room || cast.type}</Badge>
                     </div>
                   </div>
                   
@@ -451,9 +431,9 @@ export default function Staff() {
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-lg">
-                          {cast.name} ({cast.age})
+                          {cast.name}
                         </CardTitle>
-                        <p className="text-sm text-muted-foreground">{cast.measurements}</p>
+                        {cast.room && <p className="text-sm text-muted-foreground">{cast.room}</p>}
                       </div>
                     </div>
                   </CardHeader>
@@ -464,20 +444,20 @@ export default function Staff() {
                         {cast.profile}
                       </p>
                       
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <TrendingUp size={12} />
-                          <span>今月: ¥{cast.month_sales.toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock size={12} />
-                          <span>出勤: {cast.work_days}日</span>
-                        </div>
-                      </div>
-                      
-                      {cast.status === "waiting" && cast.waiting_time && (
-                        <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                          待機時間: {cast.waiting_time}
+                      {(cast.execution_date_start || cast.execution_date_end) && (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {cast.execution_date_start && (
+                            <div className="flex items-center gap-1">
+                              <Clock size={12} />
+                              <span>開始: {new Date(cast.execution_date_start).toLocaleDateString('ja-JP')}</span>
+                            </div>
+                          )}
+                          {cast.execution_date_end && (
+                            <div className="flex items-center gap-1">
+                              <Clock size={12} />
+                              <span>終了: {new Date(cast.execution_date_end).toLocaleDateString('ja-JP')}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

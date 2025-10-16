@@ -11,11 +11,12 @@ import { Star, Search } from "lucide-react";
 interface Cast {
   id: string;
   name: string;
-  age: number;
   type: string;
   status: string;
   photo: string | null;
+  photos: string[] | null;
   profile: string | null;
+  room: string | null;
 }
 
 const Casts = () => {
@@ -214,10 +215,7 @@ const Casts = () => {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-xl font-bold">{cast.name}</h3>
-                      <Badge variant="outline">{cast.type}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm text-muted-foreground">{cast.age}歳</span>
+                      <Badge variant="outline">{cast.room || cast.type}</Badge>
                     </div>
                     {cast.profile && (
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
