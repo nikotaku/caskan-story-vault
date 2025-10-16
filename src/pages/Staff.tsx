@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
+import { NotionSync } from "@/components/NotionSync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -403,6 +404,13 @@ export default function Staff() {
                 </Dialog>
               )}
             </div>
+
+            {/* Notion Sync */}
+            {isAdmin && (
+              <div className="mb-6">
+                <NotionSync />
+              </div>
+            )}
 
             {/* Search and Filter */}
             <Card className="mb-6">
