@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -27,22 +28,18 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { href: "/", label: "ホーム", icon: Home, active: true },
-  { href: "/schedule", label: "スケジュール", icon: Calendar },
+  { href: "/", label: "ホーム", icon: Home },
+  { href: "/staff", label: "キャスト管理", icon: User },
   { href: "/shift", label: "シフト", icon: Clock },
-  { href: "/reserve", label: "予約", icon: BookOpen },
-  { href: "/customer", label: "顧客", icon: Users },
-  { href: "/cast", label: "キャスト", icon: User },
-  { href: "/system", label: "料金システム", icon: DollarSign },
-  { href: "/room", label: "ルーム", icon: MapPin },
-  { href: "/guarantee", label: "給与", icon: Wallet },
-  { href: "/expense", label: "経費", icon: Receipt },
-  { href: "/design", label: "ホームページ", icon: Globe },
+  { href: "/reservations", label: "予約管理", icon: BookOpen },
   { href: "/report", label: "レポート", icon: BarChart3 },
+  { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/shop", label: "設定", icon: Settings },
 ];
 
 export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
+  const { signOut } = useAuth();
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -63,13 +60,14 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           <div className="space-y-1 p-2">
             {menuItems.map((item) => {
               const Icon = item.icon;
+              const isCurrentPath = window.location.pathname === item.href;
               return (
                 <a
                   key={item.href}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-md transition-colors",
-                    item.active 
+                    isCurrentPath 
                       ? "text-primary bg-primary/10" 
                       : "text-foreground hover:bg-muted/50"
                   )}
@@ -92,7 +90,10 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               サイトを見る
             </a>
             
-            <button className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50 rounded-md transition-colors w-full text-left">
+            <button 
+              onClick={signOut}
+              className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50 rounded-md transition-colors w-full text-left"
+            >
               <LogOut size={16} />
               ログアウト
             </button>

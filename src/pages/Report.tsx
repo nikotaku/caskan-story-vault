@@ -1,46 +1,123 @@
-import { useState } from "react";
-import { Calendar, Download, TrendingUp, Users, DollarSign, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { TrendingUp, Users, DollarSign, Calendar, Star } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
-const monthlyData = [
-  { month: "1月", sales: 2800000, customers: 120, avgTime: 85 },
-  { month: "2月", sales: 3200000, customers: 140, avgTime: 90 },
-  { month: "3月", sales: 3650000, customers: 155, avgTime: 88 },
-  { month: "4月", sales: 3100000, customers: 132, avgTime: 92 },
-  { month: "5月", sales: 3400000, customers: 148, avgTime: 87 },
-  { month: "6月", sales: 3800000, customers: 165, avgTime: 89 },
-];
+interface Stats {
+  totalReservations: number;
+  totalSales: number;
+  totalCasts: number;
+  avgRating: number;
+}
 
-const staffPerformance = [
-  { name: "田中 美咲", sessions: 45, sales: 1200000, rating: 4.8 },
-  { name: "佐藤 花音", sessions: 38, sales: 980000, rating: 4.6 },
-  { name: "鈴木 愛美", sessions: 42, sales: 1100000, rating: 4.7 },
-];
-
-const serviceStats = [
-  { service: "全身リラクゼーション", bookings: 85, revenue: 2380000 },
-  { service: "フェイシャル", bookings: 42, revenue: 1260000 },
-  { service: "ボディケア", bookings: 38, revenue: 950000 },
-  { service: "アロマテラピー", bookings: 35, revenue: 1050000 },
-];
+interface CastStats {
+  name: string;
+  sales: number;
+  rating: number;
+  workDays: number;
+}
 
 export default function Report() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState("thisMonth");
-  const { toast } = useToast();
+  const [stats, setStats] = useState<Stats>({
+    totalReservations: 0,
+    totalSales: 0,
+    totalCasts: 0,
+    avgRating: 0,
+  });
+  const [castStats, setCastStats] = useState<CastStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState("month");
 
-  const handleExport = (type: string) => {
-    toast({
-      title: "エクスポート開始",
-      description: `${type}レポートのダウンロードを開始しました`,
-    });
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (user) {
+      fetchStats();
+      fetchCastStats();
+    }
+  }, [user, period]);
+
+  const fetchStats = async () => {
+    try {
+      const { data: reservations, error: resError } = await supabase
+        .from('reservations')
+        .select('price, status')
+        .in('status', ['confirmed', 'completed']);
+
+      if (resError) throw resError;
+
+      const totalSales = reservations?.reduce((sum, r) => sum + r.price, 0) || 0;
+      const totalReservations = reservations?.length || 0;
+
+      const { data: casts, error: castError } = await supabase
+        .from('casts')
+        .select('rating');
+
+      if (castError) throw castError;
+
+      const totalCasts = casts?.length || 0;
+      const avgRating = casts && casts.length > 0
+        ? casts.reduce((sum, c) => sum + c.rating, 0) / casts.length
+        : 0;
+
+      setStats({
+        totalReservations,
+        totalSales,
+        totalCasts,
+        avgRating: Math.round(avgRating * 10) / 10,
+      });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const fetchCastStats = async () => {
+    try {
+      const { data: casts, error } = await supabase
+        .from('casts')
+        .select('name, rating, month_sales, work_days')
+        .order('month_sales', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      setCastStats(casts?.map(c => ({
+        name: c.name,
+        sales: c.month_sales,
+        rating: c.rating,
+        workDays: c.work_days,
+      })) || []);
+    } catch (error) {
+      console.error('Error fetching cast stats:', error);
+    }
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,261 +131,103 @@ export default function Report() {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h1 className="text-2xl font-bold">レポート</h1>
-                <p className="text-muted-foreground">売上・顧客・スタッフの分析データ</p>
+                <p className="text-muted-foreground">売上・予約・キャストの統計</p>
               </div>
               
-              <div className="flex gap-2">
-                <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="thisMonth">今月</SelectItem>
-                    <SelectItem value="lastMonth">先月</SelectItem>
-                    <SelectItem value="last3Months">過去3ヶ月</SelectItem>
-                    <SelectItem value="thisYear">今年</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" onClick={() => handleExport("総合")}>
-                  <Download size={16} />
-                  エクスポート
-                </Button>
-              </div>
+              <Select value={period} onValueChange={setPeriod}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">今日</SelectItem>
+                  <SelectItem value="week">今週</SelectItem>
+                  <SelectItem value="month">今月</SelectItem>
+                  <SelectItem value="year">今年</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">今月の売上</p>
-                      <p className="text-2xl font-bold">¥3,800,000</p>
-                      <p className="text-xs text-green-600 flex items-center mt-1">
-                        <TrendingUp size={12} className="mr-1" />
-                        +12% 前月比
-                      </p>
-                    </div>
-                    <div className="bg-primary/10 p-3 rounded-full">
-                      <DollarSign className="text-primary" size={24} />
-                    </div>
-                  </div>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">総売上</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">¥{stats.totalSales.toLocaleString()}</div>
+                  <p className="text-xs text-muted-foreground mt-1">予約確定分のみ</p>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">顧客数</p>
-                      <p className="text-2xl font-bold">165</p>
-                      <p className="text-xs text-green-600 flex items-center mt-1">
-                        <TrendingUp size={12} className="mr-1" />
-                        +8% 前月比
-                      </p>
-                    </div>
-                    <div className="bg-blue-100 p-3 rounded-full">
-                      <Users className="text-blue-600" size={24} />
-                    </div>
-                  </div>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">予約数</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalReservations}件</div>
+                  <p className="text-xs text-muted-foreground mt-1">確定・完了分</p>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">平均施術時間</p>
-                      <p className="text-2xl font-bold">89分</p>
-                      <p className="text-xs text-red-600 flex items-center mt-1">
-                        <TrendingUp size={12} className="mr-1 rotate-180" />
-                        -2% 前月比
-                      </p>
-                    </div>
-                    <div className="bg-orange-100 p-3 rounded-full">
-                      <Clock className="text-orange-600" size={24} />
-                    </div>
-                  </div>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">在籍キャスト</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.totalCasts}名</div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">予約率</p>
-                      <p className="text-2xl font-bold">94%</p>
-                      <p className="text-xs text-green-600 flex items-center mt-1">
-                        <TrendingUp size={12} className="mr-1" />
-                        +3% 前月比
-                      </p>
-                    </div>
-                    <div className="bg-green-100 p-3 rounded-full">
-                      <Calendar className="text-green-600" size={24} />
-                    </div>
-                  </div>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium">平均評価</CardTitle>
+                  <Star className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.avgRating}</div>
                 </CardContent>
               </Card>
             </div>
 
-            <Tabs defaultValue="sales" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="sales">売上分析</TabsTrigger>
-                <TabsTrigger value="staff">スタッフ実績</TabsTrigger>
-                <TabsTrigger value="services">サービス別</TabsTrigger>
-                <TabsTrigger value="customers">顧客分析</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="sales" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>月別売上推移</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {monthlyData.map((data, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4">
-                            <div className="font-medium w-12">{data.month}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {data.customers}件の予約
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold">¥{data.sales.toLocaleString()}</div>
-                            <div className="text-xs text-muted-foreground">
-                              平均{data.avgTime}分/回
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="staff" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>スタッフ別実績</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {staffPerformance.map((staff, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4">
-                            <div className="font-medium">{staff.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {staff.sessions}回の施術
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold">¥{staff.sales.toLocaleString()}</div>
-                            <div className="text-xs text-muted-foreground">
-                              評価 {staff.rating}/5.0
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="services" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>サービス別実績</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {serviceStats.map((service, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4">
-                            <div className="font-medium">{service.service}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {service.bookings}回予約
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold">¥{service.revenue.toLocaleString()}</div>
-                            <div className="text-xs text-muted-foreground">
-                              平均¥{Math.round(service.revenue / service.bookings).toLocaleString()}/回
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="customers" className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>顧客属性</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex justify-between">
-                          <span>新規顧客</span>
-                          <span className="font-medium">35%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>リピーター</span>
-                          <span className="font-medium">65%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>20代</span>
-                          <span className="font-medium">15%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>30代</span>
-                          <span className="font-medium">45%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>40代以上</span>
-                          <span className="font-medium">40%</span>
+            {/* Cast Rankings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>キャスト別売上ランキング（今月）</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {castStats.map((cast, index) => (
+                    <div key={cast.name} className="flex items-center gap-4 p-4 border rounded-lg">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary font-bold text-lg">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-lg">{cast.name}</div>
+                        <div className="text-sm text-muted-foreground flex items-center gap-3">
+                          <span className="flex items-center gap-1">
+                            <Star size={14} fill="currentColor" className="text-yellow-500" />
+                            {cast.rating}
+                          </span>
+                          <span>出勤: {cast.workDays}日</span>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>顧客満足度</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex justify-between">
-                          <span>5つ星</span>
-                          <span className="font-medium">68%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>4つ星</span>
-                          <span className="font-medium">25%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>3つ星</span>
-                          <span className="font-medium">5%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>2つ星以下</span>
-                          <span className="font-medium">2%</span>
-                        </div>
-                        <div className="pt-2 border-t">
-                          <div className="flex justify-between font-bold">
-                            <span>平均評価</span>
-                            <span>4.6/5.0</span>
-                          </div>
-                        </div>
+                      <div className="text-right">
+                        <div className="font-bold text-xl">¥{cast.sales.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">今月の売上</div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  ))}
+                  {castStats.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      データがありません
+                    </div>
+                  )}
                 </div>
-              </TabsContent>
-            </Tabs>
+              </CardContent>
+            </Card>
           </div>
         </main>
       </div>

@@ -101,6 +101,71 @@ export type Database = {
         }
         Relationships: []
       }
+      reservations: {
+        Row: {
+          cast_id: string
+          course_name: string
+          created_at: string
+          created_by: string
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string
+          duration: number
+          id: string
+          notes: string | null
+          payment_status: string
+          price: number
+          reservation_date: string
+          start_time: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cast_id: string
+          course_name: string
+          created_at?: string
+          created_by: string
+          customer_email?: string | null
+          customer_name: string
+          customer_phone: string
+          duration?: number
+          id?: string
+          notes?: string | null
+          payment_status?: string
+          price: number
+          reservation_date: string
+          start_time: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cast_id?: string
+          course_name?: string
+          created_at?: string
+          created_by?: string
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string
+          duration?: number
+          id?: string
+          notes?: string | null
+          payment_status?: string
+          price?: number
+          reservation_date?: string
+          start_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservations_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           cast_id: string
@@ -147,6 +212,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      shop_settings: {
+        Row: {
+          business_hours: string | null
+          created_at: string
+          description: string | null
+          id: string
+          logo_url: string | null
+          shop_address: string | null
+          shop_email: string | null
+          shop_name: string
+          shop_phone: string | null
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          business_hours?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          shop_address?: string | null
+          shop_email?: string | null
+          shop_name: string
+          shop_phone?: string | null
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          business_hours?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          shop_address?: string | null
+          shop_email?: string | null
+          shop_name?: string
+          shop_phone?: string | null
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
