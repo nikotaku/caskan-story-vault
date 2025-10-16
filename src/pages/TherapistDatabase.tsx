@@ -37,7 +37,7 @@ const TherapistDatabase = () => {
   return (
     <div className="min-h-screen w-full">
       <iframe
-        src="https://cherry-worm-418.notion.site/204f9507f0cf818ea0c6e2602c100b36?pvs=143"
+        src="https://cherry-worm-418.notion.site/ebd/204f9507f0cf818ea0c6e2602c100b36"
         className="w-full h-screen border-0"
         title="セラピストデータベース"
       />
