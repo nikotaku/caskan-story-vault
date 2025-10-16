@@ -11,7 +11,7 @@ import Reservations from "./pages/Reservations";
 import Design from "./pages/Design";
 import Report from "./pages/Report";
 import Settings from "./pages/Settings";
-import Pricing from "./pages/Pricing";
+import PricingManagement from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import PublicHome from "./pages/public/Home";
@@ -38,7 +38,7 @@ const App = () => (
           <Route path="/reservations" element={<Reservations />} />
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
-          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/pricing" element={<PricingManagement />} />
           <Route path="/shop" element={<Settings />} />
           
           {/* Public Pages */}

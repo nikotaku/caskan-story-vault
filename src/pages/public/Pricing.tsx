@@ -1,13 +1,12 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Home, Calendar, CreditCard, Clock, Star } from "lucide-react";
+import { Phone, Calendar, CreditCard, Clock, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
 
-interface PricingItem {
-  id: string;
+interface PricingCourse {
   duration: number;
   standard_price: number;
   premium_price: number;
@@ -15,33 +14,38 @@ interface PricingItem {
 }
 
 interface PricingOption {
-  id: string;
   name: string;
   price: number;
   description: string | null;
 }
 
 export default function Pricing() {
-  const [pricing, setPricing] = useState<PricingItem[]>([]);
+  const [courses, setCourses] = useState<PricingCourse[]>([]);
   const [options, setOptions] = useState<PricingOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchPricingData();
+    fetchPricing();
   }, []);
 
-  const fetchPricingData = async () => {
+  const fetchPricing = async () => {
     try {
-      const [pricingResult, optionsResult] = await Promise.all([
-        supabase.from('pricing').select('*').order('duration', { ascending: true }),
-        supabase.from('pricing_options').select('*').order('created_at', { ascending: true })
-      ]);
+      const { data: coursesData, error: coursesError } = await supabase
+        .from('pricing')
+        .select('*')
+        .order('duration', { ascending: true });
 
-      if (pricingResult.error) throw pricingResult.error;
-      if (optionsResult.error) throw optionsResult.error;
+      if (coursesError) throw coursesError;
 
-      setPricing(pricingResult.data || []);
-      setOptions(optionsResult.data || []);
+      const { data: optionsData, error: optionsError } = await supabase
+        .from('pricing_options')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (optionsError) throw optionsError;
+
+      setCourses(coursesData || []);
+      setOptions(optionsData || []);
     } catch (error) {
       console.error('Error fetching pricing:', error);
     } finally {
@@ -155,8 +159,8 @@ export default function Pricing() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pricing.map((course) => (
-                    <tr key={course.id} className="border-b border-border hover:bg-muted/50">
+                  {courses.map((course, index) => (
+                    <tr key={index} className="border-b border-border hover:bg-muted/50">
                       <td className="py-4 px-4 font-medium">{course.duration}分</td>
                       <td className="py-4 px-4 text-right">¥{course.standard_price.toLocaleString()}</td>
                       <td className="py-4 px-4 text-right">¥{course.premium_price.toLocaleString()}</td>
@@ -180,9 +184,14 @@ export default function Pricing() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {options.map((option) => (
-                  <div key={option.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                    <span className="font-medium">{option.name}</span>
+                {options.map((option, index) => (
+                  <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                    <div>
+                      <span className="font-medium">{option.name}</span>
+                      {option.description && (
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      )}
+                    </div>
                     <span className="text-primary font-bold">¥{option.price.toLocaleString()}</span>
                   </div>
                 ))}
