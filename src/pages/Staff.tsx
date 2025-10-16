@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp } f
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
+import { NotionPageSync } from "@/components/NotionPageSync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -362,6 +363,9 @@ export default function Staff() {
             {isAdmin && (
               <div className="mb-6">
                 <NotionSync />
+                <div className="mt-4">
+                  <NotionPageSync />
+                </div>
               </div>
             )}
 

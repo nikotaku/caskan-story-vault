@@ -71,6 +71,36 @@ export type Database = {
         }
         Relationships: []
       }
+      notion_pages: {
+        Row: {
+          content: Json
+          created_at: string
+          id: string
+          notion_page_id: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          id?: string
+          notion_page_id: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          id?: string
+          notion_page_id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pricing: {
         Row: {
           created_at: string

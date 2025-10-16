@@ -20,6 +20,7 @@ import PublicCastDetail from "./pages/public/CastDetail";
 import PublicSchedule from "./pages/public/Schedule";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
+import NotionPageView from "./pages/NotionPageView";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
           <Route path="/public/schedule" element={<PublicSchedule />} />
           <Route path="/public/pricing" element={<PublicPricing />} />
           <Route path="/public/system" element={<PublicSystem />} />
+          <Route path="/page/:slug" element={<NotionPageView />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
