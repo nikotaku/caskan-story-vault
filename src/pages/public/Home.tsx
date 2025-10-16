@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -93,13 +94,13 @@ const Home = () => {
       {/* Main Banner Slider */}
       <div className="container mx-auto px-4 py-8">
         <div className="relative overflow-hidden rounded-lg shadow-2xl">
-          <div className="relative h-[500px] md:h-[600px]">
+          <AspectRatio ratio={16 / 9}>
             <img
               src={slides[currentSlide]}
               alt="Banner"
-              className="w-full h-full object-cover transition-opacity duration-500"
+              className="w-full h-full object-contain transition-opacity duration-500"
             />
-          </div>
+          </AspectRatio>
 
           {/* Slider Controls */}
           <button
