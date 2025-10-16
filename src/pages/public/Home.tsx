@@ -27,12 +27,8 @@ const Home = () => {
     <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
       {/* Top Contact Bar */}
       <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
-        <div className="container mx-auto flex justify-between items-center">
+        <div className="container mx-auto flex justify-center items-center">
           <span>12:00〜26:00(24:40最終受付)</span>
-          <a href="tel:07090941854" className="hover:underline font-semibold flex items-center gap-2">
-            <Phone size={14} />
-            070-9094-1854
-          </a>
         </div>
       </div>
 
@@ -74,10 +70,6 @@ const Home = () => {
             <Link to="/public" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">TOP</div>
               <div className="text-xs text-[#a89586]">トップ</div>
-            </Link>
-            <Link to="/public/system" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
-              <div className="text-xs text-[#a89586]">料金システム</div>
             </Link>
             <Link to="/public/schedule" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">SCHEDULE</div>
@@ -191,8 +183,8 @@ const Home = () => {
 
       {/* Quick Links Section */}
       <section className="py-16 px-4" style={{ backgroundColor: "#f5e8e4" }}>
-        <div className="container max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="container max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Link to="/public/schedule">
               <Card className="hover:shadow-2xl transition-all cursor-pointer h-full bg-white border-[#e5d5cc] hover:scale-105 transform">
                 <CardContent className="p-10 text-center">
@@ -224,22 +216,6 @@ const Home = () => {
                 </CardContent>
               </Card>
             </Link>
-
-            <Link to="/public/system">
-              <Card className="hover:shadow-2xl transition-all cursor-pointer h-full bg-white border-[#e5d5cc] hover:scale-105 transform">
-                <CardContent className="p-10 text-center">
-                  <div 
-                    className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl shadow-lg"
-                    style={{ background: "linear-gradient(135deg, #d4a574 0%, #c5956f 100%)" }}
-                  >
-                    💰
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2" style={{ color: "#8b7355" }}>SYSTEM</h3>
-                  <p className="text-sm" style={{ color: "#a89586" }}>料金システム</p>
-                  <p className="text-xs mt-3 text-muted-foreground">コース・料金案内</p>
-                </CardContent>
-              </Card>
-            </Link>
           </div>
         </div>
       </section>
@@ -257,25 +233,7 @@ const Home = () => {
           >
             ご予約・お問い合わせ
           </h2>
-          <p className="mb-10 text-lg" style={{ color: "#a89586" }}>お気軽にお電話ください</p>
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <Button 
-              size="lg" 
-              asChild
-              className="min-w-[280px] text-xl py-8 shadow-xl hover:shadow-2xl transition-all transform hover:scale-105"
-              style={{
-                background: "linear-gradient(135deg, #d4a574 0%, #c5956f 100%)",
-                color: "white",
-                border: "none"
-              }}
-            >
-              <a href="tel:07090941854" className="flex items-center gap-3">
-                <Phone size={24} />
-                070-9094-1854
-              </a>
-            </Button>
-          </div>
-          <p className="mt-6 text-sm" style={{ color: "#a89586" }}>営業時間: 12:00〜26:00（24:40最終受付）</p>
+          <p className="text-lg" style={{ color: "#a89586" }}>営業時間: 12:00〜26:00（24:40最終受付）</p>
         </div>
       </section>
 
@@ -289,15 +247,6 @@ const Home = () => {
               <p className="text-sm text-white/80">(24:40最終受付)</p>
             </div>
             <div>
-              <h4 className="font-bold mb-4 text-lg">お問い合わせ</h4>
-              <p>
-                <a href="tel:07090941854" className="hover:text-[#d4a574] transition-colors text-white/95 flex items-center gap-2">
-                  <Phone size={16} />
-                  TEL: 070-9094-1854
-                </a>
-              </p>
-            </div>
-            <div>
               <h4 className="font-bold mb-4 text-lg">メニュー</h4>
               <div className="flex flex-col gap-3 text-sm">
                 <Link to="/public/casts" className="text-white/85 hover:text-[#d4a574] transition-colors">
@@ -305,9 +254,6 @@ const Home = () => {
                 </Link>
                 <Link to="/public/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   出勤情報
-                </Link>
-                <Link to="/public/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  料金システム
                 </Link>
               </div>
             </div>
