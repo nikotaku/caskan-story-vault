@@ -51,7 +51,7 @@ const TherapistDatabase = () => {
             {/* Notion Embed */}
             <div className="w-full bg-white rounded-lg shadow-lg" style={{ height: 'calc(100vh - 250px)' }}>
               <iframe
-                src="https://www.notion.so/20af9507f0cf809cae97d5be86e589e6?v=27df9507f0cf80a2ab6be385d8570292&pvs=4"
+                src="https://cherry-worm-418.notion.site/204f9507f0cf818ea0c6e2602c100b36?pvs=143"
                 className="w-full h-full border-0 rounded-lg"
                 title="セラピストデータベース"
               />
