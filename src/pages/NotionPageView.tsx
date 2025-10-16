@@ -136,8 +136,17 @@ export default function NotionPageView() {
             <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
               トップ
             </Link>
+            <Link to="/page/a" className="text-sm font-medium text-primary transition-colors">
+              料金・システム
+            </Link>
+            <Link to="/public/schedule" className="text-sm font-medium hover:text-primary transition-colors">
+              出勤情報
+            </Link>
             <Link to="/public/casts" className="text-sm font-medium hover:text-primary transition-colors">
               セラピスト
+            </Link>
+            <Link to="/public/therapist-database" className="text-sm font-medium hover:text-primary transition-colors">
+              セラピストDB
             </Link>
           </nav>
         </div>

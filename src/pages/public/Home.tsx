@@ -79,6 +79,10 @@ const Home = () => {
               <div className="text-[#8b7355] font-semibold text-sm">THERAPIST</div>
               <div className="text-xs text-[#a89586]">セラピスト</div>
             </Link>
+            <Link to="/page/a" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">PRICING</div>
+              <div className="text-xs text-[#a89586]">料金・システム</div>
+            </Link>
           </div>
         </div>
       </nav>
@@ -254,6 +258,12 @@ const Home = () => {
                 </Link>
                 <Link to="/public/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   出勤情報
+                </Link>
+                <Link to="/page/a" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                  料金・システム
+                </Link>
+                <Link to="/public/therapist-database" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                  セラピストDB
                 </Link>
               </div>
             </div>

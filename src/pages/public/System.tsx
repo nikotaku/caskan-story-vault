@@ -41,8 +41,8 @@ const System = () => {
             <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
               トップ
             </Link>
-            <Link to="/public/pricing" className="text-sm font-medium hover:text-primary transition-colors">
-              料金表
+            <Link to="/page/a" className="text-sm font-medium hover:text-primary transition-colors">
+              料金・システム
             </Link>
             <Link to="/public/system" className="text-sm font-medium text-primary transition-colors">
               システム
@@ -52,6 +52,9 @@ const System = () => {
             </Link>
             <Link to="/public/casts" className="text-sm font-medium hover:text-primary transition-colors">
               セラピスト
+            </Link>
+            <Link to="/public/therapist-database" className="text-sm font-medium hover:text-primary transition-colors">
+              セラピストDB
             </Link>
           </nav>
           <Button asChild>
