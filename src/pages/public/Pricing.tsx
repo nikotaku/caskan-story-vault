@@ -3,21 +3,62 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Phone, Home, Calendar, CreditCard, Clock, Star } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+
+interface PricingItem {
+  id: string;
+  duration: number;
+  standard_price: number;
+  premium_price: number;
+  vip_price: number;
+}
+
+interface PricingOption {
+  id: string;
+  name: string;
+  price: number;
+  description: string | null;
+}
 
 export default function Pricing() {
-  const courses = [
-    { duration: "60分", standard: "12,000円", premium: "15,000円", vip: "18,000円" },
-    { duration: "90分", standard: "17,000円", premium: "22,000円", vip: "27,000円" },
-    { duration: "120分", standard: "22,000円", premium: "28,000円", vip: "35,000円" },
-    { duration: "150分", standard: "27,000円", premium: "34,000円", vip: "43,000円" },
-  ];
+  const [pricing, setPricing] = useState<PricingItem[]>([]);
+  const [options, setOptions] = useState<PricingOption[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const options = [
-    { name: "指名料", price: "1,000円" },
-    { name: "本指名料", price: "2,000円" },
-    { name: "写真指名料", price: "500円" },
-    { name: "延長30分", price: "6,000円〜" },
-  ];
+  useEffect(() => {
+    fetchPricingData();
+  }, []);
+
+  const fetchPricingData = async () => {
+    try {
+      const [pricingResult, optionsResult] = await Promise.all([
+        supabase.from('pricing').select('*').order('duration', { ascending: true }),
+        supabase.from('pricing_options').select('*').order('created_at', { ascending: true })
+      ]);
+
+      if (pricingResult.error) throw pricingResult.error;
+      if (optionsResult.error) throw optionsResult.error;
+
+      setPricing(pricingResult.data || []);
+      setOptions(optionsResult.data || []);
+    } catch (error) {
+      console.error('Error fetching pricing:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -114,12 +155,12 @@ export default function Pricing() {
                   </tr>
                 </thead>
                 <tbody>
-                  {courses.map((course, index) => (
-                    <tr key={index} className="border-b border-border hover:bg-muted/50">
-                      <td className="py-4 px-4 font-medium">{course.duration}</td>
-                      <td className="py-4 px-4 text-right">{course.standard}</td>
-                      <td className="py-4 px-4 text-right">{course.premium}</td>
-                      <td className="py-4 px-4 text-right">{course.vip}</td>
+                  {pricing.map((course) => (
+                    <tr key={course.id} className="border-b border-border hover:bg-muted/50">
+                      <td className="py-4 px-4 font-medium">{course.duration}分</td>
+                      <td className="py-4 px-4 text-right">¥{course.standard_price.toLocaleString()}</td>
+                      <td className="py-4 px-4 text-right">¥{course.premium_price.toLocaleString()}</td>
+                      <td className="py-4 px-4 text-right">¥{course.vip_price.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -139,10 +180,10 @@ export default function Pricing() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {options.map((option, index) => (
-                  <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                {options.map((option) => (
+                  <div key={option.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
                     <span className="font-medium">{option.name}</span>
-                    <span className="text-primary font-bold">{option.price}</span>
+                    <span className="text-primary font-bold">¥{option.price.toLocaleString()}</span>
                   </div>
                 ))}
               </div>

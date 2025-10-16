@@ -71,6 +71,63 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing: {
+        Row: {
+          created_at: string
+          duration: number
+          id: string
+          premium_price: number
+          standard_price: number
+          updated_at: string
+          vip_price: number
+        }
+        Insert: {
+          created_at?: string
+          duration: number
+          id?: string
+          premium_price?: number
+          standard_price?: number
+          updated_at?: string
+          vip_price?: number
+        }
+        Update: {
+          created_at?: string
+          duration?: number
+          id?: string
+          premium_price?: number
+          standard_price?: number
+          updated_at?: string
+          vip_price?: number
+        }
+        Relationships: []
+      }
+      pricing_options: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          price?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
