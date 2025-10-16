@@ -1,9 +1,13 @@
 import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { Sidebar } from "@/components/Sidebar";
+import { DashboardHeader } from "@/components/DashboardHeader";
+import { useState } from "react";
 
 const TherapistDatabase = () => {
   const { user, loading, isAdmin } = useAuth();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   if (loading) {
     return (
@@ -35,12 +39,25 @@ const TherapistDatabase = () => {
   }
 
   return (
-    <div className="min-h-screen w-full">
-      <iframe
-        src="https://cherry-worm-418.notion.site/ebd/204f9507f0cf818ea0c6e2602c100b36"
-        className="w-full h-screen border-0"
-        title="セラピストデータベース"
-      />
+    <div className="min-h-screen bg-background flex">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className="flex-1">
+        <DashboardHeader onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
+        
+        <main className="container py-8 px-4 ml-0 md:ml-[180px]">
+          <div className="max-w-6xl mx-auto">
+            <h1 className="text-4xl font-bold mb-8">セラピストデータベース</h1>
+
+            <div className="w-full bg-white rounded-lg shadow-lg" style={{ height: 'calc(100vh - 250px)' }}>
+              <iframe
+                src="https://cherry-worm-418.notion.site/ebd/204f9507f0cf818ea0c6e2602c100b36"
+                className="w-full h-full border-0 rounded-lg"
+                title="セラピストデータベース"
+              />
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 };
