@@ -41,8 +41,11 @@ const System = () => {
             <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
               トップ
             </Link>
+            <Link to="/public/pricing" className="text-sm font-medium hover:text-primary transition-colors">
+              料金表
+            </Link>
             <Link to="/public/system" className="text-sm font-medium text-primary transition-colors">
-              料金システム
+              システム
             </Link>
             <Link to="/public/schedule" className="text-sm font-medium hover:text-primary transition-colors">
               出勤情報

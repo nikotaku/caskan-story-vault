@@ -16,8 +16,11 @@ const Home = () => {
             <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
               トップ
             </Link>
+            <Link to="/public/pricing" className="text-sm font-medium hover:text-primary transition-colors">
+              料金表
+            </Link>
             <Link to="/public/system" className="text-sm font-medium hover:text-primary transition-colors">
-              料金システム
+              システム
             </Link>
             <Link to="/public/schedule" className="text-sm font-medium hover:text-primary transition-colors">
               出勤情報
@@ -98,11 +101,11 @@ const Home = () => {
               </Card>
             </Link>
 
-            <Link to="/public/system" className="block">
+            <Link to="/public/pricing" className="block">
               <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6 text-center">
                   <DollarSign className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="text-xl font-bold mb-2">料金システム</h3>
+                  <h3 className="text-xl font-bold mb-2">料金表</h3>
                   <p className="text-muted-foreground">コース・料金案内</p>
                 </CardContent>
               </Card>
@@ -137,8 +140,11 @@ const Home = () => {
                 <Link to="/public/schedule" className="text-muted-foreground hover:text-primary transition-colors">
                   出勤情報
                 </Link>
+                <Link to="/public/pricing" className="text-muted-foreground hover:text-primary transition-colors">
+                  料金表
+                </Link>
                 <Link to="/public/system" className="text-muted-foreground hover:text-primary transition-colors">
-                  料金システム
+                  システム
                 </Link>
               </div>
             </div>
