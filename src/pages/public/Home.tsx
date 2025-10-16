@@ -1,112 +1,233 @@
 import { Link } from "react-router-dom";
-import { Calendar, Users, DollarSign, MapPin, Newspaper, Briefcase } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 const Home = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-accent/5">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link to="/public" className="flex items-center space-x-2">
-            <img src="/src/assets/caskan-logo.png" alt="Logo" className="h-8 w-auto" />
-          </Link>
-          <nav className="hidden md:flex gap-6">
-            <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
-              トップ
-            </Link>
-            <Link to="/public/pricing" className="text-sm font-medium hover:text-primary transition-colors">
-              料金表
-            </Link>
-            <Link to="/public/system" className="text-sm font-medium hover:text-primary transition-colors">
-              システム
-            </Link>
-            <Link to="/public/schedule" className="text-sm font-medium hover:text-primary transition-colors">
-              出勤情報
-            </Link>
-            <Link to="/public/casts" className="text-sm font-medium hover:text-primary transition-colors">
-              セラピスト
-            </Link>
-          </nav>
-          <Button asChild>
-            <a href="tel:080-3192-1209">
-              電話予約
-            </a>
-          </Button>
-        </div>
-      </header>
+  const [currentSlide, setCurrentSlide] = useState(0);
+  
+  const slides = [
+    {
+      image: "https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=800&q=80",
+      title: "全力エステ ZR"
+    },
+    {
+      image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800&q=80",
+      title: "癒しのひととき"
+    }
+  ];
 
-      {/* Hero Section */}
-      <section className="relative h-[600px] flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-accent/20" />
-        <div className="relative z-10 text-center px-4">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-            全力エステ ZR
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % slides.length);
+  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: "#E8D5D0" }}>
+      {/* Top Info Bar */}
+      <div className="bg-[#C5A896] text-white py-2 px-4 text-center text-sm">
+        <span>12:00〜26:00(24:40最終受付) </span>
+        <a href="tel:080-3192-1209" className="ml-4 hover:underline font-semibold">
+          080-3192-1209
+        </a>
+      </div>
+
+      {/* Large Logo Section */}
+      <div className="py-12 text-center relative">
+        <div className="relative inline-block">
+          <h1 
+            className="text-7xl md:text-8xl font-bold tracking-wider"
+            style={{
+              color: "#D4AF37",
+              textShadow: "2px 2px 4px rgba(0,0,0,0.1), 0 0 40px rgba(212, 175, 55, 0.3)",
+              fontFamily: "'Noto Serif JP', serif",
+              letterSpacing: "0.15em"
+            }}
+          >
+            ZR
           </h1>
-          <p className="text-xl md:text-2xl mb-8 text-muted-foreground">
-            素直で愛嬌があり不器用でも全力心でサービス
+          <p 
+            className="text-2xl md:text-3xl mt-2 tracking-widest"
+            style={{
+              color: "#D4AF37",
+              textShadow: "1px 1px 2px rgba(0,0,0,0.1)",
+              fontFamily: "'Noto Serif JP', serif"
+            }}
+          >
+            全力エステ
           </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <Button size="lg" asChild>
-              <Link to="/public/casts">
-                セラピスト一覧
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <a href="tel:080-3192-1209">
-                電話予約: 080-3192-1209
-              </a>
-            </Button>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="bg-white/80 backdrop-blur-sm border-y border-[#C5A896]/30 sticky top-0 z-50">
+        <div className="container mx-auto">
+          <div className="flex justify-center items-center flex-wrap gap-1 py-3">
+            <Link to="/public" className="nav-item px-6 py-2 text-sm font-medium hover:bg-[#C5A896]/20 transition-colors rounded">
+              <div className="text-[#8B6F47]">TOP</div>
+              <div className="text-xs text-muted-foreground">トップ</div>
+            </Link>
+            <Link to="/public/system" className="nav-item px-6 py-2 text-sm font-medium hover:bg-[#C5A896]/20 transition-colors rounded">
+              <div className="text-[#8B6F47]">SYSTEM</div>
+              <div className="text-xs text-muted-foreground">料金システム</div>
+            </Link>
+            <Link to="/public/schedule" className="nav-item px-6 py-2 text-sm font-medium hover:bg-[#C5A896]/20 transition-colors rounded">
+              <div className="text-[#8B6F47]">SCHEDULE</div>
+              <div className="text-xs text-muted-foreground">出勤情報</div>
+            </Link>
+            <Link to="/public/casts" className="nav-item px-6 py-2 text-sm font-medium hover:bg-[#C5A896]/20 transition-colors rounded">
+              <div className="text-[#8B6F47]">THERAPIST</div>
+              <div className="text-xs text-muted-foreground">セラピスト</div>
+            </Link>
+            <Link to="/public/pricing" className="nav-item px-6 py-2 text-sm font-medium hover:bg-[#C5A896]/20 transition-colors rounded">
+              <div className="text-[#8B6F47]">PRICE</div>
+              <div className="text-xs text-muted-foreground">料金表</div>
+            </Link>
           </div>
         </div>
-      </section>
+      </nav>
+
+      {/* Main Visual Slider */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="relative overflow-hidden rounded-lg" style={{ maxHeight: "500px" }}>
+          <div className="grid md:grid-cols-2 gap-0 bg-white/50 backdrop-blur-sm">
+            {/* Left Side - Image */}
+            <div className="relative h-[400px] md:h-[500px] overflow-hidden">
+              <img
+                src={slides[currentSlide].image}
+                alt={slides[currentSlide].title}
+                className="w-full h-full object-cover transition-all duration-500"
+              />
+            </div>
+            
+            {/* Right Side - Logo and Ambiance */}
+            <div className="relative h-[400px] md:h-[500px] overflow-hidden">
+              <img
+                src="https://images.unsplash.com/photo-1600334129128-685c5582fd35?w=800&q=80"
+                alt="Spa ambiance"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <div className="text-center">
+                  <h2 
+                    className="text-6xl font-bold mb-4"
+                    style={{
+                      color: "#D4AF37",
+                      textShadow: "2px 2px 8px rgba(0,0,0,0.5)",
+                      fontFamily: "'Noto Serif JP', serif",
+                      letterSpacing: "0.1em"
+                    }}
+                  >
+                    ZR
+                  </h2>
+                  <p 
+                    className="text-xl"
+                    style={{
+                      color: "#D4AF37",
+                      textShadow: "1px 1px 4px rgba(0,0,0,0.5)",
+                      fontFamily: "'Noto Serif JP', serif"
+                    }}
+                  >
+                    全力エステ
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Slider Controls */}
+          <button
+            onClick={prevSlide}
+            className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full transition-all"
+          >
+            <ChevronLeft className="w-6 h-6 text-[#8B6F47]" />
+          </button>
+          <button
+            onClick={nextSlide}
+            className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full transition-all"
+          >
+            <ChevronRight className="w-6 h-6 text-[#8B6F47]" />
+          </button>
+
+          {/* Slider Indicators */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentSlide(index)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  currentSlide === index ? "bg-[#D4AF37] w-8" : "bg-white/50"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Concept Section */}
       <section className="py-16 px-4">
         <div className="container max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-8">CONCEPT - コンセプト</h2>
-          <Card>
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-[#8B6F47] mb-2" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+              CONCEPT
+            </h2>
+            <p className="text-sm text-[#8B6F47]/70">コンセプト</p>
+          </div>
+          <Card className="bg-white/70 backdrop-blur-sm border-[#C5A896]/30">
             <CardContent className="p-8">
-              <p className="text-lg text-center leading-relaxed">
-                素直で愛嬌があり不器用でも全力心でサービス<br />
-                お客様に最高のリラクゼーション体験を提供いたします
+              <p className="text-lg text-center leading-relaxed text-[#5D4E37]" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+                素直で愛嬌があり不器用でも全力心でサービス
               </p>
             </CardContent>
           </Card>
         </div>
       </section>
 
-      {/* Quick Links */}
-      <section className="py-16 px-4 bg-accent/5">
+      {/* Quick Access Section */}
+      <section className="py-16 px-4 bg-white/30">
         <div className="container max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Link to="/public/schedule" className="block">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-                <CardContent className="p-6 text-center">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="text-xl font-bold mb-2">出勤情報</h3>
-                  <p className="text-muted-foreground">本日の出勤スケジュール</p>
+            <Link to="/public/schedule">
+              <Card className="hover:shadow-xl transition-all cursor-pointer h-full bg-white/80 backdrop-blur-sm border-[#C5A896]/30 hover:border-[#D4AF37]/50">
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#C5A896] flex items-center justify-center">
+                    <span className="text-2xl text-white">📅</span>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 text-[#8B6F47]">SCHEDULE</h3>
+                  <p className="text-sm text-[#8B6F47]/70">出勤情報</p>
+                  <p className="text-xs mt-2 text-muted-foreground">本日の出勤スケジュール</p>
                 </CardContent>
               </Card>
             </Link>
 
-            <Link to="/public/casts" className="block">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-                <CardContent className="p-6 text-center">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="text-xl font-bold mb-2">セラピスト</h3>
-                  <p className="text-muted-foreground">在籍セラピスト紹介</p>
+            <Link to="/public/casts">
+              <Card className="hover:shadow-xl transition-all cursor-pointer h-full bg-white/80 backdrop-blur-sm border-[#C5A896]/30 hover:border-[#D4AF37]/50">
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#C5A896] flex items-center justify-center">
+                    <span className="text-2xl text-white">👥</span>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 text-[#8B6F47]">THERAPIST</h3>
+                  <p className="text-sm text-[#8B6F47]/70">セラピスト</p>
+                  <p className="text-xs mt-2 text-muted-foreground">在籍セラピスト紹介</p>
                 </CardContent>
               </Card>
             </Link>
 
-            <Link to="/public/pricing" className="block">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-                <CardContent className="p-6 text-center">
-                  <DollarSign className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="text-xl font-bold mb-2">料金表</h3>
-                  <p className="text-muted-foreground">コース・料金案内</p>
+            <Link to="/public/pricing">
+              <Card className="hover:shadow-xl transition-all cursor-pointer h-full bg-white/80 backdrop-blur-sm border-[#C5A896]/30 hover:border-[#D4AF37]/50">
+                <CardContent className="p-8 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#D4AF37] to-[#C5A896] flex items-center justify-center">
+                    <span className="text-2xl text-white">💰</span>
+                  </div>
+                  <h3 className="text-xl font-bold mb-2 text-[#8B6F47]">PRICE</h3>
+                  <p className="text-sm text-[#8B6F47]/70">料金表</p>
+                  <p className="text-xs mt-2 text-muted-foreground">コース・料金案内</p>
                 </CardContent>
               </Card>
             </Link>
@@ -114,42 +235,68 @@ const Home = () => {
         </div>
       </section>
 
+      {/* CTA Section */}
+      <section className="py-16 px-4">
+        <div className="container max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold mb-6 text-[#8B6F47]" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+            ご予約・お問い合わせ
+          </h2>
+          <p className="mb-8 text-[#8B6F47]/80">お気軽にお電話ください</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button 
+              size="lg" 
+              asChild
+              className="min-w-[250px] text-lg py-6"
+              style={{
+                background: "linear-gradient(135deg, #D4AF37 0%, #C5A896 100%)",
+                color: "white"
+              }}
+            >
+              <a href="tel:080-3192-1209">
+                📞 080-3192-1209
+              </a>
+            </Button>
+          </div>
+          <p className="mt-4 text-sm text-[#8B6F47]/60">営業時間: 12:00〜26:00（24:40最終受付）</p>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="py-8 px-4 border-t">
+      <footer className="py-12 px-4 bg-[#C5A896] text-white">
         <div className="container max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
             <div>
-              <h4 className="font-bold mb-4">営業時間</h4>
-              <p className="text-muted-foreground">12:00〜26:00</p>
-              <p className="text-sm text-muted-foreground">(24:40最終受付)</p>
+              <h4 className="font-bold mb-4 text-lg">営業時間</h4>
+              <p className="text-white/90">12:00〜26:00</p>
+              <p className="text-sm text-white/70">(24:40最終受付)</p>
             </div>
             <div>
-              <h4 className="font-bold mb-4">お問い合わせ</h4>
-              <p className="text-muted-foreground">
-                <a href="tel:080-3192-1209" className="hover:text-primary transition-colors">
+              <h4 className="font-bold mb-4 text-lg">お問い合わせ</h4>
+              <p>
+                <a href="tel:080-3192-1209" className="hover:text-[#D4AF37] transition-colors text-white/90">
                   TEL: 080-3192-1209
                 </a>
               </p>
             </div>
             <div>
-              <h4 className="font-bold mb-4">メニュー</h4>
+              <h4 className="font-bold mb-4 text-lg">メニュー</h4>
               <div className="flex flex-col gap-2 text-sm">
-                <Link to="/public/casts" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/public/casts" className="text-white/80 hover:text-[#D4AF37] transition-colors">
                   セラピスト
                 </Link>
-                <Link to="/public/schedule" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/public/schedule" className="text-white/80 hover:text-[#D4AF37] transition-colors">
                   出勤情報
                 </Link>
-                <Link to="/public/pricing" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/public/pricing" className="text-white/80 hover:text-[#D4AF37] transition-colors">
                   料金表
                 </Link>
-                <Link to="/public/system" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/public/system" className="text-white/80 hover:text-[#D4AF37] transition-colors">
                   システム
                 </Link>
               </div>
             </div>
           </div>
-          <div className="text-center text-sm text-muted-foreground pt-8 border-t">
+          <div className="text-center text-sm text-white/70 pt-8 border-t border-white/20">
             © 2025 全力エステ ZR. All rights reserved.
           </div>
         </div>
