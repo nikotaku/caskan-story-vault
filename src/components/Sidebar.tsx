@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { 
   Home, 
   Calendar, 
@@ -80,15 +81,13 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             
             <hr className="my-2 border-border" />
             
-            <a
-              href="https://zenryoku-esthe.com"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/public"
               className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50 rounded-md transition-colors"
             >
               <ExternalLink size={16} />
               サイトを見る
-            </a>
+            </Link>
             
             <button 
               onClick={signOut}
