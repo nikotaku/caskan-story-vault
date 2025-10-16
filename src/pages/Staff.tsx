@@ -51,6 +51,7 @@ export default function Staff() {
     profile: "",
     photo: "",
   });
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
@@ -187,6 +188,8 @@ export default function Staff() {
         title: "キャスト削除",
         description: "キャストが削除されました",
       });
+      
+      setDeleteConfirmId(null);
     } catch (error) {
       console.error('Error deleting cast:', error);
       toast({
@@ -508,14 +511,36 @@ export default function Staff() {
                             <Edit size={14} />
                             編集
                           </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleDeleteCast(cast.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          
+                          {deleteConfirmId === cast.id ? (
+                            <div className="flex gap-1">
+                              <Button 
+                                variant="destructive" 
+                                size="sm"
+                                onClick={() => handleDeleteCast(cast.id)}
+                                className="text-xs"
+                              >
+                                確認
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setDeleteConfirmId(null)}
+                                className="text-xs"
+                              >
+                                キャンセル
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => setDeleteConfirmId(cast.id)}
+                              className="hover:bg-destructive hover:text-destructive-foreground"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
                         </div>
                       </>
                     )}
