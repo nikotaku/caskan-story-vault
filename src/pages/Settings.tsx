@@ -257,6 +257,20 @@ export default function Settings() {
                     </div>
                   </div>
 
+                  <Alert className="bg-blue-50 border-blue-200">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-sm">
+                      <p className="font-semibold mb-2">API設定方法：</p>
+                      <ol className="list-decimal list-inside space-y-1 text-xs">
+                        <li>チャットで「NOTION_API_KEYを設定してください」と入力</li>
+                        <li>表示されるフォームにAPIキーを入力</li>
+                        <li>チャットで「NOTION_DATABASE_IDを設定してください」と入力</li>
+                        <li>表示されるフォームにデータベースIDを入力</li>
+                        <li>設定完了後、下記の「データを同期」ボタンをクリック</li>
+                      </ol>
+                    </AlertDescription>
+                  </Alert>
+
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button
                       onClick={() => {
