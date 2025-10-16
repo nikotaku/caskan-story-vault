@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -11,6 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Cast {
   id: string;
@@ -19,81 +22,96 @@ interface Cast {
   type: string;
   status: "waiting" | "busy" | "offline";
   rating: number;
-  photo: string;
-  profile: string;
-  measurements: string;
+  photo: string | null;
+  profile: string | null;
+  measurements: string | null;
   price: number;
-  totalSales: number;
-  monthSales: number;
-  workDays: number;
-  joinDate: string;
-  phone: string;
-  waitingTime?: string;
+  total_sales: number;
+  month_sales: number;
+  work_days: number;
+  join_date: string;
+  phone: string | null;
+  waiting_time?: string | null;
 }
-
-const castData: Cast[] = [
-  {
-    id: "1",
-    name: "美咲",
-    age: 23,
-    type: "プレミアム",
-    status: "waiting",
-    rating: 4.8,
-    photo: "https://images.unsplash.com/photo-1494790108755-2616c4db2d0d?w=400",
-    profile: "明るく優しい性格で、お客様一人一人に寄り添ったサービスを心がけています。",
-    measurements: "B85-W58-H86",
-    price: 15000,
-    totalSales: 2800000,
-    monthSales: 450000,
-    workDays: 22,
-    joinDate: "2024-01-15",
-    phone: "090-1234-5678",
-    waitingTime: "14:00-20:00"
-  },
-  {
-    id: "2", 
-    name: "花音",
-    age: 21,
-    type: "スタンダード",
-    status: "busy",
-    rating: 4.6,
-    photo: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400",
-    profile: "癒し系の雰囲気でリラックスしたひとときをお過ごしいただけます。",
-    measurements: "B82-W56-H84",
-    price: 12000,
-    totalSales: 1950000,
-    monthSales: 320000,
-    workDays: 18,
-    joinDate: "2024-02-01",
-    phone: "090-2345-6789"
-  },
-  {
-    id: "3",
-    name: "愛美",
-    age: 25,
-    type: "プレミアム",
-    status: "offline",
-    rating: 4.9,
-    photo: "https://images.unsplash.com/photo-1488716820095-cbe80883c496?w=400",
-    profile: "大人の魅力溢れる接客で、特別な時間をお約束いたします。",
-    measurements: "B88-W60-H89",
-    price: 18000,
-    totalSales: 3200000,
-    monthSales: 580000,
-    workDays: 25,
-    joinDate: "2023-12-10",
-    phone: "090-3456-7890"
-  }
-];
 
 export default function Staff() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [casts, setCasts] = useState<Cast[]>(castData);
+  const [casts, setCasts] = useState<Cast[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  // フォーム用の状態
+  const [formData, setFormData] = useState({
+    name: "",
+    age: 23,
+    type: "スタンダード",
+    price: 12000,
+    measurements: "",
+    profile: "",
+    phone: "",
+    photo: "",
+  });
+  
   const { toast } = useToast();
+  const { user, loading: authLoading, isAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  // 認証チェック
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
+
+  // キャストデータを取得
+  useEffect(() => {
+    fetchCasts();
+    
+    // リアルタイム更新を購読
+    const channel = supabase
+      .channel('casts-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'casts'
+        },
+        () => {
+          fetchCasts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchCasts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('casts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setCasts((data || []) as Cast[]);
+    } catch (error) {
+      console.error('Error fetching casts:', error);
+      toast({
+        title: "エラー",
+        description: "キャスト情報の取得に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredCasts = casts.filter(cast => {
     const matchesSearch = cast.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -102,48 +120,135 @@ export default function Staff() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const handleAddCast = () => {
-    toast({
-      title: "キャスト追加",
-      description: "新しいキャストが追加されました",
-    });
-    setIsAddDialogOpen(false);
+  const handleAddCast = async () => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみキャストを追加できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('casts')
+        .insert([{
+          name: formData.name,
+          age: formData.age,
+          type: formData.type,
+          price: formData.price,
+          measurements: formData.measurements,
+          profile: formData.profile,
+          phone: formData.phone,
+          photo: formData.photo || null,
+          status: 'offline',
+          rating: 0,
+          total_sales: 0,
+          month_sales: 0,
+          work_days: 0,
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "キャスト追加",
+        description: "新しいキャストが追加されました",
+      });
+      
+      setIsAddDialogOpen(false);
+      setFormData({
+        name: "",
+        age: 23,
+        type: "スタンダード",
+        price: 12000,
+        measurements: "",
+        profile: "",
+        phone: "",
+        photo: "",
+      });
+    } catch (error) {
+      console.error('Error adding cast:', error);
+      toast({
+        title: "エラー",
+        description: "キャストの追加に失敗しました",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEditCast = (id: string) => {
-    toast({
-      title: "キャスト編集",
-      description: "キャスト情報を編集できます",
-    });
+  const handleDeleteCast = async (id: string) => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみキャストを削除できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('casts')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "キャスト削除",
+        description: "キャストが削除されました",
+      });
+    } catch (error) {
+      console.error('Error deleting cast:', error);
+      toast({
+        title: "エラー",
+        description: "キャストの削除に失敗しました",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteCast = (id: string) => {
-    setCasts(prev => prev.filter(cast => cast.id !== id));
-    toast({
-      title: "キャスト削除",
-      description: "キャストが削除されました",
-      variant: "destructive",
-    });
-  };
+  const handleStatusChange = async (id: string, newStatus: "waiting" | "busy" | "offline") => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみステータスを変更できます",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const handleStatusChange = (id: string, newStatus: "waiting" | "busy" | "offline") => {
-    setCasts(prev => prev.map(cast => 
-      cast.id === id ? { ...cast, status: newStatus } : cast
-    ));
-    const statusText = newStatus === "waiting" ? "待機中" : 
-                      newStatus === "busy" ? "接客中" : "退勤";
-    toast({
-      title: "ステータス変更",
-      description: `ステータスを「${statusText}」に変更しました`,
-    });
+    try {
+      const { error } = await supabase
+        .from('casts')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      const statusText = newStatus === "waiting" ? "待機中" : 
+                        newStatus === "busy" ? "接客中" : "退勤";
+      toast({
+        title: "ステータス変更",
+        description: `ステータスを「${statusText}」に変更しました`,
+      });
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "エラー",
+        description: "ステータスの変更に失敗しました",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "waiting": return "bg-green-100 text-green-800";
-      case "busy": return "bg-red-100 text-red-800";
-      case "offline": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "waiting": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+      case "busy": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+      case "offline": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+      default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
     }
   };
 
@@ -155,6 +260,18 @@ export default function Staff() {
       default: return "不明";
     }
   };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -171,75 +288,120 @@ export default function Staff() {
                 <p className="text-muted-foreground">キャストの登録・管理・ステータス確認</p>
               </div>
               
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus size={16} />
-                    新規追加
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>新しいキャストを追加</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="name">キャスト名</Label>
-                        <Input id="name" placeholder="美咲" />
-                      </div>
-                      <div>
-                        <Label htmlFor="age">年齢</Label>
-                        <Input id="age" type="number" placeholder="23" min="18" max="50" />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="type">ランク</Label>
-                        <Select>
-                          <SelectTrigger>
-                            <SelectValue placeholder="ランクを選択" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="スタンダード">スタンダード</SelectItem>
-                            <SelectItem value="プレミアム">プレミアム</SelectItem>
-                            <SelectItem value="VIP">VIP</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="price">料金 (60分)</Label>
-                        <Input id="price" type="number" placeholder="12000" />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="measurements">スリーサイズ</Label>
-                      <Input id="measurements" placeholder="B85-W58-H86" />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="profile">プロフィール</Label>
-                      <Textarea id="profile" rows={3} placeholder="キャストの魅力や特徴を入力..." />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="phone">電話番号</Label>
-                      <Input id="phone" placeholder="090-1234-5678" />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="photo">写真URL</Label>
-                      <Input id="photo" placeholder="https://..." />
-                    </div>
-                    
-                    <Button onClick={handleAddCast} className="w-full">
-                      追加
+              {isAdmin && (
+                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus size={16} />
+                      新規追加
                     </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>新しいキャストを追加</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="name">キャスト名</Label>
+                          <Input 
+                            id="name" 
+                            placeholder="美咲"
+                            value={formData.name}
+                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="age">年齢</Label>
+                          <Input 
+                            id="age" 
+                            type="number" 
+                            placeholder="23" 
+                            min="18" 
+                            max="50"
+                            value={formData.age}
+                            onChange={(e) => setFormData({...formData, age: parseInt(e.target.value)})}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="type">ランク</Label>
+                          <Select 
+                            value={formData.type}
+                            onValueChange={(value) => setFormData({...formData, type: value})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="ランクを選択" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="スタンダード">スタンダード</SelectItem>
+                              <SelectItem value="プレミアム">プレミアム</SelectItem>
+                              <SelectItem value="VIP">VIP</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="price">料金 (60分)</Label>
+                          <Input 
+                            id="price" 
+                            type="number" 
+                            placeholder="12000"
+                            value={formData.price}
+                            onChange={(e) => setFormData({...formData, price: parseInt(e.target.value)})}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="measurements">スリーサイズ</Label>
+                        <Input 
+                          id="measurements" 
+                          placeholder="B85-W58-H86"
+                          value={formData.measurements}
+                          onChange={(e) => setFormData({...formData, measurements: e.target.value})}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="profile">プロフィール</Label>
+                        <Textarea 
+                          id="profile" 
+                          rows={3} 
+                          placeholder="キャストの魅力や特徴を入力..."
+                          value={formData.profile}
+                          onChange={(e) => setFormData({...formData, profile: e.target.value})}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="phone">電話番号</Label>
+                        <Input 
+                          id="phone" 
+                          placeholder="090-1234-5678"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="photo">写真URL</Label>
+                        <Input 
+                          id="photo" 
+                          placeholder="https://..."
+                          value={formData.photo}
+                          onChange={(e) => setFormData({...formData, photo: e.target.value})}
+                        />
+                      </div>
+                      
+                      <Button onClick={handleAddCast} className="w-full">
+                        追加
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
 
             {/* Search and Filter */}
@@ -285,12 +447,18 @@ export default function Staff() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredCasts.map((cast) => (
                 <Card key={cast.id} className="overflow-hidden">
-                  <div className="aspect-[4/3] relative overflow-hidden">
-                    <img 
-                      src={cast.photo} 
-                      alt={cast.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="aspect-[4/3] relative overflow-hidden bg-muted">
+                    {cast.photo ? (
+                      <img 
+                        src={cast.photo} 
+                        alt={cast.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Camera size={48} className="text-muted-foreground" />
+                      </div>
+                    )}
                     <div className="absolute top-2 right-2">
                       <Badge className={getStatusColor(cast.status)}>
                         {getStatusText(cast.status)}
@@ -329,71 +497,78 @@ export default function Staff() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="flex items-center gap-1">
                           <TrendingUp size={12} />
-                          <span>今月: ¥{cast.monthSales.toLocaleString()}</span>
+                          <span>今月: ¥{cast.month_sales.toLocaleString()}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock size={12} />
-                          <span>出勤: {cast.workDays}日</span>
+                          <span>出勤: {cast.work_days}日</span>
                         </div>
                       </div>
                       
-                      {cast.status === "waiting" && cast.waitingTime && (
-                        <div className="text-xs text-green-600 font-medium">
-                          待機時間: {cast.waitingTime}
+                      {cast.status === "waiting" && cast.waiting_time && (
+                        <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                          待機時間: {cast.waiting_time}
                         </div>
                       )}
                     </div>
                     
                     {/* Status Change Buttons */}
-                    <div className="flex gap-1 mt-4">
-                      <Button 
-                        variant={cast.status === "waiting" ? "default" : "outline"}
-                        size="sm" 
-                        onClick={() => handleStatusChange(cast.id, "waiting")}
-                        className="flex-1 text-xs"
-                        disabled={cast.status === "waiting"}
-                      >
-                        待機
-                      </Button>
-                      <Button 
-                        variant={cast.status === "busy" ? "default" : "outline"}
-                        size="sm" 
-                        onClick={() => handleStatusChange(cast.id, "busy")}
-                        className="flex-1 text-xs"
-                        disabled={cast.status === "busy"}
-                      >
-                        接客
-                      </Button>
-                      <Button 
-                        variant={cast.status === "offline" ? "default" : "outline"}
-                        size="sm" 
-                        onClick={() => handleStatusChange(cast.id, "offline")}
-                        className="flex-1 text-xs"
-                        disabled={cast.status === "offline"}
-                      >
-                        退勤
-                      </Button>
-                    </div>
-                    
-                    <div className="flex gap-2 mt-3">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleEditCast(cast.id)}
-                        className="flex-1"
-                      >
-                        <Edit size={14} />
-                        編集
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleDeleteCast(cast.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
+                    {isAdmin && (
+                      <>
+                        <div className="flex gap-1 mt-4">
+                          <Button 
+                            variant={cast.status === "waiting" ? "default" : "outline"}
+                            size="sm" 
+                            onClick={() => handleStatusChange(cast.id, "waiting")}
+                            className="flex-1 text-xs"
+                            disabled={cast.status === "waiting"}
+                          >
+                            待機
+                          </Button>
+                          <Button 
+                            variant={cast.status === "busy" ? "default" : "outline"}
+                            size="sm" 
+                            onClick={() => handleStatusChange(cast.id, "busy")}
+                            className="flex-1 text-xs"
+                            disabled={cast.status === "busy"}
+                          >
+                            接客
+                          </Button>
+                          <Button 
+                            variant={cast.status === "offline" ? "default" : "outline"}
+                            size="sm" 
+                            onClick={() => handleStatusChange(cast.id, "offline")}
+                            className="flex-1 text-xs"
+                            disabled={cast.status === "offline"}
+                          >
+                            退勤
+                          </Button>
+                        </div>
+                        
+                        <div className="flex gap-2 mt-3">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => toast({
+                              title: "編集機能",
+                              description: "編集機能は近日実装予定です",
+                            })}
+                            className="flex-1"
+                          >
+                            <Edit size={14} />
+                            編集
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleDeleteCast(cast.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -401,7 +576,9 @@ export default function Staff() {
 
             {filteredCasts.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                検索条件に一致するキャストが見つかりません
+                {casts.length === 0 
+                  ? "キャストが登録されていません" 
+                  : "検索条件に一致するキャストが見つかりません"}
               </div>
             )}
           </div>
