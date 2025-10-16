@@ -145,8 +145,8 @@ export default function NotionPageView() {
             <Link to="/public/casts" className="text-sm font-medium hover:text-primary transition-colors">
               セラピスト
             </Link>
-            <Link to="/public/therapist-database" className="text-sm font-medium hover:text-primary transition-colors">
-              セラピストDB
+            <Link to="/public/system" className="text-sm font-medium hover:text-primary transition-colors">
+              システム
             </Link>
           </nav>
         </div>

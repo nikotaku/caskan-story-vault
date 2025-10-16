@@ -35,6 +35,7 @@ const menuItems = [
   { href: "/reservations", label: "予約管理", icon: BookOpen },
   { href: "/pricing", label: "料金設定", icon: DollarSign },
   { href: "/report", label: "レポート", icon: BarChart3 },
+  { href: "/therapist-database", label: "セラピストDB", icon: Users },
   { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/shop", label: "設定", icon: Settings },
 ];

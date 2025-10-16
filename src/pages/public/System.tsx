@@ -53,9 +53,6 @@ const System = () => {
             <Link to="/public/casts" className="text-sm font-medium hover:text-primary transition-colors">
               セラピスト
             </Link>
-            <Link to="/public/therapist-database" className="text-sm font-medium hover:text-primary transition-colors">
-              セラピストDB
-            </Link>
           </nav>
           <Button asChild>
             <a href="tel:080-3192-1209">

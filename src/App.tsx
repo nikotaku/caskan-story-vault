@@ -20,8 +20,8 @@ import PublicCastDetail from "./pages/public/CastDetail";
 import PublicSchedule from "./pages/public/Schedule";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
-import PublicTherapistDatabase from "./pages/public/TherapistDatabase";
 import NotionPageView from "./pages/NotionPageView";
+import TherapistDatabase from "./pages/TherapistDatabase";
 
 const queryClient = new QueryClient();
 
@@ -50,8 +50,8 @@ const App = () => (
           <Route path="/public/schedule" element={<PublicSchedule />} />
           <Route path="/public/pricing" element={<PublicPricing />} />
           <Route path="/public/system" element={<PublicSystem />} />
-          <Route path="/public/therapist-database" element={<PublicTherapistDatabase />} />
           <Route path="/page/:slug" element={<NotionPageView />} />
+          <Route path="/therapist-database" element={<TherapistDatabase />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
