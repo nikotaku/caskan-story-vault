@@ -22,16 +22,13 @@ interface Cast {
   age: number;
   type: string;
   status: "waiting" | "busy" | "offline";
-  rating: number;
   photo: string | null;
   profile: string | null;
   measurements: string | null;
-  price: number;
   total_sales: number;
   month_sales: number;
   work_days: number;
   join_date: string;
-  phone: string | null;
   waiting_time?: string | null;
 }
 
@@ -49,10 +46,8 @@ export default function Staff() {
     name: "",
     age: 23,
     type: "スタンダード",
-    price: 12000,
     measurements: "",
     profile: "",
-    phone: "",
     photo: "",
   });
   
@@ -138,13 +133,10 @@ export default function Staff() {
           name: formData.name,
           age: formData.age,
           type: formData.type,
-          price: formData.price,
           measurements: formData.measurements,
           profile: formData.profile,
-          phone: formData.phone,
           photo: formData.photo || null,
           status: 'offline',
-          rating: 0,
           total_sales: 0,
           month_sales: 0,
           work_days: 0,
@@ -162,10 +154,8 @@ export default function Staff() {
         name: "",
         age: 23,
         type: "スタンダード",
-        price: 12000,
         measurements: "",
         profile: "",
-        phone: "",
         photo: "",
       });
     } catch (error) {
@@ -343,16 +333,6 @@ export default function Staff() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div>
-                          <Label htmlFor="price">料金 (60分)</Label>
-                          <Input 
-                            id="price" 
-                            type="number" 
-                            placeholder="12000"
-                            value={formData.price}
-                            onChange={(e) => setFormData({...formData, price: parseInt(e.target.value)})}
-                          />
-                        </div>
                       </div>
                       
                       <div>
@@ -373,16 +353,6 @@ export default function Staff() {
                           placeholder="キャストの魅力や特徴を入力..."
                           value={formData.profile}
                           onChange={(e) => setFormData({...formData, profile: e.target.value})}
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="phone">電話番号</Label>
-                        <Input 
-                          id="phone" 
-                          placeholder="090-1234-5678"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({...formData, phone: e.target.value})}
                         />
                       </div>
                       
@@ -480,18 +450,10 @@ export default function Staff() {
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-lg flex items-center gap-2">
+                        <CardTitle className="text-lg">
                           {cast.name} ({cast.age})
-                          <div className="flex items-center text-yellow-500">
-                            <Star size={16} fill="currentColor" />
-                            <span className="text-sm ml-1">{cast.rating}</span>
-                          </div>
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">{cast.measurements}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg">¥{cast.price.toLocaleString()}</div>
-                        <div className="text-xs text-muted-foreground">60分</div>
                       </div>
                     </div>
                   </CardHeader>

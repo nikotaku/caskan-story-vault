@@ -14,9 +14,7 @@ interface Cast {
   age: number;
   type: string;
   status: string;
-  rating: number;
   photo: string | null;
-  price: number;
   profile: string | null;
 }
 
@@ -55,7 +53,7 @@ const Casts = () => {
       const { data, error } = await supabase
         .from("casts")
         .select("*")
-        .order("rating", { ascending: false });
+        .order("name", { ascending: true });
 
       if (error) throw error;
       setCasts(data || []);
@@ -220,12 +218,7 @@ const Casts = () => {
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-sm text-muted-foreground">{cast.age}歳</span>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="text-sm font-medium">{cast.rating}</span>
-                      </div>
                     </div>
-                    <p className="text-lg font-bold text-primary">¥{cast.price.toLocaleString()}</p>
                     {cast.profile && (
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
                         {cast.profile}

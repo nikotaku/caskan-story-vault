@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, Users, DollarSign, Calendar, Star } from "lucide-react";
+import { TrendingUp, Users, DollarSign, Calendar } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,13 +12,11 @@ interface Stats {
   totalReservations: number;
   totalSales: number;
   totalCasts: number;
-  avgRating: number;
 }
 
 interface CastStats {
   name: string;
   sales: number;
-  rating: number;
   workDays: number;
 }
 
@@ -28,7 +26,6 @@ export default function Report() {
     totalReservations: 0,
     totalSales: 0,
     totalCasts: 0,
-    avgRating: 0,
   });
   const [castStats, setCastStats] = useState<CastStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,20 +61,16 @@ export default function Report() {
 
       const { data: casts, error: castError } = await supabase
         .from('casts')
-        .select('rating');
+        .select('id');
 
       if (castError) throw castError;
 
       const totalCasts = casts?.length || 0;
-      const avgRating = casts && casts.length > 0
-        ? casts.reduce((sum, c) => sum + c.rating, 0) / casts.length
-        : 0;
 
       setStats({
         totalReservations,
         totalSales,
         totalCasts,
-        avgRating: Math.round(avgRating * 10) / 10,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -90,7 +83,7 @@ export default function Report() {
     try {
       const { data: casts, error } = await supabase
         .from('casts')
-        .select('name, rating, month_sales, work_days')
+        .select('name, month_sales, work_days')
         .order('month_sales', { ascending: false })
         .limit(10);
 
@@ -99,7 +92,6 @@ export default function Report() {
       setCastStats(casts?.map(c => ({
         name: c.name,
         sales: c.month_sales,
-        rating: c.rating,
         workDays: c.work_days,
       })) || []);
     } catch (error) {
@@ -148,7 +140,7 @@ export default function Report() {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+            <div className="grid gap-4 md:grid-cols-3 mb-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium">総売上</CardTitle>
@@ -180,16 +172,6 @@ export default function Report() {
                   <div className="text-2xl font-bold">{stats.totalCasts}名</div>
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">平均評価</CardTitle>
-                  <Star className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.avgRating}</div>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Cast Rankings */}
@@ -206,11 +188,7 @@ export default function Report() {
                       </div>
                       <div className="flex-1">
                         <div className="font-medium text-lg">{cast.name}</div>
-                        <div className="text-sm text-muted-foreground flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Star size={14} fill="currentColor" className="text-yellow-500" />
-                            {cast.rating}
-                          </span>
+                        <div className="text-sm text-muted-foreground">
                           <span>出勤: {cast.workDays}日</span>
                         </div>
                       </div>

@@ -12,9 +12,7 @@ interface Cast {
   age: number;
   type: string;
   status: string;
-  rating: number;
   photo: string | null;
-  price: number;
   profile: string | null;
   measurements: string | null;
   waiting_time: string | null;
@@ -171,10 +169,6 @@ const CastDetail = () => {
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-muted-foreground">{cast.age}歳</span>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="font-medium">{cast.rating}</span>
-                      </div>
                     </div>
                   </div>
 
@@ -184,13 +178,6 @@ const CastDetail = () => {
                       <p className="text-muted-foreground">{cast.measurements}</p>
                     </div>
                   )}
-
-                  <div>
-                    <h3 className="font-bold mb-2">料金</h3>
-                    <p className="text-2xl font-bold text-primary">
-                      ¥{cast.price.toLocaleString()}
-                    </p>
-                  </div>
 
                   {cast.waiting_time && cast.status === "waiting" && (
                     <div>

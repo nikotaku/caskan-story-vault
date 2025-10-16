@@ -23,11 +23,8 @@ export type Database = {
           measurements: string | null
           month_sales: number
           name: string
-          phone: string | null
           photo: string | null
-          price: number
           profile: string | null
-          rating: number
           status: string
           total_sales: number
           type: string
@@ -43,11 +40,8 @@ export type Database = {
           measurements?: string | null
           month_sales?: number
           name: string
-          phone?: string | null
           photo?: string | null
-          price: number
           profile?: string | null
-          rating?: number
           status?: string
           total_sales?: number
           type: string
@@ -63,11 +57,8 @@ export type Database = {
           measurements?: string | null
           month_sales?: number
           name?: string
-          phone?: string | null
           photo?: string | null
-          price?: number
           profile?: string | null
-          rating?: number
           status?: string
           total_sales?: number
           type?: string
