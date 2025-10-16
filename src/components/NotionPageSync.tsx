@@ -45,9 +45,14 @@ export const NotionPageSync = () => {
       }
     } catch (error: any) {
       console.error('Sync error:', error);
+      const errorMsg = error.message || "Notionページの同期に失敗しました";
+      const isDbError = errorMsg.includes("database");
+      
       toast({
         title: "同期エラー",
-        description: error.message || "Notionページの同期に失敗しました",
+        description: isDbError 
+          ? "入力されたIDはデータベースIDです。個別ページのIDを入力してください。NotionページのURLから32文字のページIDを取得してください。"
+          : errorMsg,
         variant: "destructive",
       });
     } finally {
@@ -77,7 +82,9 @@ export const NotionPageSync = () => {
             disabled={syncing}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            ページURLの最後の32文字（ハイフンなし）
+            ページURLの最後の32文字（ハイフンなし）<br />
+            例: https://notion.so/Page-Title-<strong>abc123...</strong> の太字部分<br />
+            <span className="text-destructive">※データベースIDではなく、個別ページのIDを入力してください</span>
           </p>
         </div>
 
