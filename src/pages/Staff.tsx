@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles, Database } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -357,20 +358,33 @@ export default function Staff() {
         
         <main className="flex-1 p-6 md:ml-[240px]">
           <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h1 className="text-2xl font-bold">キャスト管理</h1>
-                <p className="text-muted-foreground">キャストの登録・管理・ステータス確認</p>
-              </div>
-              
-              {isAdmin && (
-                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus size={16} />
-                      新規追加
-                    </Button>
-                  </DialogTrigger>
+            <Tabs defaultValue="management" className="w-full">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold">キャスト管理・セラピストDB</h1>
+                  <p className="text-muted-foreground">キャストの登録・管理・データベース参照</p>
+                </div>
+                
+                <div className="flex gap-2 items-center">
+                  <TabsList>
+                    <TabsTrigger value="management">
+                      <Star className="mr-2 h-4 w-4" />
+                      キャスト管理
+                    </TabsTrigger>
+                    <TabsTrigger value="database">
+                      <Database className="mr-2 h-4 w-4" />
+                      セラピストDB
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  {isAdmin && (
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <Plus size={16} />
+                          新規追加
+                        </Button>
+                      </DialogTrigger>
                   <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>新しいキャストを追加</DialogTitle>
@@ -449,6 +463,7 @@ export default function Staff() {
                   </DialogContent>
                 </Dialog>
               )}
+              </div>
             </div>
 
             {/* Edit Dialog */}
@@ -605,8 +620,9 @@ export default function Staff() {
               </div>
             )}
 
-            {/* Search and Filter */}
-            <Card className="mb-6">
+            <TabsContent value="management" className="space-y-6">
+              {/* Search and Filter */}
+              <Card className="mb-6">
               <CardContent className="p-4">
                 <div className="flex gap-4 flex-wrap">
                   <div className="relative flex-1 min-w-[200px]">
@@ -793,6 +809,28 @@ export default function Staff() {
                   : "検索条件に一致するキャストが見つかりません"}
               </div>
             )}
+            </TabsContent>
+
+            <TabsContent value="database" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="h-5 w-5" />
+                    セラピストデータベース
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="w-full bg-white rounded-lg shadow-lg" style={{ height: 'calc(100vh - 300px)', minHeight: '600px' }}>
+                    <iframe
+                      src="https://cherry-worm-418.notion.site/ebd/204f9507f0cf818ea0c6e2602c100b36"
+                      className="w-full h-full border-0 rounded-lg"
+                      title="セラピストデータベース"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
           </div>
         </main>
       </div>

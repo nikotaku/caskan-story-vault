@@ -23,7 +23,6 @@ import PublicSchedule from "./pages/public/Schedule";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
 import NotionPageView from "./pages/NotionPageView";
-import TherapistDatabase from "./pages/TherapistDatabase";
 import BookingReservation from "./pages/public/BookingReservation";
 import TextGeneration from "./pages/TextGeneration";
 import EstamaIntegration from "./pages/EstamaIntegration";
@@ -60,7 +59,6 @@ const App = () => (
           <Route path="/public/pricing" element={<PublicPricing />} />
           <Route path="/public/system" element={<PublicSystem />} />
           <Route path="/page/:slug" element={<NotionPageView />} />
-          <Route path="/therapist-database" element={<TherapistDatabase />} />
           <Route path="/public/booking" element={<BookingReservation />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
