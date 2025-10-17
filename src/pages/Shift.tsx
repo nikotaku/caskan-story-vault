@@ -68,6 +68,7 @@ const Shift = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [reservationSearchTerm, setReservationSearchTerm] = useState("");
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date>(new Date());
   
   const [formData, setFormData] = useState({
     cast_id: "",
@@ -381,6 +382,39 @@ const Shift = () => {
     }
   };
 
+  // タイムスケジュール用のヘルパー関数
+  const timeSlots = Array.from({ length: 15 }, (_, i) => {
+    const hour = 12 + i;
+    return hour < 24 ? `${hour}:00` : `${hour - 24}:00`;
+  });
+
+  const getScheduleDateStr = format(selectedScheduleDate, "yyyy-MM-dd");
+  const todayShifts = shifts.filter(shift => shift.shift_date === getScheduleDateStr);
+  const todayReservations = reservations.filter(res => res.reservation_date === getScheduleDateStr);
+
+  const isTimeSlotBooked = (castId: string, time: string) => {
+    return todayReservations.some(res => {
+      const resHour = parseInt(res.start_time.split(':')[0]);
+      const slotHour = parseInt(time.split(':')[0]);
+      const duration = res.duration / 60;
+      
+      return res.cast_id === castId && 
+             slotHour >= resHour && 
+             slotHour < resHour + duration;
+    });
+  };
+
+  const isTimeSlotInShift = (shift: Shift, time: string) => {
+    const slotHour = parseInt(time.split(':')[0]);
+    const startHour = parseInt(shift.start_time.split(':')[0]);
+    const endHour = parseInt(shift.end_time.split(':')[0]);
+    
+    if (endHour < startHour) {
+      return slotHour >= startHour || slotHour < endHour;
+    }
+    return slotHour >= startHour && slotHour < endHour;
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -579,6 +613,105 @@ const Shift = () => {
               </TabsContent>
 
               <TabsContent value="reservations" className="space-y-4">
+                {/* タイムスケジュールウィジェット */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-lg">セラピスト別タイムスケジュール</h3>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {format(selectedScheduleDate, "M月d日(E)", { locale: ja })}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                          <Calendar
+                            mode="single"
+                            selected={selectedScheduleDate}
+                            onSelect={(date) => date && setSelectedScheduleDate(date)}
+                            locale={ja}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {todayShifts.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">
+                        この日の出勤予定はありません
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
+                          <thead>
+                            <tr>
+                              <th className="border border-border bg-muted p-2 text-left min-w-[100px]">
+                                セラピスト
+                              </th>
+                              {timeSlots.map((time) => (
+                                <th key={time} className="border border-border bg-muted p-1 text-center min-w-[60px] text-xs">
+                                  {time}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {todayShifts.map((shift) => {
+                              const cast = casts.find(c => c.id === shift.cast_id);
+                              return (
+                                <tr key={shift.id}>
+                                  <td className="border border-border p-2 font-medium">
+                                    {cast?.name || '不明'}
+                                  </td>
+                                  {timeSlots.map((time) => {
+                                    const inShift = isTimeSlotInShift(shift, time);
+                                    const isBooked = isTimeSlotBooked(shift.cast_id, time);
+                                    
+                                    return (
+                                      <td 
+                                        key={time} 
+                                        className={cn(
+                                          "border border-border p-1 text-center text-xs",
+                                          !inShift && "bg-gray-100 dark:bg-gray-800",
+                                          inShift && !isBooked && "bg-green-100 dark:bg-green-900/30",
+                                          inShift && isBooked && "bg-red-100 dark:bg-red-900/30"
+                                        )}
+                                      >
+                                        {inShift && (
+                                          <span className={cn(
+                                            "font-semibold",
+                                            isBooked ? "text-red-700 dark:text-red-300" : "text-green-700 dark:text-green-300"
+                                          )}>
+                                            {isBooked ? "予約" : "空"}
+                                          </span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        <div className="flex gap-4 mt-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-green-100 dark:bg-green-900/30 border border-border"></div>
+                            <span>予約可能</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-red-100 dark:bg-red-900/30 border border-border"></div>
+                            <span>予約済み</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-border"></div>
+                            <span>勤務外</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <div className="flex gap-4 items-end">
                   <div className="flex-1">
                     <Label>予約検索</Label>
