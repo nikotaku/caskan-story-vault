@@ -399,20 +399,34 @@ export default function Staff() {
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${fileName}`;
 
+      console.log('Uploading photo:', filePath);
+
       const { error: uploadError } = await supabase.storage
         .from('cast-photos')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('cast-photos')
         .getPublicUrl(filePath);
 
+      console.log('Photo uploaded successfully:', publicUrl);
+
       if (isEdit && editingCast) {
         setEditingCast({ ...editingCast, photo: publicUrl });
       } else {
         setFormData({ ...formData, photo: publicUrl });
+      }
+
+      // ファイル入力をリセット
+      if (isEdit && editFileInputRef.current) {
+        editFileInputRef.current.value = '';
+      } else if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
 
       toast({
@@ -423,7 +437,7 @@ export default function Staff() {
       console.error('Error uploading photo:', error);
       toast({
         title: "エラー",
-        description: "写真のアップロードに失敗しました",
+        description: error instanceof Error ? error.message : "写真のアップロードに失敗しました",
         variant: "destructive",
       });
     } finally {
