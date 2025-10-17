@@ -4,6 +4,7 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
 import { NotionPageSync } from "@/components/NotionPageSync";
+import { WebsitePhotoSync } from "@/components/WebsitePhotoSync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -782,11 +783,10 @@ export default function Staff() {
 
             {/* Notion Sync */}
             {isAdmin && (
-              <div className="mb-6">
+              <div className="mb-6 space-y-4">
+                <WebsitePhotoSync />
                 <NotionSync />
-                <div className="mt-4">
-                  <NotionPageSync />
-                </div>
+                <NotionPageSync />
               </div>
             )}
 
