@@ -277,6 +277,7 @@ export type Database = {
       }
       pricing: {
         Row: {
+          course_type: string
           created_at: string
           duration: number
           id: string
@@ -286,6 +287,7 @@ export type Database = {
           vip_price: number
         }
         Insert: {
+          course_type?: string
           created_at?: string
           duration: number
           id?: string
@@ -295,6 +297,7 @@ export type Database = {
           vip_price?: number
         }
         Update: {
+          course_type?: string
           created_at?: string
           duration?: number
           id?: string

@@ -9,6 +9,7 @@ interface PricingCourse {
   standard_price: number;
   premium_price: number;
   vip_price: number;
+  course_type: string;
 }
 
 interface PricingOption {
@@ -137,7 +138,22 @@ const System = () => {
               <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>プロ手技のコース</h3>
             </div>
             <div className="space-y-3">
-              {courses.map((course, index) => (
+              {courses.filter(c => c.course_type === 'プロ手技').map((course, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">{course.duration}min</span>
+                  <span className="text-gray-700 font-bold">¥{course.standard_price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Zenryoku Course */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>全力コース</h3>
+            </div>
+            <div className="space-y-3">
+              {courses.filter(c => c.course_type === '全力').map((course, index) => (
                 <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
                   <span className="text-gray-700 font-medium">{course.duration}min</span>
                   <span className="text-gray-700 font-bold">¥{course.standard_price.toLocaleString()}</span>
