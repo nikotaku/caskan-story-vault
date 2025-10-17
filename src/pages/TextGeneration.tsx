@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -23,10 +24,11 @@ export default function TextGeneration() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [selectedCastId, setSelectedCastId] = useState<string>("");
-  const [generationType, setGenerationType] = useState<'profile' | 'announcement' | 'catchphrase'>('profile');
+  const [generationType, setGenerationType] = useState<'profile' | 'announcement' | 'catchphrase' | 'news'>('profile');
   const [generatedContent, setGeneratedContent] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [newsTitle, setNewsTitle] = useState<string>("");
   
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -62,7 +64,7 @@ export default function TextGeneration() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedCastId) {
+    if (generationType !== 'news' && !selectedCastId) {
       toast({
         title: "エラー",
         description: "キャストを選択してください",
@@ -71,17 +73,17 @@ export default function TextGeneration() {
       return;
     }
 
-    const selectedCast = casts.find(c => c.id === selectedCastId);
-    if (!selectedCast) return;
+    const selectedCast = generationType !== 'news' ? casts.find(c => c.id === selectedCastId) : null;
 
     setIsGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-cast-content', {
         body: {
           type: generationType,
-          castName: selectedCast.name,
-          castType: selectedCast.type,
-          existingProfile: generationType === 'profile' ? selectedCast.profile : null
+          castName: selectedCast?.name || "",
+          castType: selectedCast?.type || "",
+          existingProfile: generationType === 'profile' ? selectedCast?.profile : null,
+          newsTitle: generationType === 'news' ? newsTitle : null
         }
       });
 
@@ -161,6 +163,7 @@ export default function TextGeneration() {
       case 'profile': return 'プロフィール';
       case 'announcement': return 'お知らせ文章';
       case 'catchphrase': return 'キャッチコピー';
+      case 'news': return 'ニュース記事';
       default: return '';
     }
   };
@@ -202,7 +205,11 @@ export default function TextGeneration() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="cast-select">キャスト選択</Label>
-                    <Select value={selectedCastId} onValueChange={setSelectedCastId}>
+                    <Select 
+                      value={selectedCastId} 
+                      onValueChange={setSelectedCastId}
+                      disabled={generationType === 'news'}
+                    >
                       <SelectTrigger id="cast-select">
                         <SelectValue placeholder="キャストを選択" />
                       </SelectTrigger>
@@ -214,13 +221,23 @@ export default function TextGeneration() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {generationType === 'news' && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        ニュース記事はキャスト不要
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <Label htmlFor="type-select">生成タイプ</Label>
                     <Select 
                       value={generationType} 
-                      onValueChange={(value: any) => setGenerationType(value)}
+                      onValueChange={(value: any) => {
+                        setGenerationType(value);
+                        if (value === 'news') {
+                          setSelectedCastId("");
+                        }
+                      }}
                     >
                       <SelectTrigger id="type-select">
                         <SelectValue />
@@ -229,14 +246,30 @@ export default function TextGeneration() {
                         <SelectItem value="profile">プロフィール</SelectItem>
                         <SelectItem value="announcement">お知らせ文章</SelectItem>
                         <SelectItem value="catchphrase">キャッチコピー</SelectItem>
+                        <SelectItem value="news">ニュース記事</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
+                {generationType === 'news' && (
+                  <div>
+                    <Label htmlFor="news-title">記事タイトル（任意）</Label>
+                    <Input
+                      id="news-title"
+                      placeholder="例：新人セラピスト入店のお知らせ"
+                      value={newsTitle}
+                      onChange={(e) => setNewsTitle(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      タイトルを指定すると、それに基づいた記事を生成します
+                    </p>
+                  </div>
+                )}
+
                 <Button 
                   onClick={handleGenerate} 
-                  disabled={!selectedCastId || isGenerating}
+                  disabled={(generationType !== 'news' && !selectedCastId) || isGenerating}
                   className="w-full"
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
@@ -275,7 +308,7 @@ export default function TextGeneration() {
                         )}
                       </Button>
                       
-                      {generationType !== 'catchphrase' && (
+                      {generationType !== 'catchphrase' && generationType !== 'news' && (
                         <Button 
                           onClick={handleSave}
                           className="flex-1"
@@ -294,11 +327,12 @@ export default function TextGeneration() {
                 <CardTitle>使い方</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>1. キャストを選択してください</p>
-                <p>2. 生成したい文章のタイプを選択してください</p>
-                <p>3. 「生成」ボタンをクリックすると、AIが魅力的な文章を自動作成します</p>
-                <p>4. 生成された文章は編集可能です。必要に応じて修正してください</p>
-                <p>5. 「保存」ボタンでキャスト情報に直接保存できます</p>
+                <p>1. 生成したい文章のタイプを選択してください</p>
+                <p>2. キャストが必要な場合は選択してください（ニュース記事は不要）</p>
+                <p>3. ニュース記事の場合は、任意で記事タイトルを入力できます</p>
+                <p>4. 「生成」ボタンをクリックすると、AIが魅力的な文章を自動作成します</p>
+                <p>5. 生成された文章は編集可能です。必要に応じて修正してください</p>
+                <p>6. プロフィールとお知らせは「保存」ボタンでキャスト情報に直接保存できます</p>
               </CardContent>
             </Card>
           </div>

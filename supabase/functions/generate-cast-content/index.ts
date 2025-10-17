@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { type, castName, castType, existingProfile } = await req.json();
+    const { type, castName, castType, existingProfile, newsTitle } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -35,6 +35,13 @@ serve(async (req) => {
       case "catchphrase":
         systemPrompt = "あなたはメンズエステのキャッチコピーを作成する専門のコピーライターです。短く印象的で、お客様の興味を引くキャッチコピーを日本語で作成してください。";
         userPrompt = `キャスト名: ${castName}\nタイプ: ${castType}\n\n上記のキャストの魅力を表現する、20-40文字程度の印象的なキャッチコピーを作成してください。`;
+        break;
+      
+      case "news":
+        systemPrompt = "あなたはメンズエステのニュース記事を作成する専門のライターです。読みやすく、魅力的で、お客様の興味を引く記事を日本語で作成してください。";
+        userPrompt = newsTitle 
+          ? `タイトル: ${newsTitle}\n\n上記のタイトルに基づいて、メンズエステのニュース記事を300-500文字程度で作成してください。店舗の魅力やサービスの特徴、お得な情報などを含めてください。`
+          : `メンズエステの新着ニュース記事を300-500文字程度で作成してください。店舗の魅力やサービスの特徴、お得な情報などを含めてください。`;
         break;
       
       default:
