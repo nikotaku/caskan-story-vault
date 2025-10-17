@@ -8,6 +8,7 @@ import Staff from "./pages/Staff";
 import Shift from "./pages/Shift";
 import ShiftSubmission from "./pages/ShiftSubmission";
 import Reservations from "./pages/Reservations";
+import Customers from "./pages/Customers";
 import Design from "./pages/Design";
 import Report from "./pages/Report";
 import Salary from "./pages/Salary";
@@ -42,6 +43,7 @@ const App = () => (
           <Route path="/shift" element={<Shift />} />
           <Route path="/shift/submission" element={<ShiftSubmission />} />
           <Route path="/reservations" element={<Reservations />} />
+          <Route path="/customers" element={<Customers />} />
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
           <Route path="/salary" element={<Salary />} />
