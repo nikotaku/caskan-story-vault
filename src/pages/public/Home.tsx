@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Phone } from "lucide-react";
+import { ChevronLeft, ChevronRight, Phone, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FaXTwitter, FaLine } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { ChatBot } from "@/components/ChatBot";
@@ -242,7 +243,29 @@ const Home = () => {
           >
             ご予約・お問い合わせ
           </h2>
-          <p className="text-lg" style={{ color: "#a89586" }}>営業時間: 12:00〜26:00（24:40最終受付）</p>
+          <p className="text-lg mb-8" style={{ color: "#a89586" }}>営業時間: 12:00〜26:00（24:40最終受付）</p>
+          
+          {/* Social Media Buttons */}
+          <div className="flex justify-center gap-4 flex-wrap">
+            <Button 
+              size="lg" 
+              className="gap-2 min-w-[200px]"
+              style={{ backgroundColor: "#06C755", color: "white" }}
+              onClick={() => window.open('https://line.me/R/', '_blank')}
+            >
+              <FaLine size={24} />
+              LINE で予約
+            </Button>
+            <Button 
+              size="lg" 
+              className="gap-2 min-w-[200px]"
+              style={{ backgroundColor: "#000000", color: "white" }}
+              onClick={() => window.open('https://twitter.com/', '_blank')}
+            >
+              <FaXTwitter size={20} />
+              Twitter をフォロー
+            </Button>
+          </div>
         </div>
       </section>
 
