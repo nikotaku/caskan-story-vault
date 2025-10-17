@@ -73,6 +73,20 @@ const Shift = () => {
   const [generatingSMS, setGeneratingSMS] = useState<string | null>(null);
   const [smsMessage, setSmsMessage] = useState<string>("");
   const [showSmsDialog, setShowSmsDialog] = useState(false);
+  const [isAddReservationDialogOpen, setIsAddReservationDialogOpen] = useState(false);
+  const [reservationFormData, setReservationFormData] = useState({
+    cast_id: "",
+    customer_name: "",
+    customer_phone: "",
+    customer_email: "",
+    reservation_date: new Date(),
+    start_time: "14:00",
+    duration: 60,
+    course_name: "60分コース",
+    course_type: "standard",
+    price: 12000,
+    notes: "",
+  });
   
   const [formData, setFormData] = useState({
     cast_id: "",
@@ -433,6 +447,76 @@ const Shift = () => {
     }
   };
 
+  const handleAddReservation = async () => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみ予約を追加できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!reservationFormData.cast_id || !reservationFormData.customer_name || !reservationFormData.customer_phone) {
+      toast({
+        title: "入力エラー",
+        description: "必須項目を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("reservations")
+        .insert([{
+          cast_id: reservationFormData.cast_id,
+          customer_name: reservationFormData.customer_name,
+          customer_phone: reservationFormData.customer_phone,
+          customer_email: reservationFormData.customer_email || null,
+          reservation_date: format(reservationFormData.reservation_date, "yyyy-MM-dd"),
+          start_time: reservationFormData.start_time,
+          duration: reservationFormData.duration,
+          course_name: reservationFormData.course_name,
+          course_type: reservationFormData.course_type,
+          price: reservationFormData.price,
+          notes: reservationFormData.notes || null,
+          status: "pending",
+          payment_status: "unpaid",
+          created_by: user!.id,
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "予約追加",
+        description: "新しい予約が追加されました",
+      });
+
+      setIsAddReservationDialogOpen(false);
+      setReservationFormData({
+        cast_id: "",
+        customer_name: "",
+        customer_phone: "",
+        customer_email: "",
+        reservation_date: new Date(),
+        start_time: "14:00",
+        duration: 60,
+        course_name: "60分コース",
+        course_type: "standard",
+        price: 12000,
+        notes: "",
+      });
+    } catch (error: any) {
+      console.error("Error adding reservation:", error);
+      toast({
+        title: "エラー",
+        description: "予約の追加に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
   // タイムスケジュール用のヘルパー関数
   const timeSlots = Array.from({ length: 15 }, (_, i) => {
     const hour = 12 + i;
@@ -664,6 +748,166 @@ const Shift = () => {
               </TabsContent>
 
               <TabsContent value="reservations" className="space-y-4">
+                <div className="flex justify-end mb-4">
+                  {isAdmin && (
+                    <Dialog open={isAddReservationDialogOpen} onOpenChange={setIsAddReservationDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm">
+                          <Plus size={16} className="mr-1" />
+                          予約追加
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>新しい予約を追加</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="res_cast">キャスト *</Label>
+                            <Select
+                              value={reservationFormData.cast_id}
+                              onValueChange={(value) => setReservationFormData({...reservationFormData, cast_id: value})}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="キャストを選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {casts.map((cast) => (
+                                  <SelectItem key={cast.id} value={cast.id}>
+                                    {cast.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="res_customer_name">お客様名 *</Label>
+                            <Input
+                              id="res_customer_name"
+                              value={reservationFormData.customer_name}
+                              onChange={(e) => setReservationFormData({...reservationFormData, customer_name: e.target.value})}
+                              placeholder="山田太郎"
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="res_customer_phone">電話番号 *</Label>
+                            <Input
+                              id="res_customer_phone"
+                              type="tel"
+                              value={reservationFormData.customer_phone}
+                              onChange={(e) => setReservationFormData({...reservationFormData, customer_phone: e.target.value})}
+                              placeholder="080-1234-5678"
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="res_customer_email">メールアドレス</Label>
+                            <Input
+                              id="res_customer_email"
+                              type="email"
+                              value={reservationFormData.customer_email}
+                              onChange={(e) => setReservationFormData({...reservationFormData, customer_email: e.target.value})}
+                              placeholder="example@email.com"
+                            />
+                          </div>
+
+                          <div>
+                            <Label>予約日 *</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !reservationFormData.reservation_date && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {reservationFormData.reservation_date ? format(reservationFormData.reservation_date, "PPP", { locale: ja }) : <span>日付を選択</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={reservationFormData.reservation_date}
+                                  onSelect={(date) => date && setReservationFormData({...reservationFormData, reservation_date: date})}
+                                  initialFocus
+                                  locale={ja}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="res_start_time">開始時刻 *</Label>
+                              <Input
+                                id="res_start_time"
+                                type="time"
+                                value={reservationFormData.start_time}
+                                onChange={(e) => setReservationFormData({...reservationFormData, start_time: e.target.value})}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="res_duration">時間（分） *</Label>
+                              <Select
+                                value={reservationFormData.duration.toString()}
+                                onValueChange={(value) => setReservationFormData({...reservationFormData, duration: parseInt(value)})}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="60">60分</SelectItem>
+                                  <SelectItem value="80">80分</SelectItem>
+                                  <SelectItem value="90">90分</SelectItem>
+                                  <SelectItem value="100">100分</SelectItem>
+                                  <SelectItem value="120">120分</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="res_course_name">コース名 *</Label>
+                            <Input
+                              id="res_course_name"
+                              value={reservationFormData.course_name}
+                              onChange={(e) => setReservationFormData({...reservationFormData, course_name: e.target.value})}
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="res_price">料金（円） *</Label>
+                            <Input
+                              id="res_price"
+                              type="number"
+                              value={reservationFormData.price}
+                              onChange={(e) => setReservationFormData({...reservationFormData, price: parseInt(e.target.value)})}
+                            />
+                          </div>
+
+                          <div>
+                            <Label htmlFor="res_notes">備考</Label>
+                            <Textarea
+                              id="res_notes"
+                              value={reservationFormData.notes}
+                              onChange={(e) => setReservationFormData({...reservationFormData, notes: e.target.value})}
+                              placeholder="備考を入力"
+                            />
+                          </div>
+
+                          <Button onClick={handleAddReservation} className="w-full">
+                            予約を追加
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+
                 {/* タイムスケジュールウィジェット */}
                 <Card>
                   <CardContent className="p-4">
