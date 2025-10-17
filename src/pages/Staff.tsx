@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles, Database, Link as LinkIcon, Copy } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles, Database, Link as LinkIcon, Copy, Upload } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
@@ -58,6 +58,9 @@ export default function Staff() {
     photo: "",
   });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
   
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
@@ -380,6 +383,54 @@ export default function Staff() {
     });
   };
 
+  const handlePhotoUpload = async (file: File, isEdit: boolean = false) => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみ写真をアップロードできます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('cast-photos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('cast-photos')
+        .getPublicUrl(filePath);
+
+      if (isEdit && editingCast) {
+        setEditingCast({ ...editingCast, photo: publicUrl });
+      } else {
+        setFormData({ ...formData, photo: publicUrl });
+      }
+
+      toast({
+        title: "アップロード完了",
+        description: "写真がアップロードされました",
+      });
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      toast({
+        title: "エラー",
+        description: "写真のアップロードに失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -490,13 +541,44 @@ export default function Staff() {
                       </div>
                       
                       <div>
-                        <Label htmlFor="photo">写真URL</Label>
-                        <Input 
-                          id="photo" 
-                          placeholder="https://..."
-                          value={formData.photo}
-                          onChange={(e) => setFormData({...formData, photo: e.target.value})}
-                        />
+                        <Label htmlFor="photo">写真</Label>
+                        <div className="space-y-2">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handlePhotoUpload(file, false);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingPhoto}
+                          >
+                            <Upload className="mr-2 h-4 w-4" />
+                            {uploadingPhoto ? "アップロード中..." : "写真をアップロード"}
+                          </Button>
+                          {formData.photo && (
+                            <div className="relative">
+                              <img 
+                                src={formData.photo} 
+                                alt="プレビュー" 
+                                className="w-full h-32 object-cover rounded-md"
+                              />
+                            </div>
+                          )}
+                          <Input 
+                            id="photo" 
+                            placeholder="または写真URLを入力: https://..."
+                            value={formData.photo}
+                            onChange={(e) => setFormData({...formData, photo: e.target.value})}
+                          />
+                        </div>
                       </div>
                       
                       <Button onClick={handleAddCast} className="w-full">
@@ -603,13 +685,44 @@ export default function Staff() {
                     </div>
                     
                     <div>
-                      <Label htmlFor="edit-photo">写真URL</Label>
-                      <Input 
-                        id="edit-photo" 
-                        placeholder="https://..."
-                        value={editingCast.photo || ""}
-                        onChange={(e) => setEditingCast({...editingCast, photo: e.target.value})}
-                      />
+                      <Label htmlFor="edit-photo">写真</Label>
+                      <div className="space-y-2">
+                        <input
+                          ref={editFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handlePhotoUpload(file, true);
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => editFileInputRef.current?.click()}
+                          disabled={uploadingPhoto}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          {uploadingPhoto ? "アップロード中..." : "写真をアップロード"}
+                        </Button>
+                        {editingCast.photo && (
+                          <div className="relative">
+                            <img 
+                              src={editingCast.photo} 
+                              alt="プレビュー" 
+                              className="w-full h-32 object-cover rounded-md"
+                            />
+                          </div>
+                        )}
+                        <Input 
+                          id="edit-photo" 
+                          placeholder="または写真URLを入力: https://..."
+                          value={editingCast.photo || ""}
+                          onChange={(e) => setEditingCast({...editingCast, photo: e.target.value})}
+                        />
+                      </div>
                     </div>
 
                     <div>
