@@ -49,6 +49,7 @@ export type Database = {
       }
       casts: {
         Row: {
+          access_token: string | null
           created_at: string
           execution_date_end: string | null
           execution_date_start: string | null
@@ -67,6 +68,7 @@ export type Database = {
           x_account: string | null
         }
         Insert: {
+          access_token?: string | null
           created_at?: string
           execution_date_end?: string | null
           execution_date_start?: string | null
@@ -85,6 +87,7 @@ export type Database = {
           x_account?: string | null
         }
         Update: {
+          access_token?: string | null
           created_at?: string
           execution_date_end?: string | null
           execution_date_start?: string | null

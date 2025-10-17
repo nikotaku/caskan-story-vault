@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles, Database } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles, Database, Link as LinkIcon, Copy } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
@@ -33,6 +33,7 @@ interface Cast {
   upload_check: string | null;
   x_account: string | null;
   join_date: string;
+  access_token: string | null;
 }
 
 export default function Staff() {
@@ -335,6 +336,48 @@ export default function Staff() {
       case "未着手": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
       default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
     }
+  };
+
+  const generateAccessToken = async (castId: string) => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみトークンを生成できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const token = crypto.randomUUID();
+      const { error } = await supabase
+        .from('casts')
+        .update({ access_token: token })
+        .eq('id', castId);
+
+      if (error) throw error;
+
+      toast({
+        title: "トークン生成完了",
+        description: "専用リンクが生成されました",
+      });
+    } catch (error) {
+      console.error('Error generating token:', error);
+      toast({
+        title: "エラー",
+        description: "トークンの生成に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyPortalLink = (token: string) => {
+    const link = `${window.location.origin}/therapist/${token}`;
+    navigator.clipboard.writeText(link);
+    toast({
+      title: "リンクをコピーしました",
+      description: "専用ページのリンクがクリップボードにコピーされました",
+    });
   };
 
   if (authLoading || loading) {
@@ -753,6 +796,29 @@ export default function Staff() {
                             退勤
                           </Button>
                         </div>
+                        
+                        {/* Therapist Portal Link */}
+                        {cast.access_token ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => copyPortalLink(cast.access_token!)}
+                            className="w-full mt-3"
+                          >
+                            <Copy size={14} className="mr-1" />
+                            専用ページリンクをコピー
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => generateAccessToken(cast.id)}
+                            className="w-full mt-3"
+                          >
+                            <LinkIcon size={14} className="mr-1" />
+                            専用ページを作成
+                          </Button>
+                        )}
                         
                         <div className="flex gap-2 mt-3">
                           <Button 

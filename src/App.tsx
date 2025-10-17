@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import PricingManagement from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import TherapistPortal from "./pages/TherapistPortal";
 import PublicHome from "./pages/public/Home";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
@@ -50,6 +51,9 @@ const App = () => (
           <Route path="/text-generation" element={<TextGeneration />} />
           <Route path="/estama" element={<EstamaIntegration />} />
           <Route path="/shop" element={<Settings />} />
+          
+          {/* Therapist Portal - Token-based access */}
+          <Route path="/therapist/:token" element={<TherapistPortal />} />
           
           {/* Public Pages */}
           <Route path="/public" element={<PublicHome />} />
