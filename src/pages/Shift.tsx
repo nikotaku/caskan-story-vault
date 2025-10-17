@@ -6,19 +6,20 @@ import { Sidebar } from "@/components/Sidebar";
 import { ShiftCalendar } from "@/components/ShiftCalendar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Plus, User, Phone, Clock, CreditCard, Trash2, CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, User, Phone, Clock, CreditCard, Trash2, CalendarIcon, MessageSquare, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 interface Cast {
@@ -69,6 +70,9 @@ const Shift = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [reservationSearchTerm, setReservationSearchTerm] = useState("");
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date>(new Date());
+  const [generatingSMS, setGeneratingSMS] = useState<string | null>(null);
+  const [smsMessage, setSmsMessage] = useState<string>("");
+  const [showSmsDialog, setShowSmsDialog] = useState(false);
   
   const [formData, setFormData] = useState({
     cast_id: "",
@@ -379,6 +383,53 @@ const Shift = () => {
       case "cancelled": return "キャンセル";
       case "no_show": return "No Show";
       default: return "不明";
+    }
+  };
+
+  const handleGenerateSMS = async (reservation: Reservation) => {
+    setGeneratingSMS(reservation.id);
+    try {
+      const { data: castData } = await supabase
+        .from("casts")
+        .select("name")
+        .eq("id", reservation.cast_id)
+        .single();
+
+      const { data: shopData } = await supabase
+        .from("shop_settings")
+        .select("shop_name")
+        .limit(1)
+        .single();
+
+      const { data, error } = await supabase.functions.invoke("generate-sms-message", {
+        body: {
+          customerName: reservation.customer_name,
+          reservationDate: reservation.reservation_date,
+          startTime: reservation.start_time,
+          courseName: reservation.course_name,
+          duration: reservation.duration,
+          castName: castData?.name || "担当セラピスト",
+          shopName: shopData?.shop_name || "当店",
+        },
+      });
+
+      if (error) throw error;
+
+      setSmsMessage(data.message);
+      setShowSmsDialog(true);
+      toast({
+        title: "SMS生成完了",
+        description: "メッセージが生成されました",
+      });
+    } catch (error: any) {
+      console.error("SMS generation error:", error);
+      toast({
+        title: "エラー",
+        description: error.message || "SMS生成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingSMS(null);
     }
   };
 
@@ -798,30 +849,42 @@ const Shift = () => {
                               </div>
                             </div>
 
-                            <div className="flex gap-2">
+                            <div className="flex flex-col gap-2">
                               {isAdmin && (
                                 <>
-                                  <Select
-                                    value={reservation.status}
-                                    onValueChange={(value) => handleStatusChange(reservation.id, value)}
-                                  >
-                                    <SelectTrigger className="w-32">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="pending">確認中</SelectItem>
-                                      <SelectItem value="confirmed">確定</SelectItem>
-                                      <SelectItem value="completed">完了</SelectItem>
-                                      <SelectItem value="cancelled">キャンセル</SelectItem>
-                                      <SelectItem value="no_show">No Show</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                  <div className="flex gap-2">
+                                    <Select
+                                      value={reservation.status}
+                                      onValueChange={(value) => handleStatusChange(reservation.id, value)}
+                                    >
+                                      <SelectTrigger className="w-32">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="pending">確認中</SelectItem>
+                                        <SelectItem value="confirmed">確定</SelectItem>
+                                        <SelectItem value="completed">完了</SelectItem>
+                                        <SelectItem value="cancelled">キャンセル</SelectItem>
+                                        <SelectItem value="no_show">No Show</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      variant="destructive"
+                                      size="icon"
+                                      onClick={() => handleDeleteReservation(reservation.id)}
+                                    >
+                                      <Trash2 size={16} />
+                                    </Button>
+                                  </div>
                                   <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    onClick={() => handleDeleteReservation(reservation.id)}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleGenerateSMS(reservation)}
+                                    disabled={generatingSMS === reservation.id}
+                                    className="w-full"
                                   >
-                                    <Trash2 size={16} />
+                                    <MessageSquare className="h-4 w-4 mr-1" />
+                                    {generatingSMS === reservation.id ? "生成中..." : "SMS生成"}
                                   </Button>
                                 </>
                               )}
@@ -836,6 +899,43 @@ const Shift = () => {
             </Tabs>
           </div>
         </div>
+        
+        <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>SMS メッセージ</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Textarea
+                value={smsMessage}
+                onChange={(e) => setSmsMessage(e.target.value)}
+                rows={8}
+                className="resize-none"
+              />
+              <p className="text-sm text-muted-foreground">
+                文字数: {smsMessage.length}
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(smsMessage);
+                  toast({
+                    title: "コピーしました",
+                    description: "SMSメッセージをクリップボードにコピーしました",
+                  });
+                }}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                コピー
+              </Button>
+              <Button onClick={() => setShowSmsDialog(false)}>
+                閉じる
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         
         <footer className="mt-auto py-4 px-4">
           <div className="max-w-4xl mx-auto text-center">
