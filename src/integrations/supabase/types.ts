@@ -50,59 +50,107 @@ export type Database = {
       casts: {
         Row: {
           access_token: string | null
+          age: number | null
+          blood_type: string | null
+          body_type: string | null
+          bust: number | null
+          celebrity_lookalike: string | null
           created_at: string
+          cup_size: string | null
+          day_off_activities: string | null
           execution_date_end: string | null
           execution_date_start: string | null
+          experience_years: number | null
+          favorite_food: string | null
+          height: number | null
+          hip: number | null
+          hobbies: string | null
           hp_notice: string | null
           id: string
+          ideal_type: string | null
           join_date: string
+          message: string | null
           name: string
           photo: string | null
           photos: string[] | null
           profile: string | null
           room: string | null
+          specialties: string | null
           status: string
           type: string
           updated_at: string
           upload_check: string | null
+          waist: number | null
           x_account: string | null
         }
         Insert: {
           access_token?: string | null
+          age?: number | null
+          blood_type?: string | null
+          body_type?: string | null
+          bust?: number | null
+          celebrity_lookalike?: string | null
           created_at?: string
+          cup_size?: string | null
+          day_off_activities?: string | null
           execution_date_end?: string | null
           execution_date_start?: string | null
+          experience_years?: number | null
+          favorite_food?: string | null
+          height?: number | null
+          hip?: number | null
+          hobbies?: string | null
           hp_notice?: string | null
           id?: string
+          ideal_type?: string | null
           join_date?: string
+          message?: string | null
           name: string
           photo?: string | null
           photos?: string[] | null
           profile?: string | null
           room?: string | null
+          specialties?: string | null
           status?: string
           type: string
           updated_at?: string
           upload_check?: string | null
+          waist?: number | null
           x_account?: string | null
         }
         Update: {
           access_token?: string | null
+          age?: number | null
+          blood_type?: string | null
+          body_type?: string | null
+          bust?: number | null
+          celebrity_lookalike?: string | null
           created_at?: string
+          cup_size?: string | null
+          day_off_activities?: string | null
           execution_date_end?: string | null
           execution_date_start?: string | null
+          experience_years?: number | null
+          favorite_food?: string | null
+          height?: number | null
+          hip?: number | null
+          hobbies?: string | null
           hp_notice?: string | null
           id?: string
+          ideal_type?: string | null
           join_date?: string
+          message?: string | null
           name?: string
           photo?: string | null
           photos?: string[] | null
           profile?: string | null
           room?: string | null
+          specialties?: string | null
           status?: string
           type?: string
           updated_at?: string
           upload_check?: string | null
+          waist?: number | null
           x_account?: string | null
         }
         Relationships: []
