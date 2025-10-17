@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Save, Store, Phone, Mail, MapPin, Clock, Database, ExternalLink, RefreshCw, CheckCircle, AlertCircle, Link2 } from "lucide-react";
+import { Save, Store, Phone, Mail, MapPin, Clock } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,10 +29,6 @@ export default function Settings() {
   const [settings, setSettings] = useState<ShopSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
-  const [notionApiKey, setNotionApiKey] = useState("");
-  const [notionDatabaseId, setNotionDatabaseId] = useState("");
 
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
@@ -72,48 +68,6 @@ export default function Settings() {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleNotionSync = async () => {
-    setIsSyncing(true);
-    
-    try {
-      console.log('Starting Notion sync...');
-      
-      const { data, error } = await supabase.functions.invoke('sync-notion', {
-        body: {},
-      });
-
-      if (error) {
-        console.error('Sync function error:', error);
-        throw error;
-      }
-
-      console.log('Sync result:', data);
-
-      if (data.success) {
-        setLastSync(new Date());
-        toast({
-          title: "同期完了",
-          description: `${data.synced}件のキャストデータを同期しました${data.errors > 0 ? `（${data.errors}件のエラー）` : ''}`,
-        });
-
-        if (data.details?.errors?.length > 0) {
-          console.warn('Sync errors:', data.details.errors);
-        }
-      } else {
-        throw new Error(data.error || 'Unknown sync error');
-      }
-    } catch (error) {
-      console.error('Error syncing with Notion:', error);
-      toast({
-        title: "同期エラー",
-        description: error instanceof Error ? error.message : "Notionとの同期に失敗しました。設定を確認してください。",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -197,111 +151,6 @@ export default function Settings() {
                 </Button>
               )}
             </div>
-
-            {/* Notion Integration */}
-            {isAdmin && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Database size={20} />
-                    Notion連携
-                  </CardTitle>
-                  <CardDescription>
-                    Notionデータベースからキャスト情報を同期できます
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <div className="space-y-2 text-sm">
-                        <p className="font-semibold">Notion連携の設定手順：</p>
-                        <ol className="list-decimal list-inside space-y-1 ml-2">
-                          <li>
-                            <a 
-                              href="https://www.notion.so/my-integrations" 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline inline-flex items-center gap-1"
-                            >
-                              Notionインテグレーション
-                              <ExternalLink size={12} />
-                            </a>
-                            を作成してAPIキーを取得
-                          </li>
-                          <li>Notionでキャスト情報用のデータベースを作成</li>
-                          <li>データベースをインテグレーションと共有</li>
-                          <li>データベースのURLから32文字のIDを取得</li>
-                          <li>下記の「API設定」ボタンから認証情報を登録</li>
-                        </ol>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-3">
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-sm flex items-center gap-2">
-                        <CheckCircle size={14} className="text-primary" />
-                        必要なプロパティ
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div>• 名前/Name (タイトル)</div>
-                        <div>• 年齢/Age (数値)</div>
-                        <div>• ランク/Type (セレクト)</div>
-                        <div>• 料金/Price (数値)</div>
-                        <div>• スリーサイズ/Measurements (テキスト)</div>
-                        <div>• プロフィール/Profile (テキスト)</div>
-                        <div>• 電話番号/Phone (電話番号)</div>
-                        <div>• 写真/Photo (ファイル/URL)</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Alert className="bg-blue-50 border-blue-200">
-                    <AlertCircle className="h-4 w-4 text-blue-600" />
-                    <AlertDescription className="text-sm">
-                      <p className="font-semibold mb-2">API設定方法：</p>
-                      <ol className="list-decimal list-inside space-y-1 text-xs">
-                        <li>チャットで「NOTION_API_KEYを設定してください」と入力</li>
-                        <li>表示されるフォームにAPIキーを入力</li>
-                        <li>チャットで「NOTION_DATABASE_IDを設定してください」と入力</li>
-                        <li>表示されるフォームにデータベースIDを入力</li>
-                        <li>設定完了後、下記の「データを同期」ボタンをクリック</li>
-                      </ol>
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Button
-                      onClick={() => {
-                        window.open('https://www.notion.so/my-integrations', '_blank');
-                      }}
-                      variant="outline"
-                      className="gap-2"
-                    >
-                      <Link2 size={16} />
-                      Notion設定を開く
-                    </Button>
-                    
-                    <Button
-                      onClick={handleNotionSync}
-                      disabled={isSyncing}
-                      className="gap-2"
-                    >
-                      <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                      {isSyncing ? '同期中...' : 'データを同期'}
-                    </Button>
-                  </div>
-
-                  {lastSync && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCircle size={12} />
-                      最終同期: {lastSync.toLocaleString('ja-JP')}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {settings ? (
               <Card>
