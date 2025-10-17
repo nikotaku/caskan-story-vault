@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { format, addWeeks, subWeeks, startOfWeek, addDays, parseISO } from "date-fns";
+import { format, addWeeks, subWeeks, startOfWeek, addDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -9,14 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight, Plus, User, Phone, Clock, CreditCard, Trash2, CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Cast {
@@ -35,14 +37,37 @@ interface Shift {
   room: string | null;
 }
 
+interface Reservation {
+  id: string;
+  cast_id: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string | null;
+  reservation_date: string;
+  start_time: string;
+  duration: number;
+  course_name: string;
+  course_type: string | null;
+  options: string[] | null;
+  nomination_type: string | null;
+  price: number;
+  status: string;
+  payment_status: string;
+  notes: string | null;
+  casts?: { name: string };
+}
+
 const Shift = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [searchTerm, setSearchTerm] = useState("");
   const [casts, setCasts] = useState<Cast[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [reservationSearchTerm, setReservationSearchTerm] = useState("");
   
   const [formData, setFormData] = useState({
     cast_id: "",
@@ -67,8 +92,9 @@ const Shift = () => {
     if (user) {
       fetchCasts();
       fetchShifts();
+      fetchReservations();
       
-      const channel = supabase
+      const shiftsChannel = supabase
         .channel('shifts-changes')
         .on(
           'postgres_changes',
@@ -83,8 +109,24 @@ const Shift = () => {
         )
         .subscribe();
 
+      const reservationsChannel = supabase
+        .channel('reservations-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'reservations'
+          },
+          () => {
+            fetchReservations();
+          }
+        )
+        .subscribe();
+
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(shiftsChannel);
+        supabase.removeChannel(reservationsChannel);
       };
     }
   }, [user]);
@@ -122,6 +164,29 @@ const Shift = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReservations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reservations')
+        .select(`
+          *,
+          casts:cast_id (name)
+        `)
+        .order('reservation_date', { ascending: false })
+        .order('start_time', { ascending: true });
+
+      if (error) throw error;
+      setReservations(data || []);
+    } catch (error) {
+      console.error('Error fetching reservations:', error);
+      toast({
+        title: "エラー",
+        description: "予約情報の取得に失敗しました",
+        variant: "destructive",
+      });
     }
   };
 
@@ -222,6 +287,100 @@ const Shift = () => {
     notes: shift.notes || "",
   }));
 
+  const filteredReservations = reservations.filter(reservation => {
+    const matchesSearch = 
+      reservation.customer_name.toLowerCase().includes(reservationSearchTerm.toLowerCase()) ||
+      reservation.customer_phone.includes(reservationSearchTerm);
+    const matchesStatus = filterStatus === "all" || reservation.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleDeleteReservation = async (id: string) => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみ予約を削除できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "予約削除",
+        description: "予約が削除されました",
+      });
+    } catch (error) {
+      console.error('Error deleting reservation:', error);
+      toast({
+        title: "エラー",
+        description: "予約の削除に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    if (!isAdmin) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみステータスを変更できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .update({ status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "ステータス変更",
+        description: "ステータスが更新されました",
+      });
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "エラー",
+        description: "ステータスの変更に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+      case "confirmed": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
+      case "completed": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+      case "cancelled": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+      case "no_show": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+      default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending": return "予約確認中";
+      case "confirmed": return "予約確定";
+      case "completed": return "完了";
+      case "cancelled": return "キャンセル";
+      case "no_show": return "No Show";
+      default: return "不明";
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -246,169 +405,302 @@ const Shift = () => {
       <main className="pt-[60px] md:ml-[240px] transition-all duration-300">
         <div className="p-4">
           <div className="max-w-full">
-            <div className="mb-5 flex justify-between items-center">
-              <h2 className="text-lg font-normal m-0 p-0">シフト</h2>
-              {isAdmin && (
-                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm">
-                      <Plus size={16} />
-                      シフト追加
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>新しいシフトを追加</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="cast">キャスト</Label>
-                        <Select
-                          value={formData.cast_id}
-                          onValueChange={(value) => setFormData({...formData, cast_id: value})}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="キャストを選択" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {casts.map((cast) => (
-                              <SelectItem key={cast.id} value={cast.id}>
-                                {cast.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div>
-                        <Label>日付</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !formData.shift_date && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {formData.shift_date ? format(formData.shift_date, "PPP", { locale: ja }) : <span>日付を選択</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={formData.shift_date}
-                              onSelect={(date) => date && setFormData({...formData, shift_date: date})}
-                              initialFocus
-                              className="pointer-events-auto"
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="start_time">開始時刻</Label>
-                          <Input
-                            id="start_time"
-                            type="time"
-                            value={formData.start_time}
-                            onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="end_time">終了時刻</Label>
-                          <Input
-                            id="end_time"
-                            type="time"
-                            value={formData.end_time}
-                            onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="room">ルーム</Label>
-                        <Select
-                          value={formData.room}
-                          onValueChange={(value) => setFormData({...formData, room: value})}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="ルームを選択" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="インルーム">インルーム</SelectItem>
-                            <SelectItem value="ラスルーム">ラスルーム</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="notes">備考</Label>
-                        <Input
-                          id="notes"
-                          placeholder="備考を入力"
-                          value={formData.notes}
-                          onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                        />
-                      </div>
-                      
-                      <Button onClick={handleAddShift} className="w-full">
-                        追加
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
+            <div className="mb-5">
+              <h2 className="text-lg font-normal m-0 p-0">シフト・予約管理</h2>
             </div>
 
-            <div className="p-2">
-              {/* Date Navigation */}
-              <div className="flex items-center gap-2 mb-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={goToPreviousWeek}
-                  className="text-xs"
-                >
-                  <ChevronLeft size={12} className="mr-1" />1週間前
-                </Button>
-                <div className="text-sm font-medium">
-                  {format(currentWeekStart, 'yyyy年M月d日', { locale: ja })} 〜
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={goToNextWeek}
-                  className="text-xs"
-                >
-                  1週間後<ChevronRight size={12} className="ml-1" />
-                </Button>
-              </div>
+            <Tabs defaultValue="shift" className="w-full">
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="shift">シフトカレンダー</TabsTrigger>
+                <TabsTrigger value="reservations">予約ダッシュボード</TabsTrigger>
+              </TabsList>
 
-              {/* Search */}
-              <div className="py-1 mb-4">
-                <div className="flex max-w-64">
-                  <Input
-                    type="text"
-                    placeholder="キャスト名"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="h-8 text-sm"
+              <TabsContent value="shift" className="space-y-4">
+                <div className="flex justify-end">
+                  {isAdmin && (
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm">
+                          <Plus size={16} />
+                          シフト追加
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>新しいシフトを追加</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="cast">キャスト</Label>
+                            <Select
+                              value={formData.cast_id}
+                              onValueChange={(value) => setFormData({...formData, cast_id: value})}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="キャストを選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {casts.map((cast) => (
+                                  <SelectItem key={cast.id} value={cast.id}>
+                                    {cast.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label>日付</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !formData.shift_date && "text-muted-foreground"
+                                  )}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {formData.shift_date ? format(formData.shift_date, "PPP", { locale: ja }) : <span>日付を選択</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={formData.shift_date}
+                                  onSelect={(date) => date && setFormData({...formData, shift_date: date})}
+                                  initialFocus
+                                  className="pointer-events-auto"
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="start_time">開始時刻</Label>
+                              <Input
+                                id="start_time"
+                                type="time"
+                                value={formData.start_time}
+                                onChange={(e) => setFormData({...formData, start_time: e.target.value})}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="end_time">終了時刻</Label>
+                              <Input
+                                id="end_time"
+                                type="time"
+                                value={formData.end_time}
+                                onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="room">ルーム</Label>
+                            <Select
+                              value={formData.room}
+                              onValueChange={(value) => setFormData({...formData, room: value})}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="ルームを選択" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="インルーム">インルーム</SelectItem>
+                                <SelectItem value="ラスルーム">ラスルーム</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="notes">備考</Label>
+                            <Input
+                              id="notes"
+                              placeholder="備考を入力"
+                              value={formData.notes}
+                              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                            />
+                          </div>
+                          
+                          <Button onClick={handleAddShift} className="w-full">
+                            追加
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+
+                <div className="p-2">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToPreviousWeek}
+                      className="text-xs"
+                    >
+                      <ChevronLeft size={12} className="mr-1" />1週間前
+                    </Button>
+                    <div className="text-sm font-medium">
+                      {format(currentWeekStart, 'yyyy年M月d日', { locale: ja })} 〜
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNextWeek}
+                      className="text-xs"
+                    >
+                      1週間後<ChevronRight size={12} className="ml-1" />
+                    </Button>
+                  </div>
+
+                  <div className="py-1 mb-4">
+                    <div className="flex max-w-64">
+                      <Input
+                        type="text"
+                        placeholder="キャスト名"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border">
+                  <ShiftCalendar 
+                    dates={dates}
+                    casts={filteredCasts}
+                    shifts={mappedShifts}
+                    onShiftUpdate={fetchShifts}
                   />
                 </div>
-              </div>
-            </div>
+              </TabsContent>
 
-            <div className="border-t border-border">
-              <ShiftCalendar 
-                dates={dates}
-                casts={filteredCasts}
-                shifts={mappedShifts}
-                onShiftUpdate={fetchShifts}
-              />
-            </div>
+              <TabsContent value="reservations" className="space-y-4">
+                <div className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <Label>予約検索</Label>
+                    <Input
+                      placeholder="顧客名または電話番号で検索"
+                      value={reservationSearchTerm}
+                      onChange={(e) => setReservationSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-48">
+                    <Label>ステータスフィルター</Label>
+                    <Select value={filterStatus} onValueChange={setFilterStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">すべて</SelectItem>
+                        <SelectItem value="pending">予約確認中</SelectItem>
+                        <SelectItem value="confirmed">予約確定</SelectItem>
+                        <SelectItem value="completed">完了</SelectItem>
+                        <SelectItem value="cancelled">キャンセル</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  {filteredReservations.length === 0 ? (
+                    <Card>
+                      <CardContent className="flex items-center justify-center py-8">
+                        <p className="text-muted-foreground">予約がありません</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    filteredReservations.map((reservation) => (
+                      <Card key={reservation.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-2">
+                                <Badge className={getStatusColor(reservation.status)}>
+                                  {getStatusText(reservation.status)}
+                                </Badge>
+                                <span className="text-sm text-muted-foreground">
+                                  {format(new Date(reservation.reservation_date), 'M月d日(E)', { locale: ja })}
+                                </span>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <User size={16} className="text-muted-foreground" />
+                                    <span className="font-medium">{reservation.customer_name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Phone size={16} />
+                                    <span>{reservation.customer_phone}</span>
+                                  </div>
+                                </div>
+                                
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <Clock size={16} className="text-muted-foreground" />
+                                    <span>{reservation.start_time} ({reservation.duration}分)</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <CreditCard size={16} className="text-muted-foreground" />
+                                    <span className="font-medium">¥{reservation.price.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="pt-2 border-t">
+                                <div className="text-sm">
+                                  <p><span className="text-muted-foreground">セラピスト:</span> {reservation.casts?.name}</p>
+                                  <p><span className="text-muted-foreground">コース:</span> {reservation.course_name}</p>
+                                  {reservation.nomination_type && (
+                                    <p><span className="text-muted-foreground">指名:</span> {reservation.nomination_type}</p>
+                                  )}
+                                  {reservation.options && reservation.options.length > 0 && (
+                                    <p><span className="text-muted-foreground">オプション:</span> {reservation.options.join(', ')}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              {isAdmin && (
+                                <>
+                                  <Select
+                                    value={reservation.status}
+                                    onValueChange={(value) => handleStatusChange(reservation.id, value)}
+                                  >
+                                    <SelectTrigger className="w-32">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="pending">確認中</SelectItem>
+                                      <SelectItem value="confirmed">確定</SelectItem>
+                                      <SelectItem value="completed">完了</SelectItem>
+                                      <SelectItem value="cancelled">キャンセル</SelectItem>
+                                      <SelectItem value="no_show">No Show</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    onClick={() => handleDeleteReservation(reservation.id)}
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
         
