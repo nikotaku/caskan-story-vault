@@ -55,10 +55,10 @@ export const WebsitePhotoSync = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Image size={20} />
-          ウェブサイト写真同期
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          <Image className="h-5 w-5" />
+          <CardTitle>ウェブサイト写真同期</CardTitle>
+        </div>
         <CardDescription>
           zenryoku-esthe.comからセラピストの写真を自動取得
         </CardDescription>
@@ -69,7 +69,7 @@ export const WebsitePhotoSync = () => {
             <p className="text-sm font-medium">写真URL同期</p>
             {lastSync && (
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <CheckCircle size={12} />
+                <CheckCircle className="h-3 w-3" />
                 最終同期: {lastSync.toLocaleString('ja-JP')}
               </p>
             )}
@@ -79,14 +79,14 @@ export const WebsitePhotoSync = () => {
             disabled={isSyncing}
             className="gap-2"
           >
-            <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
             {isSyncing ? '同期中...' : '今すぐ同期'}
           </Button>
         </div>
 
         <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
           <div className="flex items-start gap-2">
-            <AlertCircle size={16} className="text-muted-foreground mt-0.5" />
+            <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
             <div className="text-xs text-muted-foreground space-y-1">
               <p>セラピスト名が一致するキャストの写真URLを更新します</p>
               <ul className="list-disc list-inside ml-2 space-y-0.5">

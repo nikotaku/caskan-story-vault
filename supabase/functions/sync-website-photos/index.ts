@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,32 +24,34 @@ serve(async (req) => {
     console.log('Fetching therapist page from website...');
     
     const websiteResponse = await fetch('https://zenryoku-esthe.com/therapist');
+    
+    if (!websiteResponse.ok) {
+      throw new Error(`Failed to fetch website: ${websiteResponse.status}`);
+    }
+    
     const html = await websiteResponse.text();
     
-    const $ = cheerio.load(html);
-    
+    // 簡易的なHTML解析（正規表現使用）
     const therapists: Array<{
       name: string;
       photoUrl: string;
-      detailUrl: string;
     }> = [];
 
-    // セラピスト情報を抽出
-    $('a[href*="/therapist/"]').each((_, element) => {
-      const $link = $(element);
-      const detailUrl = $link.attr('href');
-      const $img = $link.find('img');
-      const photoUrl = $img.attr('src');
-      const name = $img.attr('alt');
-
-      if (name && photoUrl && detailUrl) {
+    // セラピストの画像URLを抽出
+    const imgRegex = /<img[^>]+src="([^"]*cast_tmb[^"]*)"[^>]*alt="([^"]*)"/gi;
+    let match;
+    
+    while ((match = imgRegex.exec(html)) !== null) {
+      const photoUrl = match[1];
+      const name = match[2];
+      
+      if (name && photoUrl) {
         therapists.push({
           name: name.toUpperCase(),
-          photoUrl: photoUrl.startsWith('http') ? photoUrl : `https://zenryoku-esthe.com${photoUrl}`,
-          detailUrl: detailUrl.startsWith('http') ? detailUrl : `https://zenryoku-esthe.com${detailUrl}`
+          photoUrl: photoUrl.startsWith('http') ? photoUrl : `https://zenryoku-esthe.com${photoUrl}`
         });
       }
-    });
+    }
 
     console.log(`Found ${therapists.length} therapists on website`);
 
