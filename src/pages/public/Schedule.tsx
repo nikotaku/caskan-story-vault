@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChatBot } from "@/components/ChatBot";
 
@@ -24,15 +24,25 @@ interface Shift {
   };
 }
 
+interface Reservation {
+  id: string;
+  cast_id: string;
+  reservation_date: string;
+  start_time: string;
+  duration: number;
+}
+
 const Schedule = () => {
+  const navigate = useNavigate();
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
-    fetchShifts();
+    fetchData();
 
-    const channel = supabase
+    const shiftsChannel = supabase
       .channel('public-shifts-changes')
       .on(
         'postgres_changes',
@@ -42,68 +52,100 @@ const Schedule = () => {
           table: 'shifts'
         },
         () => {
-          fetchShifts();
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    const reservationsChannel = supabase
+      .channel('public-reservations-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'reservations'
+        },
+        () => {
+          fetchData();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(shiftsChannel);
+      supabase.removeChannel(reservationsChannel);
     };
-  }, []);
+  }, [selectedDate]);
 
-  const fetchShifts = async () => {
+  const fetchData = async () => {
     try {
-      const { data, error } = await supabase
-        .from("shifts")
-        .select(`
-          *,
-          casts (
-            name,
-            photo,
-            type,
-            status
-          )
-        `)
-        .order("shift_date", { ascending: true })
-        .order("start_time", { ascending: true });
+      const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+      
+      const [shiftsResult, reservationsResult] = await Promise.all([
+        supabase
+          .from("shifts")
+          .select(`
+            *,
+            casts (
+              name,
+              photo,
+              type,
+              status
+            )
+          `)
+          .eq("shift_date", selectedDateStr)
+          .order("start_time", { ascending: true }),
+        supabase
+          .from("reservations")
+          .select("id, cast_id, reservation_date, start_time, duration")
+          .eq("reservation_date", selectedDateStr)
+      ]);
 
-      if (error) throw error;
-      setShifts(data || []);
+      if (shiftsResult.error) throw shiftsResult.error;
+      if (reservationsResult.error) throw reservationsResult.error;
+      
+      setShifts(shiftsResult.data || []);
+      setReservations(reservationsResult.data || []);
     } catch (error) {
-      console.error("Error fetching shifts:", error);
+      console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
-  const todayShifts = shifts.filter(shift => shift.shift_date === selectedDateStr);
+  // 営業時間: 12:00〜26:00（翌2:00まで）
+  const timeSlots = Array.from({ length: 15 }, (_, i) => {
+    const hour = 12 + i;
+    return hour < 24 ? `${hour}:00` : `${hour - 24}:00`;
+  });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "working":
-        return "bg-green-500";
-      case "waiting":
-        return "bg-yellow-500";
-      case "offline":
-        return "bg-gray-500";
-      default:
-        return "bg-gray-500";
-    }
+  const isTimeSlotBooked = (castId: string, time: string) => {
+    return reservations.some(res => {
+      const resHour = parseInt(res.start_time.split(':')[0]);
+      const slotHour = parseInt(time.split(':')[0]);
+      const duration = res.duration / 60; // 分を時間に変換
+      
+      return res.cast_id === castId && 
+             slotHour >= resHour && 
+             slotHour < resHour + duration;
+    });
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "working":
-        return "接客中";
-      case "waiting":
-        return "待機中";
-      case "offline":
-        return "退勤";
-      default:
-        return status;
+  const isTimeSlotInShift = (shift: Shift, time: string) => {
+    const slotHour = parseInt(time.split(':')[0]);
+    const startHour = parseInt(shift.start_time.split(':')[0]);
+    const endHour = parseInt(shift.end_time.split(':')[0]);
+    
+    if (endHour < startHour) {
+      return slotHour >= startHour || slotHour < endHour;
     }
+    return slotHour >= startHour && slotHour < endHour;
+  };
+
+  const handleBooking = (castId: string, castName: string, time: string) => {
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    navigate(`/public/booking?castId=${castId}&date=${dateStr}&time=${time}`);
   };
 
   if (loading) {
@@ -184,67 +226,92 @@ const Schedule = () => {
               </CardContent>
             </Card>
 
-            {/* Schedule List */}
+            {/* Timetable */}
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
                   <CardTitle>
-                    {format(selectedDate, "M月d日（E）", { locale: ja })} の出勤
+                    {format(selectedDate, "M月d日（E）", { locale: ja })} の出勤タイムテーブル
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {todayShifts.length === 0 ? (
+                  {shifts.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">
                         この日の出勤予定はありません
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {todayShifts.map((shift) => (
-                        <Card key={shift.id} className="overflow-hidden">
-                          <div className="flex">
-                            <div className="w-24 h-24 relative flex-shrink-0">
-                              {shift.casts.photo ? (
-                                <img
-                                  src={shift.casts.photo}
-                                  alt={shift.casts.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                                  <span className="text-2xl text-muted-foreground">
-                                    {shift.casts.name.charAt(0)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <CardContent className="flex-1 p-4">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="text-lg font-bold">{shift.casts.name}</h3>
-                                    <Badge variant="outline">{shift.casts.type}</Badge>
-                                    <Badge
-                                      className={`${getStatusColor(shift.casts.status)} text-white`}
-                                    >
-                                      {getStatusText(shift.casts.status)}
-                                    </Badge>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="border border-[#d4b5a8] bg-[#f5e8e4] p-2 text-left min-w-[120px]">
+                              セラピスト
+                            </th>
+                            {timeSlots.map((time) => (
+                              <th key={time} className="border border-[#d4b5a8] bg-[#f5e8e4] p-2 text-center min-w-[80px] text-xs">
+                                {time}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {shifts.map((shift) => (
+                            <tr key={shift.id}>
+                              <td className="border border-[#d4b5a8] p-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-12 h-12 relative flex-shrink-0 rounded-full overflow-hidden">
+                                    {shift.casts.photo ? (
+                                      <img
+                                        src={shift.casts.photo}
+                                        alt={shift.casts.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                                        <span className="text-sm text-muted-foreground">
+                                          {shift.casts.name.charAt(0)}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    {shift.start_time.slice(0, 5)} 〜 {shift.end_time.slice(0, 5)}
-                                  </p>
+                                  <div>
+                                    <div className="font-semibold text-sm">{shift.casts.name}</div>
+                                    <Badge variant="outline" className="text-xs">{shift.casts.type}</Badge>
+                                  </div>
                                 </div>
-                                <Button asChild size="sm">
-                                  <Link to={`/public/casts/${shift.cast_id}`}>
-                                    詳細
-                                  </Link>
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </div>
-                        </Card>
-                      ))}
+                              </td>
+                              {timeSlots.map((time) => {
+                                const inShift = isTimeSlotInShift(shift, time);
+                                const isBooked = isTimeSlotBooked(shift.cast_id, time);
+                                
+                                return (
+                                  <td 
+                                    key={time} 
+                                    className={`border border-[#d4b5a8] p-1 text-center ${
+                                      !inShift ? 'bg-gray-100' : isBooked ? 'bg-red-100' : 'bg-green-50'
+                                    }`}
+                                  >
+                                    {inShift && !isBooked && (
+                                      <Button
+                                        size="sm"
+                                        className="text-xs px-2 py-1 h-auto"
+                                        onClick={() => handleBooking(shift.cast_id, shift.casts.name, time)}
+                                      >
+                                        予約
+                                      </Button>
+                                    )}
+                                    {inShift && isBooked && (
+                                      <span className="text-xs text-red-600 font-semibold">予約済</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </CardContent>
