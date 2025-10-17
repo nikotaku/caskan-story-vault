@@ -60,7 +60,7 @@ export const WebsitePhotoSync = () => {
           <CardTitle>ウェブサイト写真同期</CardTitle>
         </div>
         <CardDescription>
-          zenryoku-esthe.comからセラピストの写真を自動取得
+          estama.jpからセラピストの写真を自動取得
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

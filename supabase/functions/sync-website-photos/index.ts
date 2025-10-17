@@ -23,7 +23,7 @@ serve(async (req) => {
 
     console.log('Fetching therapist page from website...');
     
-    const websiteResponse = await fetch('https://zenryoku-esthe.com/therapist');
+    const websiteResponse = await fetch('https://estama.jp/shop/43923/cast/');
     
     if (!websiteResponse.ok) {
       throw new Error(`Failed to fetch website: ${websiteResponse.status}`);
@@ -31,24 +31,25 @@ serve(async (req) => {
     
     const html = await websiteResponse.text();
     
-    // 簡易的なHTML解析（正規表現使用）
+    // エステ魂サイトのHTML解析
     const therapists: Array<{
       name: string;
       photoUrl: string;
     }> = [];
 
-    // セラピストの画像URLを抽出
-    const imgRegex = /<img[^>]+src="([^"]*cast_tmb[^"]*)"[^>]*alt="([^"]*)"/gi;
+    // セラピストの画像URLと名前を抽出
+    // パターン: ![セラピスト名](画像URL)
+    const imgRegex = /!\[([^\]]+)\]\((https:\/\/img\.estama\.jp\/shop_data\/[^\)]+)\)/g;
     let match;
     
     while ((match = imgRegex.exec(html)) !== null) {
-      const photoUrl = match[1];
-      const name = match[2];
+      const name = match[1].trim();
+      const photoUrl = match[2];
       
       if (name && photoUrl) {
         therapists.push({
           name: name.toUpperCase(),
-          photoUrl: photoUrl.startsWith('http') ? photoUrl : `https://zenryoku-esthe.com${photoUrl}`
+          photoUrl: photoUrl
         });
       }
     }
