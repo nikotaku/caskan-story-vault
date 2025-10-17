@@ -17,7 +17,8 @@ import {
   LogOut,
   ExternalLink,
   Menu,
-  X
+  X,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const menuItems = [
   { href: "/reservations", label: "予約管理", icon: BookOpen },
   { href: "/pricing", label: "料金設定", icon: DollarSign },
   { href: "/report", label: "レポート", icon: BarChart3 },
+  { href: "/text-generation", label: "文章生成", icon: Sparkles },
   { href: "/therapist-database", label: "セラピストDB", icon: Users },
   { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/shop", label: "設定", icon: Settings },

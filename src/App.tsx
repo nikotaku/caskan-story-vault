@@ -23,6 +23,7 @@ import PublicSystem from "./pages/public/System";
 import NotionPageView from "./pages/NotionPageView";
 import TherapistDatabase from "./pages/TherapistDatabase";
 import BookingReservation from "./pages/public/BookingReservation";
+import TextGeneration from "./pages/TextGeneration";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
           <Route path="/pricing" element={<PricingManagement />} />
+          <Route path="/text-generation" element={<TextGeneration />} />
           <Route path="/shop" element={<Settings />} />
           
           {/* Public Pages */}
