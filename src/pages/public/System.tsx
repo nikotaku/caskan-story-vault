@@ -2,31 +2,66 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Course {
+  duration: number;
+  standard_price: number;
+  name: string;
+  price: string;
+  features: string[];
+  popular?: boolean;
+}
 
 const System = () => {
-  const courses = [
-    {
-      name: "60分コース",
-      price: "¥12,000",
-      features: ["全身リラクゼーション", "アロマオイル使用"],
-    },
-    {
-      name: "90分コース",
-      price: "¥16,000",
-      features: ["全身リラクゼーション", "アロマオイル使用", "ディープリラクゼーション"],
-      popular: true,
-    },
-    {
-      name: "120分コース",
-      price: "¥20,000",
-      features: [
-        "全身リラクゼーション",
-        "アロマオイル使用",
-        "ディープリラクゼーション",
-        "プレミアムケア",
-      ],
-    },
-  ];
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const fetchCourses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pricing')
+        .select('*')
+        .order('duration', { ascending: true });
+
+      if (error) throw error;
+
+      const coursesData: Course[] = (data || []).map((item, index) => ({
+        duration: item.duration,
+        standard_price: item.standard_price,
+        name: `${item.duration}分コース`,
+        price: `¥${item.standard_price.toLocaleString()}`,
+        features: item.duration === 60 
+          ? ["全身リラクゼーション", "アロマオイル使用"]
+          : item.duration === 90
+          ? ["全身リラクゼーション", "アロマオイル使用", "ディープリラクゼーション"]
+          : ["全身リラクゼーション", "アロマオイル使用", "ディープリラクゼーション", "プレミアムケア"],
+        popular: index === 1
+      }));
+
+      setCourses(coursesData);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
