@@ -35,6 +35,9 @@ interface Reservation {
   start_time: string;
   duration: number;
   course_name: string;
+  course_type: string | null;
+  options: string[] | null;
+  nomination_type: string | null;
   price: number;
   status: string;
   payment_status: string;
@@ -42,10 +45,35 @@ interface Reservation {
   casts?: { name: string };
 }
 
+interface BackRate {
+  id: string;
+  course_type: string;
+  duration: number;
+  customer_price: number;
+  therapist_back: number;
+}
+
+interface OptionRate {
+  id: string;
+  option_name: string;
+  customer_price: number;
+  therapist_back: number;
+}
+
+interface NominationRate {
+  id: string;
+  nomination_type: string;
+  customer_price: number;
+  therapist_back: number | null;
+}
+
 export default function Reservations() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [casts, setCasts] = useState<Cast[]>([]);
+  const [backRates, setBackRates] = useState<BackRate[]>([]);
+  const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
+  const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -60,9 +88,11 @@ export default function Reservations() {
     reservation_date: new Date(),
     start_time: "14:00",
     end_time: "15:00",
-    duration: 60,
+    duration: 80,
     room: "",
-    course_name: "60分コース",
+    course_type: "aroma",
+    course_name: "80分 アロマオイルコース",
+    selectedOptions: [] as string[],
     price: 12000,
     payment_method: "cash",
     reservation_method: "",
@@ -83,6 +113,7 @@ export default function Reservations() {
     if (user) {
       fetchCasts();
       fetchReservations();
+      fetchRates();
       
       const channel = supabase
         .channel('reservations-changes')
@@ -104,6 +135,65 @@ export default function Reservations() {
       };
     }
   }, [user]);
+
+  // Calculate price when course, options, or nomination changes
+  useEffect(() => {
+    calculatePrice();
+  }, [formData.course_type, formData.duration, formData.selectedOptions, formData.nomination_type, backRates, optionRates, nominationRates]);
+
+  const fetchRates = async () => {
+    try {
+      const { data: backData } = await supabase
+        .from('back_rates')
+        .select('*');
+      
+      const { data: optionData } = await supabase
+        .from('option_rates')
+        .select('*');
+      
+      const { data: nominationData } = await supabase
+        .from('nomination_rates')
+        .select('*');
+
+      if (backData) setBackRates(backData);
+      if (optionData) setOptionRates(optionData);
+      if (nominationData) setNominationRates(nominationData);
+    } catch (error) {
+      console.error('Error fetching rates:', error);
+    }
+  };
+
+  const calculatePrice = () => {
+    let totalPrice = 0;
+
+    // Base course price
+    const matchingRate = backRates.find(
+      rate => rate.course_type === formData.course_type && rate.duration === formData.duration
+    );
+    if (matchingRate) {
+      totalPrice += matchingRate.customer_price;
+    }
+
+    // Add options
+    formData.selectedOptions.forEach(optionName => {
+      const matchingOption = optionRates.find(opt => opt.option_name === optionName);
+      if (matchingOption) {
+        totalPrice += matchingOption.customer_price;
+      }
+    });
+
+    // Add nomination fee
+    if (formData.nomination_type && formData.nomination_type !== 'none') {
+      const matchingNomination = nominationRates.find(
+        nom => nom.nomination_type === formData.nomination_type
+      );
+      if (matchingNomination) {
+        totalPrice += matchingNomination.customer_price;
+      }
+    }
+
+    setFormData(prev => ({ ...prev, price: totalPrice }));
+  };
 
   const fetchCasts = async () => {
     try {
@@ -182,7 +272,10 @@ export default function Reservations() {
           reservation_date: format(formData.reservation_date, 'yyyy-MM-dd'),
           start_time: formData.start_time,
           duration: formData.duration,
+          course_type: formData.course_type,
           course_name: formData.course_name,
+          options: formData.selectedOptions,
+          nomination_type: formData.nomination_type === 'none' ? null : formData.nomination_type,
           price: formData.price,
           notes: formData.notes || null,
           created_by: user!.id,
@@ -205,9 +298,11 @@ export default function Reservations() {
         reservation_date: new Date(),
         start_time: "14:00",
         end_time: "15:00",
-        duration: 60,
+        duration: 80,
         room: "",
-        course_name: "60分コース",
+        course_type: "aroma",
+        course_name: "80分 アロマオイルコース",
+        selectedOptions: [],
         price: 12000,
         payment_method: "cash",
         reservation_method: "",
@@ -392,9 +487,9 @@ export default function Reservations() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">指名なし</SelectItem>
-                              <SelectItem value="photo">写真指名</SelectItem>
-                              <SelectItem value="regular">本指名</SelectItem>
-                              <SelectItem value="external">外部情報</SelectItem>
+                              <SelectItem value="ネット指名">ネット指名</SelectItem>
+                              <SelectItem value="本指名">本指名</SelectItem>
+                              <SelectItem value="姫予約">姫予約</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -487,23 +582,101 @@ export default function Reservations() {
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="course_name">コース名</Label>
-                          <Input
-                            id="course_name"
-                            placeholder="60分コース"
-                            value={formData.course_name}
-                            onChange={(e) => setFormData({...formData, course_name: e.target.value})}
-                          />
+                          <Label>コースタイプ</Label>
+                          <Select
+                            value={formData.course_type}
+                            onValueChange={(value) => {
+                              const courseType = value;
+                              let courseName = "";
+                              if (courseType === "aroma") {
+                                courseName = `${formData.duration}分 アロマオイルコース`;
+                              } else if (courseType === "zenryoku") {
+                                courseName = `${formData.duration}分 全力コース`;
+                              }
+                              setFormData({...formData, course_type: courseType, course_name: courseName});
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="aroma">アロマオイルコース</SelectItem>
+                              <SelectItem value="zenryoku">全力コース（無限DR/🔥）</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
-                          <Label htmlFor="price">料金</Label>
-                          <Input
-                            id="price"
-                            type="number"
-                            placeholder="12000"
-                            value={formData.price}
-                            onChange={(e) => setFormData({...formData, price: parseInt(e.target.value)})}
-                          />
+                          <Label>時間</Label>
+                          <Select
+                            value={formData.duration.toString()}
+                            onValueChange={(value) => {
+                              const duration = parseInt(value);
+                              let courseName = "";
+                              if (formData.course_type === "aroma") {
+                                courseName = `${duration}分 アロマオイルコース`;
+                              } else if (formData.course_type === "zenryoku") {
+                                courseName = `${duration}分 全力コース`;
+                              }
+                              setFormData({...formData, duration, course_name: courseName});
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {formData.course_type === "aroma" ? (
+                                <>
+                                  <SelectItem value="80">80分</SelectItem>
+                                  <SelectItem value="100">100分</SelectItem>
+                                  <SelectItem value="120">120分</SelectItem>
+                                </>
+                              ) : (
+                                <>
+                                  <SelectItem value="60">60分</SelectItem>
+                                  <SelectItem value="80">80分</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>オプション</Label>
+                        <div className="space-y-2 mt-2">
+                          {optionRates.map((option) => (
+                            <div key={option.id} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`option-${option.id}`}
+                                checked={formData.selectedOptions.includes(option.option_name)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({
+                                      ...formData,
+                                      selectedOptions: [...formData.selectedOptions, option.option_name]
+                                    });
+                                  } else {
+                                    setFormData({
+                                      ...formData,
+                                      selectedOptions: formData.selectedOptions.filter(o => o !== option.option_name)
+                                    });
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <label htmlFor={`option-${option.id}`} className="text-sm">
+                                {option.option_name} (+¥{option.customer_price.toLocaleString()})
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-muted p-4 rounded-lg">
+                        <div className="flex justify-between items-center text-lg font-bold">
+                          <span>合計金額:</span>
+                          <span>¥{formData.price.toLocaleString()}</span>
                         </div>
                       </div>
                       
@@ -654,8 +827,23 @@ export default function Reservations() {
                         <div className="flex items-center gap-2 text-sm">
                           <CreditCard size={16} className="text-muted-foreground" />
                           <span className="font-medium">¥{reservation.price.toLocaleString()}</span>
-                          <span className="text-muted-foreground">({reservation.course_name})</span>
                         </div>
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">コース: </span>
+                          <span>{reservation.course_name}</span>
+                        </div>
+                        {reservation.options && reservation.options.length > 0 && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">オプション: </span>
+                            <span>{reservation.options.join(', ')}</span>
+                          </div>
+                        )}
+                        {reservation.nomination_type && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">指名: </span>
+                            <span>{reservation.nomination_type}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     {reservation.notes && (

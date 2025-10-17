@@ -24,11 +24,23 @@ interface Cast {
   status: string;
 }
 
-interface PricingOption {
+interface BackRate {
   id: string;
-  name: string;
-  price: number;
-  description: string | null;
+  course_type: string;
+  duration: number;
+  customer_price: number;
+}
+
+interface OptionRate {
+  id: string;
+  option_name: string;
+  customer_price: number;
+}
+
+interface NominationRate {
+  id: string;
+  nomination_type: string;
+  customer_price: number;
 }
 
 const reservationSchema = z.object({
@@ -40,27 +52,69 @@ const reservationSchema = z.object({
 
 const BookingReservation = () => {
   const [casts, setCasts] = useState<Cast[]>([]);
-  const [pricingOptions, setPricingOptions] = useState<PricingOption[]>([]);
+  const [backRates, setBackRates] = useState<BackRate[]>([]);
+  const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
+  const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedCastId, setSelectedCastId] = useState<string>("");
-  const [selectedCourse, setSelectedCourse] = useState<string>("");
+  const [courseType, setCourseType] = useState<string>("aroma");
   const [startTime, setStartTime] = useState<string>("14:00");
-  const [duration, setDuration] = useState<number>(60);
+  const [duration, setDuration] = useState<number>(80);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [nominationType, setNominationType] = useState<string>("none");
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [customerEmail, setCustomerEmail] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [totalPrice, setTotalPrice] = useState<number>(0);
 
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchCasts();
-    fetchPricingOptions();
+    fetchRates();
   }, []);
+
+  // Calculate price when course, options, or nomination changes
+  useEffect(() => {
+    calculatePrice();
+  }, [courseType, duration, selectedOptions, nominationType, backRates, optionRates, nominationRates]);
+
+  const calculatePrice = () => {
+    let price = 0;
+
+    // Base course price
+    const matchingRate = backRates.find(
+      rate => rate.course_type === courseType && rate.duration === duration
+    );
+    if (matchingRate) {
+      price += matchingRate.customer_price;
+    }
+
+    // Add options
+    selectedOptions.forEach(optionName => {
+      const matchingOption = optionRates.find(opt => opt.option_name === optionName);
+      if (matchingOption) {
+        price += matchingOption.customer_price;
+      }
+    });
+
+    // Add nomination fee
+    if (nominationType && nominationType !== 'none') {
+      const matchingNomination = nominationRates.find(
+        nom => nom.nomination_type === nominationType
+      );
+      if (matchingNomination) {
+        price += matchingNomination.customer_price;
+      }
+    }
+
+    setTotalPrice(price);
+  };
 
   const fetchCasts = async () => {
     try {
@@ -83,17 +137,25 @@ const BookingReservation = () => {
     }
   };
 
-  const fetchPricingOptions = async () => {
+  const fetchRates = async () => {
     try {
-      const { data, error } = await supabase
-        .from("pricing_options")
-        .select("*")
-        .order("price");
+      const { data: backData } = await supabase
+        .from('back_rates')
+        .select('*');
+      
+      const { data: optionData } = await supabase
+        .from('option_rates')
+        .select('*');
+      
+      const { data: nominationData } = await supabase
+        .from('nomination_rates')
+        .select('*');
 
-      if (error) throw error;
-      setPricingOptions(data || []);
+      if (backData) setBackRates(backData);
+      if (optionData) setOptionRates(optionData);
+      if (nominationData) setNominationRates(nominationData);
     } catch (error) {
-      console.error("Error fetching pricing options:", error);
+      console.error('Error fetching rates:', error);
     }
   };
 
@@ -119,7 +181,7 @@ const BookingReservation = () => {
       }
     }
 
-    if (!selectedDate || !selectedCastId || !selectedCourse) {
+    if (!selectedDate || !selectedCastId || !courseType) {
       toast({
         title: "入力エラー",
         description: "必須項目をすべて入力してください",
@@ -131,7 +193,9 @@ const BookingReservation = () => {
     setSubmitting(true);
 
     try {
-      const selectedPricing = pricingOptions.find(p => p.name === selectedCourse);
+      const courseName = courseType === "aroma" 
+        ? `${duration}分 アロマオイルコース` 
+        : `${duration}分 全力コース`;
       
       const { error } = await supabase
         .from("reservations")
@@ -143,8 +207,11 @@ const BookingReservation = () => {
           reservation_date: format(selectedDate, "yyyy-MM-dd"),
           start_time: startTime,
           duration: duration,
-          course_name: selectedCourse,
-          price: selectedPricing?.price || 0,
+          course_type: courseType,
+          course_name: courseName,
+          options: selectedOptions.length > 0 ? selectedOptions : null,
+          nomination_type: nominationType !== 'none' ? nominationType : null,
+          price: totalPrice,
           notes: notes.trim() || null,
           status: "pending",
           payment_status: "unpaid",
@@ -161,9 +228,11 @@ const BookingReservation = () => {
       // フォームをリセット
       setSelectedDate(undefined);
       setSelectedCastId("");
-      setSelectedCourse("");
+      setCourseType("aroma");
       setStartTime("14:00");
-      setDuration(60);
+      setDuration(80);
+      setSelectedOptions([]);
+      setNominationType("none");
       setCustomerName("");
       setCustomerPhone("");
       setCustomerEmail("");
@@ -323,17 +392,80 @@ const BookingReservation = () => {
                     </Select>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>コースタイプ *</Label>
+                      <Select value={courseType} onValueChange={setCourseType} required>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="aroma">アロマオイルコース</SelectItem>
+                          <SelectItem value="zenryoku">全力コース（無限DR/🔥）</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>時間 *</Label>
+                      <Select value={duration.toString()} onValueChange={(v) => setDuration(parseInt(v))} required>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {courseType === "aroma" ? (
+                            <>
+                              <SelectItem value="80">80分 - ¥12,000</SelectItem>
+                              <SelectItem value="100">100分 - ¥15,000</SelectItem>
+                              <SelectItem value="120">120分 - ¥18,000</SelectItem>
+                            </>
+                          ) : (
+                            <>
+                              <SelectItem value="60">60分 - ¥15,000</SelectItem>
+                              <SelectItem value="80">80分 - ¥19,000</SelectItem>
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div>
-                    <Label>コース *</Label>
-                    <Select value={selectedCourse} onValueChange={setSelectedCourse} required>
+                    <Label>オプション</Label>
+                    <div className="space-y-2 mt-2">
+                      {optionRates.map((option) => (
+                        <div key={option.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`option-${option.id}`}
+                            checked={selectedOptions.includes(option.option_name)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOptions([...selectedOptions, option.option_name]);
+                              } else {
+                                setSelectedOptions(selectedOptions.filter(o => o !== option.option_name));
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <label htmlFor={`option-${option.id}`} className="text-sm">
+                            {option.option_name} (+¥{option.customer_price.toLocaleString()})
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label>指名</Label>
+                    <Select value={nominationType} onValueChange={setNominationType}>
                       <SelectTrigger>
-                        <SelectValue placeholder="コースを選択してください" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {pricingOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.name}>
-                            {option.name} - ¥{option.price.toLocaleString()}
-                            {option.description && ` (${option.description})`}
+                        <SelectItem value="none">指名なし</SelectItem>
+                        {nominationRates.map((nom) => (
+                          <SelectItem key={nom.id} value={nom.nomination_type}>
+                            {nom.nomination_type} (+¥{nom.customer_price.toLocaleString()})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -368,30 +500,15 @@ const BookingReservation = () => {
                     </Popover>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="start_time">開始時刻 *</Label>
-                      <Input
-                        id="start_time"
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label>所要時間</Label>
-                      <Select value={duration.toString()} onValueChange={(v) => setDuration(parseInt(v))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="60">60分</SelectItem>
-                          <SelectItem value="90">90分</SelectItem>
-                          <SelectItem value="120">120分</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <Label htmlFor="start_time">開始時刻 *</Label>
+                    <Input
+                      id="start_time"
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      required
+                    />
                   </div>
 
                   <div>
@@ -404,6 +521,15 @@ const BookingReservation = () => {
                       onChange={(e) => setNotes(e.target.value)}
                       maxLength={1000}
                     />
+                  </div>
+
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold">合計金額:</span>
+                      <span className="text-2xl font-bold" style={{ color: "#d4a574" }}>
+                        ¥{totalPrice.toLocaleString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

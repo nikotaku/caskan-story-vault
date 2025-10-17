@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      back_rates: {
+        Row: {
+          course_type: string
+          created_at: string
+          customer_price: number
+          duration: number
+          id: string
+          shop_back: number
+          therapist_back: number
+          updated_at: string
+        }
+        Insert: {
+          course_type: string
+          created_at?: string
+          customer_price: number
+          duration: number
+          id?: string
+          shop_back: number
+          therapist_back: number
+          updated_at?: string
+        }
+        Update: {
+          course_type?: string
+          created_at?: string
+          customer_price?: number
+          duration?: number
+          id?: string
+          shop_back?: number
+          therapist_back?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       casts: {
         Row: {
           created_at: string
@@ -71,6 +104,66 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_rates: {
+        Row: {
+          created_at: string
+          expense_type: string
+          id: string
+          min_days: number | null
+          shop_income: number
+          therapist_deduction: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expense_type: string
+          id?: string
+          min_days?: number | null
+          shop_income: number
+          therapist_deduction: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expense_type?: string
+          id?: string
+          min_days?: number | null
+          shop_income?: number
+          therapist_deduction?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nomination_rates: {
+        Row: {
+          created_at: string
+          customer_price: number
+          id: string
+          nomination_type: string
+          shop_back: number | null
+          therapist_back: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_price: number
+          id?: string
+          nomination_type: string
+          shop_back?: number | null
+          therapist_back?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_price?: number
+          id?: string
+          nomination_type?: string
+          shop_back?: number | null
+          therapist_back?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notion_pages: {
         Row: {
           content: Json
@@ -97,6 +190,36 @@ export type Database = {
           notion_page_id?: string
           slug?: string
           title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      option_rates: {
+        Row: {
+          created_at: string
+          customer_price: number
+          id: string
+          option_name: string
+          shop_back: number | null
+          therapist_back: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_price: number
+          id?: string
+          option_name: string
+          shop_back?: number | null
+          therapist_back: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_price?: number
+          id?: string
+          option_name?: string
+          shop_back?: number | null
+          therapist_back?: number
           updated_at?: string
         }
         Relationships: []
@@ -186,6 +309,7 @@ export type Database = {
         Row: {
           cast_id: string
           course_name: string
+          course_type: string | null
           created_at: string
           created_by: string
           customer_email: string | null
@@ -193,7 +317,9 @@ export type Database = {
           customer_phone: string
           duration: number
           id: string
+          nomination_type: string | null
           notes: string | null
+          options: string[] | null
           payment_status: string
           price: number
           reservation_date: string
@@ -204,6 +330,7 @@ export type Database = {
         Insert: {
           cast_id: string
           course_name: string
+          course_type?: string | null
           created_at?: string
           created_by: string
           customer_email?: string | null
@@ -211,7 +338,9 @@ export type Database = {
           customer_phone: string
           duration?: number
           id?: string
+          nomination_type?: string | null
           notes?: string | null
+          options?: string[] | null
           payment_status?: string
           price: number
           reservation_date: string
@@ -222,6 +351,7 @@ export type Database = {
         Update: {
           cast_id?: string
           course_name?: string
+          course_type?: string | null
           created_at?: string
           created_by?: string
           customer_email?: string | null
@@ -229,7 +359,9 @@ export type Database = {
           customer_phone?: string
           duration?: number
           id?: string
+          nomination_type?: string | null
           notes?: string | null
+          options?: string[] | null
           payment_status?: string
           price?: number
           reservation_date?: string

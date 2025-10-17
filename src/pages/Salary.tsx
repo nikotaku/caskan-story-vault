@@ -14,6 +14,12 @@ interface CastSalary {
   cast_id: string;
   cast_name: string;
   total_salary: number;
+  reservation_count: number;
+  details: {
+    course_back: number;
+    option_back: number;
+    nomination_back: number;
+  };
 }
 
 export default function Salary() {
@@ -52,12 +58,16 @@ export default function Salary() {
 
       if (shiftsError) throw shiftsError;
 
-      // Get reservations for the selected date
+      // Get reservations with all details
       const { data: reservations, error: reservationsError } = await supabase
         .from('reservations')
         .select(`
           cast_id,
           price,
+          duration,
+          course_type,
+          options,
+          nomination_type,
           casts (name)
         `)
         .eq('reservation_date', dateStr)
@@ -65,22 +75,78 @@ export default function Salary() {
 
       if (reservationsError) throw reservationsError;
 
-      // Calculate salary per cast (assuming 50% of reservation price)
+      // Fetch rate tables
+      const { data: backRates } = await supabase
+        .from('back_rates')
+        .select('*');
+      
+      const { data: optionRates } = await supabase
+        .from('option_rates')
+        .select('*');
+      
+      const { data: nominationRates } = await supabase
+        .from('nomination_rates')
+        .select('*');
+
+      // Calculate salary per cast based on back rates
       const salaryMap = new Map<string, CastSalary>();
 
       reservations?.forEach(reservation => {
         if (reservation.casts && Array.isArray(reservation.casts) && reservation.casts[0]) {
           const castName = reservation.casts[0].name;
-          const salary = Math.floor(reservation.price * 0.5); // 50% commission
+          
+          // Calculate base course back
+          let courseBack = 0;
+          const matchingRate = backRates?.find(
+            rate => rate.course_type === reservation.course_type && 
+                    rate.duration === reservation.duration
+          );
+          if (matchingRate) {
+            courseBack = matchingRate.therapist_back;
+          }
+
+          // Calculate options back
+          let optionBack = 0;
+          if (reservation.options && Array.isArray(reservation.options)) {
+            reservation.options.forEach(optionName => {
+              const matchingOption = optionRates?.find(opt => opt.option_name === optionName);
+              if (matchingOption) {
+                optionBack += matchingOption.therapist_back;
+              }
+            });
+          }
+
+          // Calculate nomination back
+          let nominationBack = 0;
+          if (reservation.nomination_type) {
+            const matchingNomination = nominationRates?.find(
+              nom => nom.nomination_type === reservation.nomination_type
+            );
+            if (matchingNomination && matchingNomination.therapist_back) {
+              nominationBack = matchingNomination.therapist_back;
+            }
+          }
+
+          const totalSalary = courseBack + optionBack + nominationBack;
           
           const existing = salaryMap.get(reservation.cast_id);
           if (existing) {
-            existing.total_salary += salary;
+            existing.total_salary += totalSalary;
+            existing.reservation_count += 1;
+            existing.details.course_back += courseBack;
+            existing.details.option_back += optionBack;
+            existing.details.nomination_back += nominationBack;
           } else {
             salaryMap.set(reservation.cast_id, {
               cast_id: reservation.cast_id,
               cast_name: castName,
-              total_salary: salary,
+              total_salary: totalSalary,
+              reservation_count: 1,
+              details: {
+                course_back: courseBack,
+                option_back: optionBack,
+                nomination_back: nominationBack,
+              },
             });
           }
         }
@@ -95,6 +161,12 @@ export default function Salary() {
               cast_id: shift.cast_id,
               cast_name: castName,
               total_salary: 0,
+              reservation_count: 0,
+              details: {
+                course_back: 0,
+                option_back: 0,
+                nomination_back: 0,
+              },
             });
           }
         }
@@ -170,24 +242,42 @@ export default function Salary() {
                   {salaries.map((salary) => (
                     <div 
                       key={salary.cast_id}
-                      className="flex justify-between items-center p-4 border rounded-lg hover:bg-accent transition-colors"
+                      className="p-4 border rounded-lg hover:bg-accent transition-colors"
                     >
-                      <div className="font-medium">{salary.cast_name}</div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-xl font-bold">
-                          ¥{salary.total_salary.toLocaleString()}
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <div className="font-medium text-lg">{salary.cast_name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            予約: {salary.reservation_count}件
+                          </div>
                         </div>
-                        <Button 
-                          variant="link" 
-                          className="text-primary"
-                          onClick={() => {
-                            // Navigate to detailed salary page (to be implemented)
-                            console.log('詳細', salary.cast_id);
-                          }}
-                        >
-                          詳細
-                        </Button>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold">
+                            ¥{salary.total_salary.toLocaleString()}
+                          </div>
+                        </div>
                       </div>
+                      
+                      {salary.reservation_count > 0 && (
+                        <div className="mt-3 pt-3 border-t text-sm space-y-1">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>コースバック:</span>
+                            <span>¥{salary.details.course_back.toLocaleString()}</span>
+                          </div>
+                          {salary.details.option_back > 0 && (
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>オプションバック:</span>
+                              <span>¥{salary.details.option_back.toLocaleString()}</span>
+                            </div>
+                          )}
+                          {salary.details.nomination_back > 0 && (
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>指名バック:</span>
+                              <span>¥{salary.details.nomination_back.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                   
