@@ -41,6 +41,8 @@ export default function Staff() {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingCast, setEditingCast] = useState<Cast | null>(null);
   const [loading, setLoading] = useState(true);
   
   // フォーム用の状態
@@ -162,6 +164,55 @@ export default function Staff() {
       toast({
         title: "エラー",
         description: "キャストの追加に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditCast = (cast: Cast) => {
+    setEditingCast(cast);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateCast = async () => {
+    if (!isAdmin || !editingCast) {
+      toast({
+        title: "権限エラー",
+        description: "管理者のみキャストを更新できます",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('casts')
+        .update({
+          name: editingCast.name,
+          type: editingCast.type,
+          room: editingCast.room,
+          status: editingCast.status,
+          profile: editingCast.profile,
+          photo: editingCast.photo || null,
+          x_account: editingCast.x_account || null,
+          hp_notice: editingCast.hp_notice || null,
+        })
+        .eq('id', editingCast.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "キャスト更新",
+        description: "キャスト情報が更新されました",
+      });
+      
+      setIsEditDialogOpen(false);
+      setEditingCast(null);
+    } catch (error) {
+      console.error('Error updating cast:', error);
+      toast({
+        title: "エラー",
+        description: "キャストの更新に失敗しました",
         variant: "destructive",
       });
     }
@@ -359,6 +410,126 @@ export default function Staff() {
               )}
             </div>
 
+            {/* Edit Dialog */}
+            {isAdmin && editingCast && (
+              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>キャスト編集</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="edit-name">セラピスト名</Label>
+                      <Input 
+                        id="edit-name" 
+                        placeholder="名前を入力"
+                        value={editingCast.name}
+                        onChange={(e) => setEditingCast({...editingCast, name: e.target.value})}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="edit-type">タイプ</Label>
+                        <Select 
+                          value={editingCast.type}
+                          onValueChange={(value) => setEditingCast({...editingCast, type: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="新人">新人</SelectItem>
+                            <SelectItem value="standard">スタンダード</SelectItem>
+                            <SelectItem value="premium">プレミアム</SelectItem>
+                            <SelectItem value="VIP">VIP</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-room">ルーム</Label>
+                        <Select 
+                          value={editingCast.room || ""}
+                          onValueChange={(value) => setEditingCast({...editingCast, room: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="ルームを選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="インルーム">インルーム</SelectItem>
+                            <SelectItem value="ラスルーム">ラスルーム</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="edit-status">ステータス</Label>
+                      <Select 
+                        value={editingCast.status}
+                        onValueChange={(value) => setEditingCast({...editingCast, status: value})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="waiting">待機中</SelectItem>
+                          <SelectItem value="working">接客中</SelectItem>
+                          <SelectItem value="offline">退勤</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="edit-profile">プロフィール</Label>
+                      <Textarea 
+                        id="edit-profile" 
+                        rows={5} 
+                        placeholder="キャストの魅力や特徴を入力..."
+                        value={editingCast.profile || ""}
+                        onChange={(e) => setEditingCast({...editingCast, profile: e.target.value})}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="edit-photo">写真URL</Label>
+                      <Input 
+                        id="edit-photo" 
+                        placeholder="https://..."
+                        value={editingCast.photo || ""}
+                        onChange={(e) => setEditingCast({...editingCast, photo: e.target.value})}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="edit-x-account">Xアカウント</Label>
+                      <Input 
+                        id="edit-x-account" 
+                        placeholder="@username"
+                        value={editingCast.x_account || ""}
+                        onChange={(e) => setEditingCast({...editingCast, x_account: e.target.value})}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="edit-hp-notice">HP告知</Label>
+                      <Textarea 
+                        id="edit-hp-notice" 
+                        rows={3} 
+                        placeholder="ホームページに表示するお知らせ..."
+                        value={editingCast.hp_notice || ""}
+                        onChange={(e) => setEditingCast({...editingCast, hp_notice: e.target.value})}
+                      />
+                    </div>
+                    
+                    <Button onClick={handleUpdateCast} className="w-full">
+                      更新
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+
             {/* Notion Sync */}
             {isAdmin && (
               <div className="mb-6">
@@ -506,10 +677,7 @@ export default function Staff() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => toast({
-                              title: "編集機能",
-                              description: "編集機能は近日実装予定です",
-                            })}
+                            onClick={() => handleEditCast(cast)}
                             className="flex-1"
                           >
                             <Edit size={14} />
