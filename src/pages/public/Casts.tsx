@@ -133,6 +133,9 @@ const Casts = () => {
             <Link to="/public/casts" className="text-sm font-medium text-primary transition-colors">
               セラピスト
             </Link>
+            <Link to="/public/booking" className="text-sm font-medium hover:text-primary transition-colors">
+              WEB予約
+            </Link>
           </nav>
           <Button asChild>
             <a href="tel:080-3192-1209">

@@ -92,6 +92,9 @@ export default function Pricing() {
               <Link to="/public/system" className="text-muted-foreground hover:text-foreground transition-colors">
                 システム
               </Link>
+              <Link to="/public/booking" className="text-muted-foreground hover:text-foreground transition-colors">
+                WEB予約
+              </Link>
             </nav>
             <Button size="sm" className="gap-2">
               <Phone size={16} />

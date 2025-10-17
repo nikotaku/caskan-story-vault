@@ -148,6 +148,9 @@ export default function NotionPageView() {
             <Link to="/public/system" className="text-sm font-medium hover:text-primary transition-colors">
               システム
             </Link>
+            <Link to="/public/booking" className="text-sm font-medium hover:text-primary transition-colors">
+              WEB予約
+            </Link>
           </nav>
         </div>
       </header>
