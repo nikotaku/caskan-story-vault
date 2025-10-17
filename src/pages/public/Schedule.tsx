@@ -260,8 +260,8 @@ const Schedule = () => {
                           {shifts.map((shift) => (
                             <tr key={shift.id}>
                               <td className="border border-[#d4b5a8] p-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-12 h-12 relative flex-shrink-0 rounded-full overflow-hidden">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-20 h-20 relative flex-shrink-0 rounded-full overflow-hidden">
                                     {shift.casts.photo ? (
                                       <img
                                         src={shift.casts.photo}
@@ -270,14 +270,14 @@ const Schedule = () => {
                                       />
                                     ) : (
                                       <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                                        <span className="text-sm text-muted-foreground">
+                                        <span className="text-lg text-muted-foreground">
                                           {shift.casts.name.charAt(0)}
                                         </span>
                                       </div>
                                     )}
                                   </div>
                                   <div>
-                                    <div className="font-semibold text-sm">{shift.casts.name}</div>
+                                    <div className="font-semibold text-base">{shift.casts.name}</div>
                                     <Badge variant="outline" className="text-xs">{shift.casts.type}</Badge>
                                   </div>
                                 </div>
