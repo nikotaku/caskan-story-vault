@@ -35,6 +35,7 @@ const menuItems = [
   { href: "/shift", label: "シフト", icon: Clock },
   { href: "/reservations", label: "予約管理", icon: BookOpen },
   { href: "/pricing", label: "料金設定", icon: DollarSign },
+  { href: "/salary", label: "給与", icon: Wallet },
   { href: "/report", label: "レポート", icon: BarChart3 },
   { href: "/text-generation", label: "文章生成", icon: Sparkles },
   { href: "/estama", label: "Estama連携", icon: ExternalLink },

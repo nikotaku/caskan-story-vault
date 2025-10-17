@@ -56,11 +56,18 @@ export default function Reservations() {
     customer_name: "",
     customer_phone: "",
     customer_email: "",
+    customer_furigana: "",
+    nationality: "",
+    nomination_type: "none",
     reservation_date: new Date(),
     start_time: "14:00",
+    end_time: "15:00",
     duration: 60,
+    room: "",
     course_name: "60分コース",
     price: 12000,
+    payment_method: "cash",
+    reservation_method: "",
     notes: "",
   });
 
@@ -196,11 +203,18 @@ export default function Reservations() {
         customer_name: "",
         customer_phone: "",
         customer_email: "",
+        customer_furigana: "",
+        nationality: "",
+        nomination_type: "none",
         reservation_date: new Date(),
         start_time: "14:00",
+        end_time: "15:00",
         duration: 60,
+        room: "",
         course_name: "60分コース",
         price: 12000,
+        payment_method: "cash",
+        reservation_method: "",
         notes: "",
       });
     } catch (error) {
@@ -341,7 +355,7 @@ export default function Reservations() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="customer_name">お客様名</Label>
+                          <Label htmlFor="customer_name">予約者</Label>
                           <Input 
                             id="customer_name" 
                             placeholder="山田太郎"
@@ -349,6 +363,18 @@ export default function Reservations() {
                             onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
                           />
                         </div>
+                        <div>
+                          <Label htmlFor="customer_furigana">フリガナ</Label>
+                          <Input 
+                            id="customer_furigana" 
+                            placeholder="ヤマダタロウ"
+                            value={formData.customer_furigana}
+                            onChange={(e) => setFormData({...formData, customer_furigana: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="customer_phone">電話番号</Label>
                           <Input 
@@ -358,17 +384,51 @@ export default function Reservations() {
                             onChange={(e) => setFormData({...formData, customer_phone: e.target.value})}
                           />
                         </div>
+                        <div>
+                          <Label htmlFor="customer_email">メールアドレス</Label>
+                          <Input 
+                            id="customer_email" 
+                            type="email"
+                            placeholder="example@email.com"
+                            value={formData.customer_email}
+                            onChange={(e) => setFormData({...formData, customer_email: e.target.value})}
+                          />
+                        </div>
                       </div>
-                      
-                      <div>
-                        <Label htmlFor="customer_email">メールアドレス（任意）</Label>
-                        <Input 
-                          id="customer_email" 
-                          type="email"
-                          placeholder="example@email.com"
-                          value={formData.customer_email}
-                          onChange={(e) => setFormData({...formData, customer_email: e.target.value})}
-                        />
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>国籍</Label>
+                          <Select
+                            value={formData.nationality}
+                            onValueChange={(value) => setFormData({...formData, nationality: value})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="未指定" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="japanese">日本</SelectItem>
+                              <SelectItem value="other">その他</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>指名</Label>
+                          <Select
+                            value={formData.nomination_type}
+                            onValueChange={(value) => setFormData({...formData, nomination_type: value})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">指名なし</SelectItem>
+                              <SelectItem value="photo">写真指名</SelectItem>
+                              <SelectItem value="regular">本指名</SelectItem>
+                              <SelectItem value="external">外部情報</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
 
                       <div>
@@ -428,21 +488,32 @@ export default function Reservations() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="duration">所要時間（分）</Label>
-                          <Select
-                            value={formData.duration.toString()}
-                            onValueChange={(value) => setFormData({...formData, duration: parseInt(value)})}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="60">60分</SelectItem>
-                              <SelectItem value="90">90分</SelectItem>
-                              <SelectItem value="120">120分</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label htmlFor="end_time">終了時刻</Label>
+                          <Input
+                            id="end_time"
+                            type="time"
+                            value={formData.end_time}
+                            onChange={(e) => setFormData({...formData, end_time: e.target.value})}
+                          />
                         </div>
+                      </div>
+
+                      <div>
+                        <Label>ルーム</Label>
+                        <Select
+                          value={formData.room}
+                          onValueChange={(value) => setFormData({...formData, room: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="本指定" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="main">本指定</SelectItem>
+                            <SelectItem value="1room">1room</SelectItem>
+                            <SelectItem value="2room">2room</SelectItem>
+                            <SelectItem value="3room">3room</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
@@ -468,10 +539,47 @@ export default function Reservations() {
                       </div>
                       
                       <div>
-                        <Label htmlFor="notes">備考</Label>
+                        <Label>支払い方法</Label>
+                        <Select
+                          value={formData.payment_method}
+                          onValueChange={(value) => setFormData({...formData, payment_method: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cash">現金</SelectItem>
+                            <SelectItem value="card">カード（手数料10%）</SelectItem>
+                            <SelectItem value="paypay">PayPay（手数料10%）</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label>予約方法</Label>
+                        <Select
+                          value={formData.reservation_method}
+                          onValueChange={(value) => setFormData({...formData, reservation_method: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="未指定" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="phone">電話</SelectItem>
+                            <SelectItem value="web">WEB</SelectItem>
+                            <SelectItem value="line">LINE</SelectItem>
+                            <SelectItem value="sms">SMS</SelectItem>
+                            <SelectItem value="twitter">Twitter</SelectItem>
+                            <SelectItem value="other">その他</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="notes">予約内容と要望</Label>
                         <Textarea
                           id="notes"
-                          rows={3}
+                          rows={4}
                           placeholder="特記事項があれば入力..."
                           value={formData.notes}
                           onChange={(e) => setFormData({...formData, notes: e.target.value})}

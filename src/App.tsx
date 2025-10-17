@@ -10,6 +10,7 @@ import ShiftSubmission from "./pages/ShiftSubmission";
 import Reservations from "./pages/Reservations";
 import Design from "./pages/Design";
 import Report from "./pages/Report";
+import Salary from "./pages/Salary";
 import Settings from "./pages/Settings";
 import PricingManagement from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
@@ -43,6 +44,7 @@ const App = () => (
           <Route path="/reservations" element={<Reservations />} />
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
+          <Route path="/salary" element={<Salary />} />
           <Route path="/pricing" element={<PricingManagement />} />
           <Route path="/text-generation" element={<TextGeneration />} />
           <Route path="/estama" element={<EstamaIntegration />} />
