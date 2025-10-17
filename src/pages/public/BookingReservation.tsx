@@ -197,45 +197,59 @@ const BookingReservation = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link to="/public" className="flex items-center space-x-2">
-            <img src="/src/assets/caskan-logo.png" alt="Logo" className="h-8 w-auto" />
-          </Link>
-          <nav className="hidden md:flex gap-6">
-            <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
-              トップ
-            </Link>
-            <Link to="/public/pricing" className="text-sm font-medium hover:text-primary transition-colors">
-              料金表
-            </Link>
-            <Link to="/public/system" className="text-sm font-medium hover:text-primary transition-colors">
-              システム
-            </Link>
-            <Link to="/public/schedule" className="text-sm font-medium hover:text-primary transition-colors">
-              出勤情報
-            </Link>
-            <Link to="/public/casts" className="text-sm font-medium hover:text-primary transition-colors">
-              セラピスト
-            </Link>
-            <Link to="/public/booking" className="text-sm font-medium text-primary transition-colors">
-              WEB予約
-            </Link>
-          </nav>
-          <Button asChild>
-            <a href="tel:080-3192-1209">
-              電話予約
-            </a>
-          </Button>
+    <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
+      {/* Top Contact Bar */}
+      <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
+        <div className="container mx-auto flex justify-center items-center">
+          <span>12:00〜26:00(24:40最終受付)</span>
         </div>
-      </header>
+      </div>
+
+      {/* Navigation Menu */}
+      <nav className="bg-white border-y border-[#e5d5cc] sticky top-0 z-50 shadow-sm">
+        <div className="container mx-auto">
+          <div className="flex justify-center items-center flex-wrap">
+            <Link to="/public" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">TOP</div>
+              <div className="text-xs text-[#a89586]">トップ</div>
+            </Link>
+            <Link to="/public/schedule" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">SCHEDULE</div>
+              <div className="text-xs text-[#a89586]">出勤情報</div>
+            </Link>
+            <Link to="/public/casts" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">THERAPIST</div>
+              <div className="text-xs text-[#a89586]">セラピスト</div>
+            </Link>
+            <Link to="/page/a" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">PRICING</div>
+              <div className="text-xs text-[#a89586]">料金・システム</div>
+            </Link>
+            <Link to="/public/system" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
+              <div className="text-xs text-[#a89586]">システム</div>
+            </Link>
+            <Link to="/public/booking" className="px-8 py-4 bg-[#f5e8e4] transition-colors border-b-2 border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">BOOKING</div>
+              <div className="text-xs text-[#a89586]">WEB予約</div>
+            </Link>
+          </div>
+        </div>
+      </nav>
 
       <main className="container py-8 px-4">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold mb-2 text-center">WEB予約</h1>
-          <p className="text-center text-muted-foreground mb-8">
+          <h1 
+            className="text-4xl font-bold mb-2 text-center"
+            style={{ 
+              color: "#8b7355",
+              fontFamily: "'Noto Serif JP', serif",
+              letterSpacing: "0.1em"
+            }}
+          >
+            BOOKING - WEB予約
+          </h1>
+          <p className="text-center mb-8" style={{ color: "#a89586" }}>
             下記のフォームよりご予約ください。担当者より確認のご連絡をさせていただきます。
           </p>
 
@@ -412,9 +426,35 @@ const BookingReservation = () => {
       </main>
 
       {/* Footer */}
-      <footer className="py-8 px-4 border-t mt-12">
-        <div className="container max-w-6xl mx-auto text-center text-sm text-muted-foreground">
-          © 2025 全力エステ ZR. All rights reserved.
+      <footer className="py-16 px-4 text-white" style={{ background: "linear-gradient(180deg, #d4b5a8 0%, #c5a89b 100%)" }}>
+        <div className="container max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
+            <div>
+              <h4 className="font-bold mb-4 text-lg">営業時間</h4>
+              <p className="text-white/95">12:00〜26:00</p>
+              <p className="text-sm text-white/80">(24:40最終受付)</p>
+            </div>
+            <div>
+              <h4 className="font-bold mb-4 text-lg">メニュー</h4>
+              <div className="flex flex-col gap-3 text-sm">
+                <Link to="/public/casts" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                  セラピスト
+                </Link>
+                <Link to="/public/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                  出勤情報
+                </Link>
+                <Link to="/page/a" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                  料金・システム
+                </Link>
+                <Link to="/public/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                  システム
+                </Link>
+              </div>
+            </div>
+          </div>
+          <div className="text-center text-sm text-white/70 pt-10 border-t border-white/20">
+            © 2025 全力エステ ZR. All rights reserved.
+          </div>
         </div>
       </footer>
     </div>
