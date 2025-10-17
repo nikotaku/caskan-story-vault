@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
+import { ChatBot } from "@/components/ChatBot";
 
 interface Shift {
   id: string;
@@ -249,6 +250,9 @@ const Schedule = () => {
           © 2025 全力エステ ZR. All rights reserved.
         </div>
       </footer>
+
+      {/* Chat Bot */}
+      <ChatBot />
     </div>
   );
 };

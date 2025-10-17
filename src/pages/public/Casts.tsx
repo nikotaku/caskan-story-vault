@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Star, Search } from "lucide-react";
+import { ChatBot } from "@/components/ChatBot";
 
 interface Cast {
   id: string;
@@ -246,6 +247,9 @@ const Casts = () => {
           © 2025 全力エステ ZR. All rights reserved.
         </div>
       </footer>
+
+      {/* Chat Bot */}
+      <ChatBot />
     </div>
   );
 };

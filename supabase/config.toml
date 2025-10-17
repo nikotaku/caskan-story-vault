@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.generate-cast-content]
 verify_jwt = true
+
+[functions.customer-chat]
+verify_jwt = false

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { ChatBot } from "@/components/ChatBot";
 
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -281,6 +282,9 @@ const Home = () => {
           </div>
         </div>
       </footer>
+
+      {/* Chat Bot */}
+      <ChatBot />
     </div>
   );
 };
