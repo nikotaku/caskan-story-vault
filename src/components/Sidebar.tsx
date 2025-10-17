@@ -70,9 +70,9 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               const Icon = item.icon;
               const isCurrentPath = window.location.pathname === item.href;
               return (
-                <a
+                <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-md transition-colors",
                     isCurrentPath 
@@ -82,7 +82,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                 >
                   <Icon size={16} />
                   {item.label}
-                </a>
+                </Link>
               );
             })}
             
