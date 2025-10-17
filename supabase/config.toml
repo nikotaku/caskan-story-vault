@@ -2,3 +2,6 @@ project_id = "xobhamjwrumrkpxxxozz"
 
 [functions.sync-notion]
 verify_jwt = true
+
+[functions.generate-cast-content]
+verify_jwt = true

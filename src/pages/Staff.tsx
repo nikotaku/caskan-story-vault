@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
@@ -44,6 +44,7 @@ export default function Staff() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCast, setEditingCast] = useState<Cast | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generatingContent, setGeneratingContent] = useState(false);
   
   // フォーム用の状態
   const [formData, setFormData] = useState({
@@ -215,6 +216,46 @@ export default function Staff() {
         description: "キャストの更新に失敗しました",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleGenerateContent = async (type: 'profile' | 'announcement' | 'catchphrase') => {
+    if (!editingCast) return;
+    
+    setGeneratingContent(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-cast-content', {
+        body: {
+          type,
+          castName: editingCast.name,
+          castType: editingCast.type,
+          existingProfile: type === 'profile' ? editingCast.profile : null
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.content) {
+        if (type === 'profile') {
+          setEditingCast({ ...editingCast, profile: data.content });
+        } else if (type === 'announcement') {
+          setEditingCast({ ...editingCast, hp_notice: data.content });
+        }
+        
+        toast({
+          title: "AI生成完了",
+          description: `${type === 'profile' ? 'プロフィール' : type === 'announcement' ? 'お知らせ' : 'キャッチコピー'}を生成しました`,
+        });
+      }
+    } catch (error) {
+      console.error('Error generating content:', error);
+      toast({
+        title: "エラー",
+        description: "コンテンツの生成に失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingContent(false);
     }
   };
 
@@ -481,10 +522,22 @@ export default function Staff() {
                     </div>
                     
                     <div>
-                      <Label htmlFor="edit-profile">プロフィール</Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="edit-profile">プロフィール</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleGenerateContent('profile')}
+                          disabled={generatingContent}
+                        >
+                          <Sparkles className="w-4 h-4 mr-1" />
+                          AI生成
+                        </Button>
+                      </div>
                       <Textarea 
                         id="edit-profile" 
-                        rows={5} 
+                        rows={5}
                         placeholder="キャストの魅力や特徴を入力..."
                         value={editingCast.profile || ""}
                         onChange={(e) => setEditingCast({...editingCast, profile: e.target.value})}
@@ -512,7 +565,19 @@ export default function Staff() {
                     </div>
 
                     <div>
-                      <Label htmlFor="edit-hp-notice">HP告知</Label>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="edit-hp-notice">HP告知</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleGenerateContent('announcement')}
+                          disabled={generatingContent}
+                        >
+                          <Sparkles className="w-4 h-4 mr-1" />
+                          AI生成
+                        </Button>
+                      </div>
                       <Textarea 
                         id="edit-hp-notice" 
                         rows={3} 
