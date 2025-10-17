@@ -32,6 +32,7 @@ interface Shift {
   end_time: string;
   status: string;
   notes: string | null;
+  room: string | null;
 }
 
 const Shift = () => {
@@ -48,6 +49,7 @@ const Shift = () => {
     shift_date: new Date(),
     start_time: "13:00",
     end_time: "22:00",
+    room: "インルーム",
     notes: "",
   });
 
@@ -150,6 +152,7 @@ const Shift = () => {
           shift_date: format(formData.shift_date, 'yyyy-MM-dd'),
           start_time: formData.start_time,
           end_time: formData.end_time,
+          room: formData.room,
           notes: formData.notes || null,
           created_by: user!.id,
         }]);
@@ -167,6 +170,7 @@ const Shift = () => {
         shift_date: new Date(),
         start_time: "13:00",
         end_time: "22:00",
+        room: "インルーム",
         notes: "",
       });
     } catch (error: any) {
@@ -214,6 +218,7 @@ const Shift = () => {
     date: shift.shift_date,
     startTime: shift.start_time.slice(0, 5),
     endTime: shift.end_time.slice(0, 5),
+    room: shift.room || "",
     notes: shift.notes || "",
   }));
 
@@ -324,10 +329,26 @@ const Shift = () => {
                       </div>
                       
                       <div>
+                        <Label htmlFor="room">ルーム</Label>
+                        <Select
+                          value={formData.room}
+                          onValueChange={(value) => setFormData({...formData, room: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="ルームを選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="インルーム">インルーム</SelectItem>
+                            <SelectItem value="ラスルーム">ラスルーム</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
                         <Label htmlFor="notes">備考</Label>
                         <Input
                           id="notes"
-                          placeholder="ルーム名など"
+                          placeholder="備考を入力"
                           value={formData.notes}
                           onChange={(e) => setFormData({...formData, notes: e.target.value})}
                         />

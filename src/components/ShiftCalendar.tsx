@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,6 +21,7 @@ interface Shift {
   date: string;
   startTime: string;
   endTime: string;
+  room?: string;
   notes?: string;
 }
 
@@ -42,6 +44,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
   const [formData, setFormData] = useState({
     startTime: "09:00",
     endTime: "18:00",
+    room: "インルーム",
     notes: "",
   });
   
@@ -60,12 +63,14 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
       setFormData({
         startTime: existingShift.startTime,
         endTime: existingShift.endTime,
+        room: existingShift.room || "インルーム",
         notes: existingShift.notes || "",
       });
     } else {
       setFormData({
         startTime: "09:00",
         endTime: "18:00",
+        room: "インルーム",
         notes: "",
       });
     }
@@ -87,6 +92,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
           .update({
             start_time: formData.startTime,
             end_time: formData.endTime,
+            room: formData.room,
             notes: formData.notes,
           })
           .eq('id', existingShift.id);
@@ -106,6 +112,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
             shift_date: selectedCell.date,
             start_time: formData.startTime,
             end_time: formData.endTime,
+            room: formData.room,
             notes: formData.notes,
             status: 'scheduled',
             created_by: user.id,
@@ -206,6 +213,11 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
                         <div className="mb-1 font-medium">
                           {shift.startTime} - {shift.endTime}
                         </div>
+                        {shift.room && (
+                          <div className="text-xs text-primary font-medium">
+                            {shift.room}
+                          </div>
+                        )}
                         {shift.notes && (
                           <div className="text-xs text-muted-foreground truncate">
                             {shift.notes}
@@ -259,11 +271,26 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
               />
             </div>
             <div>
+              <Label>ルーム</Label>
+              <Select
+                value={formData.room}
+                onValueChange={(value) => setFormData({ ...formData, room: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ルームを選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="インルーム">インルーム</SelectItem>
+                  <SelectItem value="ラスルーム">ラスルーム</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label>メモ</Label>
               <Textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="部屋番号やその他のメモ"
+                placeholder="その他のメモ"
                 rows={3}
               />
             </div>

@@ -255,6 +255,7 @@ export type Database = {
           end_time: string
           id: string
           notes: string | null
+          room: string | null
           shift_date: string
           start_time: string
           status: string
@@ -267,6 +268,7 @@ export type Database = {
           end_time: string
           id?: string
           notes?: string | null
+          room?: string | null
           shift_date: string
           start_time: string
           status?: string
@@ -279,6 +281,7 @@ export type Database = {
           end_time?: string
           id?: string
           notes?: string | null
+          room?: string | null
           shift_date?: string
           start_time?: string
           status?: string
