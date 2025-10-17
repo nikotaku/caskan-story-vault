@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { ShiftCalendar } from "@/components/ShiftCalendar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -760,6 +760,9 @@ const Shift = () => {
                       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>新しい予約を追加</DialogTitle>
+                          <DialogDescription>
+                            お客様の予約情報を入力してください
+                          </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
                           <div>
@@ -1148,6 +1151,9 @@ const Shift = () => {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>SMS メッセージ</DialogTitle>
+              <DialogDescription>
+                生成されたSMSメッセージを確認・編集できます
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <Textarea
