@@ -56,8 +56,6 @@ export default function Reservations() {
     customer_name: "",
     customer_phone: "",
     customer_email: "",
-    customer_furigana: "",
-    nationality: "",
     nomination_type: "none",
     reservation_date: new Date(),
     start_time: "14:00",
@@ -203,8 +201,6 @@ export default function Reservations() {
         customer_name: "",
         customer_phone: "",
         customer_email: "",
-        customer_furigana: "",
-        nationality: "",
         nomination_type: "none",
         reservation_date: new Date(),
         start_time: "14:00",
@@ -364,18 +360,6 @@ export default function Reservations() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="customer_furigana">フリガナ</Label>
-                          <Input 
-                            id="customer_furigana" 
-                            placeholder="ヤマダタロウ"
-                            value={formData.customer_furigana}
-                            onChange={(e) => setFormData({...formData, customer_furigana: e.target.value})}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
                           <Label htmlFor="customer_phone">電話番号</Label>
                           <Input 
                             id="customer_phone" 
@@ -384,6 +368,9 @@ export default function Reservations() {
                             onChange={(e) => setFormData({...formData, customer_phone: e.target.value})}
                           />
                         </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="customer_email">メールアドレス</Label>
                           <Input 
@@ -393,24 +380,6 @@ export default function Reservations() {
                             value={formData.customer_email}
                             onChange={(e) => setFormData({...formData, customer_email: e.target.value})}
                           />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>国籍</Label>
-                          <Select
-                            value={formData.nationality}
-                            onValueChange={(value) => setFormData({...formData, nationality: value})}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="未指定" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="japanese">日本</SelectItem>
-                              <SelectItem value="other">その他</SelectItem>
-                            </SelectContent>
-                          </Select>
                         </div>
                         <div>
                           <Label>指名</Label>
