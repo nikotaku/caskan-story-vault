@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 
 interface Stats {
   totalReservations: number;
@@ -49,9 +50,15 @@ export default function Report() {
 
   const fetchStats = async () => {
     try {
+      const today = new Date();
+      const startDate = format(startOfMonth(today), 'yyyy-MM-dd');
+      const endDate = format(endOfMonth(today), 'yyyy-MM-dd');
+
       const { data: reservations, error: resError } = await supabase
         .from('reservations')
-        .select('price, status')
+        .select('price, status, reservation_date')
+        .gte('reservation_date', startDate)
+        .lte('reservation_date', endDate)
         .in('status', ['confirmed', 'completed']);
 
       if (resError) throw resError;
