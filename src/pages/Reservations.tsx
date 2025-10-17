@@ -384,12 +384,12 @@ export default function Reservations() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
-      case "confirmed": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
-      case "completed": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      case "cancelled": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
-      case "no_show": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+      case "pending": return "bg-amber-50 text-amber-700 border-amber-200";
+      case "confirmed": return "bg-blue-50 text-blue-700 border-blue-200";
+      case "completed": return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "cancelled": return "bg-rose-50 text-rose-700 border-rose-200";
+      case "no_show": return "bg-slate-50 text-slate-700 border-slate-200";
+      default: return "bg-slate-50 text-slate-700 border-slate-200";
     }
   };
 
@@ -423,22 +423,25 @@ export default function Reservations() {
       <div className="flex pt-[60px]">
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         
-        <main className="flex-1 p-6 md:ml-[240px]">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h1 className="text-2xl font-bold">予約管理</h1>
-                <p className="text-muted-foreground">予約の登録・管理・ステータス確認</p>
-              </div>
+        <main className="flex-1 p-8 md:ml-[240px]">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Header */}
+            <Card className="border-none shadow-md">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-3xl font-bold text-primary mb-2">予約管理</h1>
+                    <p className="text-muted-foreground text-sm">予約の登録・管理・ステータス確認</p>
+                  </div>
               
-              {isAdmin && (
-                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus size={16} />
-                      新規予約
-                    </Button>
-                  </DialogTrigger>
+                  {isAdmin && (
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="lg" className="shadow-md">
+                          <Plus size={18} className="mr-2" />
+                          新規予約
+                        </Button>
+                      </DialogTrigger>
                   <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>新しい予約を追加</DialogTitle>
@@ -733,25 +736,30 @@ export default function Reservations() {
                       </Button>
                     </div>
                   </DialogContent>
-                </Dialog>
-              )}
-            </div>
+                    </Dialog>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Search and Filter */}
-            <Card className="mb-6">
-              <CardContent className="p-4">
+            <Card className="shadow-md">
+              <CardHeader className="border-b">
+                <CardTitle className="text-lg">検索・フィルター</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
                 <div className="flex gap-4 flex-wrap">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+                  <div className="relative flex-1 min-w-[250px]">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
                     <Input
                       placeholder="お客様名・電話番号で検索..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 h-11"
                     />
                   </div>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-[150px]">
+                    <SelectTrigger className="w-[180px] h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -767,126 +775,127 @@ export default function Reservations() {
             </Card>
 
             {/* Reservations List */}
-            <div className="grid gap-4">
-              {filteredReservations.map((reservation) => (
-                <Card key={reservation.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div className="flex gap-2 items-center">
-                        <Badge className={getStatusColor(reservation.status)}>
-                          {getStatusText(reservation.status)}
-                        </Badge>
-                        <Badge variant="outline">
-                          {reservation.payment_status === 'paid' ? '支払済' : '未払い'}
-                        </Badge>
-                      </div>
-                      {isAdmin && (
-                        <Select
-                          value={reservation.status}
-                          onValueChange={(value) => handleStatusChange(reservation.id, value)}
-                        >
-                          <SelectTrigger className="w-[130px] h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">予約確認中</SelectItem>
-                            <SelectItem value="confirmed">予約確定</SelectItem>
-                            <SelectItem value="completed">完了</SelectItem>
-                            <SelectItem value="cancelled">キャンセル</SelectItem>
-                            <SelectItem value="no_show">No Show</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
+            <Card className="shadow-md">
+              <CardHeader className="border-b">
+                <CardTitle className="text-lg">予約一覧</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {filteredReservations.length === 0 ? (
+                    <div className="p-12 text-center text-muted-foreground">
+                      <p className="text-lg">予約が見つかりません</p>
+                      <p className="text-sm mt-2">検索条件を変更するか、新しい予約を追加してください</p>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <User size={16} className="text-muted-foreground" />
-                          <span className="font-medium">{reservation.customer_name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Phone size={16} className="text-muted-foreground" />
-                          <span>{reservation.customer_phone}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <User size={16} className="text-muted-foreground" />
-                          <span>担当: {reservation.casts?.name}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm">
-                          <CalendarIcon size={16} className="text-muted-foreground" />
-                          <span>{format(parseISO(reservation.reservation_date), 'yyyy年M月d日(E)', { locale: ja })}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Clock size={16} className="text-muted-foreground" />
-                          <span>{reservation.start_time.slice(0, 5)} ({reservation.duration}分)</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <CreditCard size={16} className="text-muted-foreground" />
-                          <span className="font-medium">¥{reservation.price.toLocaleString()}</span>
-                        </div>
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">コース: </span>
-                          <span>{reservation.course_name}</span>
-                        </div>
-                        {reservation.options && reservation.options.length > 0 && (
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">オプション: </span>
-                            <span>{reservation.options.join(', ')}</span>
+                  ) : (
+                    filteredReservations.map((reservation) => (
+                      <div key={reservation.id} className="p-6 hover:bg-accent/50 transition-colors">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex gap-2 items-center flex-wrap">
+                            <Badge className={cn("border font-semibold", getStatusColor(reservation.status))}>
+                              {getStatusText(reservation.status)}
+                            </Badge>
+                            <Badge variant="outline" className="font-medium">
+                              {reservation.payment_status === 'paid' ? '✓ 支払済' : '未払い'}
+                            </Badge>
                           </div>
-                        )}
-                        {reservation.nomination_type && (
-                          <div className="text-sm">
-                            <span className="text-muted-foreground">指名: </span>
-                            <span>{reservation.nomination_type}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {reservation.notes && (
-                      <div className="mt-3 pt-3 border-t text-sm text-muted-foreground">
-                        備考: {reservation.notes}
-                      </div>
-                    )}
-                    {isAdmin && (
-                      <div className="flex gap-2 mt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toast({
-                            title: "編集機能",
-                            description: "編集機能は近日実装予定です",
-                          })}
-                        >
-                          <Edit size={14} />
-                          編集
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteReservation(reservation.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 size={14} />
-                          削除
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                          {isAdmin && (
+                            <div className="flex gap-2">
+                              <Select
+                                value={reservation.status}
+                                onValueChange={(value) => handleStatusChange(reservation.id, value)}
+                              >
+                                <SelectTrigger className="w-[150px] h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">予約確認中</SelectItem>
+                                  <SelectItem value="confirmed">予約確定</SelectItem>
+                                  <SelectItem value="completed">完了</SelectItem>
+                                  <SelectItem value="cancelled">キャンセル</SelectItem>
+                                  <SelectItem value="no_show">No Show</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteReservation(reservation.id)}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
 
-            {filteredReservations.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                {reservations.length === 0 
-                  ? "予約がありません" 
-                  : "検索条件に一致する予約が見つかりません"}
-              </div>
-            )}
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          <div className="space-y-3">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">お客様情報</h4>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary flex-shrink-0">
+                                <User size={18} />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-base">{reservation.customer_name}</p>
+                                <p className="text-sm text-muted-foreground">{reservation.customer_phone}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <User size={16} className="text-muted-foreground flex-shrink-0" />
+                              <span><span className="font-medium">担当:</span> {reservation.casts?.name}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">予約詳細</h4>
+                            <div className="flex items-center gap-2 text-sm">
+                              <CalendarIcon size={16} className="text-muted-foreground flex-shrink-0" />
+                              <span className="font-medium">{format(parseISO(reservation.reservation_date), 'yyyy年M月d日(E)', { locale: ja })}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Clock size={16} className="text-muted-foreground flex-shrink-0" />
+                              <span>{reservation.start_time.slice(0, 5)} <span className="text-muted-foreground">({reservation.duration}分)</span></span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <CreditCard size={16} className="text-muted-foreground flex-shrink-0" />
+                              <span className="font-bold text-lg text-primary">¥{reservation.price.toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">コース内容</h4>
+                            <div className="text-sm space-y-2">
+                              <div>
+                                <span className="font-medium block">{reservation.course_name}</span>
+                              </div>
+                              {reservation.options && reservation.options.length > 0 && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">オプション:</span>
+                                  <span className="block text-sm">{reservation.options.join(', ')}</span>
+                                </div>
+                              )}
+                              {reservation.nomination_type && (
+                                <div>
+                                  <span className="text-muted-foreground text-xs">指名:</span>
+                                  <span className="block text-sm">{reservation.nomination_type}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {reservation.notes && (
+                          <div className="mt-4 p-4 bg-muted/50 rounded-lg border">
+                            <p className="text-sm">
+                              <span className="font-semibold text-muted-foreground">備考:</span>
+                              <span className="ml-2">{reservation.notes}</span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </main>
       </div>
