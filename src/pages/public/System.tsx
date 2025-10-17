@@ -1,52 +1,51 @@
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
+import { Phone, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-interface Course {
+interface PricingCourse {
   duration: number;
   standard_price: number;
+  premium_price: number;
+  vip_price: number;
+}
+
+interface PricingOption {
   name: string;
-  price: string;
-  features: string[];
-  popular?: boolean;
+  price: number;
+  description: string | null;
 }
 
 const System = () => {
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<PricingCourse[]>([]);
+  const [options, setOptions] = useState<PricingOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchCourses();
+    fetchPricing();
   }, []);
 
-  const fetchCourses = async () => {
+  const fetchPricing = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: coursesData, error: coursesError } = await supabase
         .from('pricing')
         .select('*')
         .order('duration', { ascending: true });
 
-      if (error) throw error;
+      if (coursesError) throw coursesError;
 
-      const coursesData: Course[] = (data || []).map((item, index) => ({
-        duration: item.duration,
-        standard_price: item.standard_price,
-        name: `${item.duration}分コース`,
-        price: `¥${item.standard_price.toLocaleString()}`,
-        features: item.duration === 60 
-          ? ["全身リラクゼーション", "アロマオイル使用"]
-          : item.duration === 90
-          ? ["全身リラクゼーション", "アロマオイル使用", "ディープリラクゼーション"]
-          : ["全身リラクゼーション", "アロマオイル使用", "ディープリラクゼーション", "プレミアムケア"],
-        popular: index === 1
-      }));
+      const { data: optionsData, error: optionsError } = await supabase
+        .from('pricing_options')
+        .select('*')
+        .order('created_at', { ascending: true });
 
-      setCourses(coursesData);
+      if (optionsError) throw optionsError;
+
+      setCourses(coursesData || []);
+      setOptions(optionsData || []);
     } catch (error) {
-      console.error('Error fetching courses:', error);
+      console.error('Error fetching pricing:', error);
     } finally {
       setLoading(false);
     }
@@ -100,124 +99,198 @@ const System = () => {
         </div>
       </nav>
 
-      <main className="container py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          <h1 
-            className="text-4xl font-bold mb-8 text-center"
-            style={{ 
-              color: "#8b7355",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.1em"
-            }}
-          >
-            SYSTEM - 料金システム
-          </h1>
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-12 max-w-4xl">
+        {/* Page Title */}
+        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
+          <div className="text-center mb-8">
+            <h1 
+              className="text-3xl font-bold mb-2"
+              style={{ 
+                color: "#8b7355",
+                fontFamily: "'Noto Serif JP', serif",
+                letterSpacing: "0.2em"
+              }}
+            >
+              SYSTEM
+            </h1>
+            <p className="text-sm" style={{ color: "#a89586", letterSpacing: "0.1em" }}>料金システム</p>
+          </div>
 
-          {/* Courses */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {courses.map((course, index) => (
-              <Card
-                key={index}
-                className={`relative ${
-                  course.popular ? "border-primary shadow-lg scale-105" : ""
-                }`}
-              >
-                {course.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-bold">
-                      人気No.1
-                    </span>
+          {/* Logo/Brand */}
+          <div className="text-center mb-12">
+            <h2 
+              className="text-4xl font-bold mb-2"
+              style={{ 
+                color: "#c9a876",
+                fontFamily: "'Noto Serif JP', serif",
+                letterSpacing: "0.1em"
+              }}
+            >
+              全力エステ
+            </h2>
+          </div>
+
+          {/* Pro Course */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>プロ手技のコース</h3>
+            </div>
+            <div className="space-y-3">
+              {courses.map((course, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">{course.duration}min</span>
+                  <span className="text-gray-700 font-bold">¥{course.standard_price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Options */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>オプションメニュー</h3>
+            </div>
+            <div className="space-y-3">
+              {options.map((option, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <div>
+                    <span className="text-gray-700 font-medium">{option.name}</span>
+                    {option.description && (
+                      <p className="text-xs text-gray-500 mt-1">{option.description}</p>
+                    )}
                   </div>
-                )}
-                <CardHeader>
-                  <CardTitle className="text-2xl text-center">{course.name}</CardTitle>
-                  <p className="text-3xl font-bold text-center text-primary mt-2">
-                    {course.price}
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3">
-                    {course.features.map((feature, featureIndex) => (
-                      <li key={featureIndex} className="flex items-center gap-2">
-                        <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Button className="w-full mt-6" asChild>
-                    <a href="tel:080-3192-1209">予約する</a>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                  <span className="text-gray-700 font-bold">¥{option.price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Additional Info */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>営業時間</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg mb-2">12:00〜26:00（翌2:00）</p>
-                <p className="text-sm text-muted-foreground">最終受付 24:40</p>
-                <p className="text-sm text-muted-foreground mt-2">年中無休</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>お支払い方法</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-5 w-5 text-primary" />
-                    <span>現金</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-5 w-5 text-primary" />
-                    <span>クレジットカード</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-5 w-5 text-primary" />
-                    <span>電子マネー</span>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>ご利用上の注意</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>・ご予約はお電話にて承っております</li>
-                  <li>・キャンセルの場合は必ずご連絡ください</li>
-                  <li>・当日キャンセルの場合、キャンセル料が発生する場合がございます</li>
-                  <li>・18歳未満の方のご利用はお断りしております</li>
-                  <li>・泥酔状態でのご来店はお断りする場合がございます</li>
-                </ul>
-              </CardContent>
-            </Card>
+          {/* Payment Methods */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>お支払い</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-700">現金</span>
+                <span className="text-gray-700">◯</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-700">クレジット</span>
+                <span className="text-gray-700">◯</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-700">電子マネー</span>
+                <span className="text-gray-700">◯</span>
+              </div>
+            </div>
           </div>
 
-          {/* CTA */}
-          <div className="mt-12 text-center">
-            <Card className="bg-gradient-to-r from-primary/10 to-accent/10">
-              <CardContent className="p-8">
-                <h2 className="text-2xl font-bold mb-4">ご予約・お問い合わせ</h2>
-                <p className="text-muted-foreground mb-6">
-                  お気軽にお電話ください
-                </p>
-                <Button size="lg" asChild>
-                  <a href="tel:080-3192-1209" className="text-lg">
-                    080-3192-1209
-                  </a>
-                </Button>
-              </CardContent>
-            </Card>
+          {/* Flow Section */}
+          <div className="mb-12">
+            <div className="bg-white border-2 border-[#c9a876] rounded-lg p-6">
+              <h3 
+                className="text-2xl font-bold text-center mb-6"
+                style={{ 
+                  color: "#8b7355",
+                  fontFamily: "'Noto Serif JP', serif",
+                  letterSpacing: "0.2em"
+                }}
+              >
+                FLOW
+              </h3>
+              <p className="text-sm text-center mb-6" style={{ color: "#a89586", letterSpacing: "0.1em" }}>ご利用の流れ</p>
+              
+              <div className="space-y-4 text-sm text-gray-700">
+                <div>
+                  <p className="font-bold mb-1">お電話にて</p>
+                  <p>・コース・指名をお伝えください</p>
+                  <p>・ご希望のお時間をお伝えください</p>
+                  <p>・ご利用場所をお伝えください</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notice Section */}
+          <div className="mb-12">
+            <div className="bg-white border-2 border-[#c9a876] rounded-lg p-6">
+              <h3 
+                className="text-2xl font-bold text-center mb-6"
+                style={{ 
+                  color: "#8b7355",
+                  fontFamily: "'Noto Serif JP', serif",
+                  letterSpacing: "0.2em"
+                }}
+              >
+                NOTICE
+              </h3>
+              <p className="text-sm text-center mb-6" style={{ color: "#a89586", letterSpacing: "0.1em" }}>ご注意事項</p>
+              
+              <div className="space-y-3 text-sm text-gray-700">
+                <p>・全てのコースに消費税が含まれております</p>
+                <p>・表示価格は全て税込み価格となります</p>
+                <p>・ご予約のキャンセルは前日まで無料、当日は50%、無断キャンセルは100%のキャンセル料が発生いたします</p>
+                <p>・セラピストの指名は無料です</p>
+                <p>・延長は10分単位で承っております</p>
+                <p>・お支払いは現金、クレジットカード、電子マネーをご利用いただけます</p>
+                <p>・風俗店ではございません</p>
+                <p>・18歳未満の方のご利用はお断りしております</p>
+                <p>・泥酔状態でのご利用はお断りする場合がございます</p>
+                <p>・セラピストへの迷惑行為は固くお断りいたします</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Shop Section */}
+          <div className="mb-8">
+            <div className="bg-white border-2 border-[#c9a876] rounded-lg p-6">
+              <h3 
+                className="text-2xl font-bold text-center mb-6"
+                style={{ 
+                  color: "#8b7355",
+                  fontFamily: "'Noto Serif JP', serif",
+                  letterSpacing: "0.2em"
+                }}
+              >
+                SHOP
+              </h3>
+              <p className="text-sm text-center mb-6" style={{ color: "#a89586", letterSpacing: "0.1em" }}>店舗情報</p>
+              
+              <div className="space-y-4 text-sm text-gray-700">
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">店舗名</span>
+                  <span>全力エステ</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">営業時間</span>
+                  <span>12:00～26:00（24:40最終受付）</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">定休日</span>
+                  <span>年中無休</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">エリア</span>
+                  <span>出張専門</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="gap-2 min-w-[200px] bg-[#c9a876] hover:bg-[#b89766]">
+              <Phone size={20} />
+              電話で予約
+            </Button>
+            <Link to="/public/casts">
+              <Button size="lg" variant="outline" className="gap-2 min-w-[200px] border-[#c9a876] text-[#8b7355] hover:bg-[#f5e8e4]">
+                <Calendar size={20} />
+                キャスト一覧
+              </Button>
+            </Link>
           </div>
         </div>
       </main>
