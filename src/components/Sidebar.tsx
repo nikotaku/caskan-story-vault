@@ -37,6 +37,7 @@ const menuItems = [
   { href: "/pricing", label: "料金設定", icon: DollarSign },
   { href: "/report", label: "レポート", icon: BarChart3 },
   { href: "/text-generation", label: "文章生成", icon: Sparkles },
+  { href: "/estama", label: "Estama連携", icon: ExternalLink },
   { href: "/therapist-database", label: "セラピストDB", icon: Users },
   { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/shop", label: "設定", icon: Settings },

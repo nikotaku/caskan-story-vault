@@ -24,6 +24,7 @@ import NotionPageView from "./pages/NotionPageView";
 import TherapistDatabase from "./pages/TherapistDatabase";
 import BookingReservation from "./pages/public/BookingReservation";
 import TextGeneration from "./pages/TextGeneration";
+import EstamaIntegration from "./pages/EstamaIntegration";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
           <Route path="/report" element={<Report />} />
           <Route path="/pricing" element={<PricingManagement />} />
           <Route path="/text-generation" element={<TextGeneration />} />
+          <Route path="/estama" element={<EstamaIntegration />} />
           <Route path="/shop" element={<Settings />} />
           
           {/* Public Pages */}
