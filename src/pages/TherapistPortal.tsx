@@ -3,8 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, FileText, DollarSign, Receipt, Plane } from "lucide-react";
+import { Loader2, FileText, DollarSign, Receipt, Plane, X } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import backRatesImage from "@/assets/back-rates-table.jpg";
 
 interface Cast {
   id: string;
@@ -17,6 +19,7 @@ export default function TherapistPortal() {
   const navigate = useNavigate();
   const [cast, setCast] = useState<Cast | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showBackRates, setShowBackRates] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -70,25 +73,25 @@ export default function TherapistPortal() {
       title: "精算はこちら",
       description: "今月の売上と精算情報を確認",
       icon: DollarSign,
-      href: "#settlement",
+      action: () => toast.info("この機能は準備中です"),
     },
     {
       title: "バック表",
       description: "コース別・オプション別のバック率を確認",
       icon: Receipt,
-      href: "#back-rates",
+      action: () => setShowBackRates(true),
     },
     {
       title: "メニュー表",
       description: "料金表とサービス内容を確認",
       icon: FileText,
-      href: "#menu",
+      action: () => toast.info("この機能は準備中です"),
     },
     {
       title: "交通費申請",
       description: "交通費の申請を行う",
       icon: Plane,
-      href: "#expenses",
+      action: () => toast.info("この機能は準備中です"),
     },
   ];
 
@@ -128,7 +131,7 @@ export default function TherapistPortal() {
                   <CardDescription>{item.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full" onClick={() => toast.info("この機能は準備中です")}>
+                  <Button className="w-full" onClick={item.action}>
                     開く
                   </Button>
                 </CardContent>
@@ -148,6 +151,21 @@ export default function TherapistPortal() {
           </CardContent>
         </Card>
       </main>
+
+      <Dialog open={showBackRates} onOpenChange={setShowBackRates}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>バック表</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <img 
+              src={backRatesImage} 
+              alt="バック表" 
+              className="w-full h-auto"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
