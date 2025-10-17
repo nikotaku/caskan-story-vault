@@ -7,13 +7,13 @@ const System = () => {
   const courses = [
     {
       name: "60分コース",
-      price: "¥10,000",
-      features: ["全身リラクゼーション", "アロマオイル使用", "フェイシャルケア"],
+      price: "¥12,000",
+      features: ["全身リラクゼーション", "アロマオイル使用"],
     },
     {
       name: "90分コース",
-      price: "¥15,000",
-      features: ["全身リラクゼーション", "アロマオイル使用", "フェイシャルケア", "ヘッドマッサージ"],
+      price: "¥16,000",
+      features: ["全身リラクゼーション", "アロマオイル使用", "ディープリラクゼーション"],
       popular: true,
     },
     {
@@ -22,9 +22,8 @@ const System = () => {
       features: [
         "全身リラクゼーション",
         "アロマオイル使用",
-        "フェイシャルケア",
-        "ヘッドマッサージ",
-        "足つぼマッサージ",
+        "ディープリラクゼーション",
+        "プレミアムケア",
       ],
     },
   ];
@@ -53,10 +52,6 @@ const System = () => {
             <Link to="/public/casts" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">THERAPIST</div>
               <div className="text-xs text-[#a89586]">セラピスト</div>
-            </Link>
-            <Link to="/page/a" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">PRICING</div>
-              <div className="text-xs text-[#a89586]">料金・システム</div>
             </Link>
             <Link to="/public/system" className="px-8 py-4 bg-[#f5e8e4] transition-colors border-b-2 border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
@@ -209,9 +204,6 @@ const System = () => {
                 </Link>
                 <Link to="/public/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   出勤情報
-                </Link>
-                <Link to="/page/a" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  料金・システム
                 </Link>
                 <Link to="/public/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   システム
