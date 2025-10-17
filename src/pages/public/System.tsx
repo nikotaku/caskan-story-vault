@@ -101,7 +101,7 @@ const System = () => {
       </nav>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-12 max-w-4xl">
+      <main className="container mx-auto px-4 py-12 max-w-3xl">
         {/* Page Title */}
         <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
           <div className="text-center mb-8">
@@ -121,7 +121,7 @@ const System = () => {
           {/* Logo/Brand */}
           <div className="text-center mb-12">
             <h2 
-              className="text-4xl font-bold mb-2"
+              className="text-5xl font-bold mb-2"
               style={{ 
                 color: "#c9a876",
                 fontFamily: "'Noto Serif JP', serif",
@@ -133,72 +133,72 @@ const System = () => {
           </div>
 
           {/* Aroma Oil Course */}
-          <div className="mb-12">
-            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
-              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>アロマオイルコース</h3>
+          <div className="mb-10">
+            <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+              <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>アロマオイルコース</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {courses.filter(c => c.course_type === 'アロマオイル').map((course, index) => (
-                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-700 font-medium">{course.duration}min</span>
-                  <span className="text-gray-700 font-bold">¥{course.standard_price.toLocaleString()}</span>
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                  <span className="text-gray-700 text-sm">{course.duration}min</span>
+                  <span className="text-gray-700 font-bold text-sm">¥{course.standard_price.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Zenryoku Course */}
-          <div className="mb-12">
-            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
-              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>全力コース</h3>
+          <div className="mb-10">
+            <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+              <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>全力コース</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {courses.filter(c => c.course_type === '全力').map((course, index) => (
-                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <span className="text-gray-700 font-medium">{course.duration}min</span>
-                  <span className="text-gray-700 font-bold">¥{course.standard_price.toLocaleString()}</span>
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                  <span className="text-gray-700 text-sm">{course.duration}min</span>
+                  <span className="text-gray-700 font-bold text-sm">¥{course.standard_price.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Options */}
-          <div className="mb-12">
-            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
-              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>オプションメニュー</h3>
+          <div className="mb-10">
+            <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+              <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>オプションメニュー</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {options.map((option, index) => (
-                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
-                  <div>
-                    <span className="text-gray-700 font-medium">{option.name}</span>
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-700 text-sm">{option.name}</span>
                     {option.description && (
-                      <p className="text-xs text-gray-500 mt-1">{option.description}</p>
+                      <span className="text-xs text-gray-500">({option.description})</span>
                     )}
                   </div>
-                  <span className="text-gray-700 font-bold">¥{option.price.toLocaleString()}</span>
+                  <span className="text-gray-700 font-bold text-sm">¥{option.price.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Payment Methods */}
-          <div className="mb-12">
-            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
-              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>お支払い</h3>
+          <div className="mb-10">
+            <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+              <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>お支払い</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-700">現金</span>
-                <span className="text-gray-700">◯</span>
+                <span className="text-gray-700 text-sm">現金</span>
+                <span className="text-gray-700 text-sm">◯</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-700">クレジット</span>
-                <span className="text-gray-700">◯</span>
+                <span className="text-gray-700 text-sm">クレジット</span>
+                <span className="text-gray-700 text-sm">◯</span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="text-gray-700">電子マネー</span>
-                <span className="text-gray-700">◯</span>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                <span className="text-gray-700 text-sm">電子マネー</span>
+                <span className="text-gray-700 text-sm">◯</span>
               </div>
             </div>
           </div>
