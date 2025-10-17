@@ -102,178 +102,193 @@ export default function Pricing() {
       </nav>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-12 max-w-4xl">
         {/* Page Title */}
-        <div className="text-center mb-12">
-          <h1 
-            className="text-4xl font-bold mb-4"
-            style={{ 
-              color: "#8b7355",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.1em"
-            }}
-          >
-            PRICING - 料金表
-          </h1>
-          <p className="text-lg" style={{ color: "#a89586" }}>明瞭会計でご安心いただけます</p>
-        </div>
-
-        {/* Rank Description */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Star className="text-primary" />
-              ランクについて
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-lg border border-border">
-                <Badge variant="secondary" className="mb-2">スタンダード</Badge>
-                <p className="text-sm text-muted-foreground">
-                  リーズナブルな価格で高品質なサービスをご提供します
-                </p>
-              </div>
-              <div className="p-4 rounded-lg border border-primary/50 bg-primary/5">
-                <Badge className="mb-2">プレミアム</Badge>
-                <p className="text-sm text-muted-foreground">
-                  経験豊富なキャストによる上質なひとときをお楽しみください
-                </p>
-              </div>
-              <div className="p-4 rounded-lg border border-primary bg-primary/10">
-                <Badge variant="default" className="mb-2">VIP</Badge>
-                <p className="text-sm text-muted-foreground">
-                  最高級のおもてなしで特別な時間を演出いたします
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Base Pricing Table */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>基本料金</CardTitle>
-            <CardDescription>コース時間とランクによる料金表</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4">コース時間</th>
-                    <th className="text-right py-3 px-4">スタンダード</th>
-                    <th className="text-right py-3 px-4">プレミアム</th>
-                    <th className="text-right py-3 px-4">VIP</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {courses.map((course, index) => (
-                    <tr key={index} className="border-b border-border hover:bg-muted/50">
-                      <td className="py-4 px-4 font-medium">{course.duration}分</td>
-                      <td className="py-4 px-4 text-right">¥{course.standard_price.toLocaleString()}</td>
-                      <td className="py-4 px-4 text-right">¥{course.premium_price.toLocaleString()}</td>
-                      <td className="py-4 px-4 text-right">¥{course.vip_price.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Options */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="text-primary" />
-                オプション料金
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {options.map((option, index) => (
-                  <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-0">
-                    <div>
-                      <span className="font-medium">{option.name}</span>
-                      {option.description && (
-                        <p className="text-xs text-muted-foreground">{option.description}</p>
-                      )}
-                    </div>
-                    <span className="text-primary font-bold">¥{option.price.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="text-primary" />
-                お支払い方法
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-primary text-sm">✓</span>
-                </div>
-                <div>
-                  <p className="font-medium">現金</p>
-                  <p className="text-sm text-muted-foreground">料金後払い制</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-primary text-sm">✓</span>
-                </div>
-                <div>
-                  <p className="font-medium">クレジットカード</p>
-                  <p className="text-sm text-muted-foreground">VISA・Master・JCB・AMEX</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-primary text-sm">✓</span>
-                </div>
-                <div>
-                  <p className="font-medium">電子マネー</p>
-                  <p className="text-sm text-muted-foreground">各種対応可能</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Notes */}
-        <Card className="mb-8 border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-lg">ご注意事項</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>• 表示価格はすべて税込みです</p>
-            <p>• 延長料金はランクにより異なります</p>
-            <p>• キャンセル料は前日50%、当日100%となります</p>
-            <p>• 交通費は別途発生する場合がございます（エリアにより異なります）</p>
-            <p>• 詳細はお電話にてお問い合わせください</p>
-          </CardContent>
-        </Card>
-
-        {/* CTA Section */}
-        <div className="text-center space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">ご予約・お問い合わせ</h2>
-            <p className="text-muted-foreground">お気軽にお電話ください</p>
+        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
+          <div className="text-center mb-8">
+            <h1 
+              className="text-3xl font-bold mb-2"
+              style={{ 
+                color: "#8b7355",
+                fontFamily: "'Noto Serif JP', serif",
+                letterSpacing: "0.2em"
+              }}
+            >
+              SYSTEM
+            </h1>
+            <p className="text-sm" style={{ color: "#a89586", letterSpacing: "0.1em" }}>料金システム</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button size="lg" className="gap-2 min-w-[200px]">
+
+          {/* Logo/Brand */}
+          <div className="text-center mb-12">
+            <h2 
+              className="text-4xl font-bold mb-2"
+              style={{ 
+                color: "#c9a876",
+                fontFamily: "'Noto Serif JP', serif",
+                letterSpacing: "0.1em"
+              }}
+            >
+              全力エステ
+            </h2>
+          </div>
+
+          {/* Pro Course */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>プロ手技のコース</h3>
+            </div>
+            <div className="space-y-3">
+              {courses.map((course, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">{course.duration}min</span>
+                  <span className="text-gray-700 font-bold">¥{course.standard_price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Options */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>オプションメニュー</h3>
+            </div>
+            <div className="space-y-3">
+              {options.map((option, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-200">
+                  <div>
+                    <span className="text-gray-700 font-medium">{option.name}</span>
+                    {option.description && (
+                      <p className="text-xs text-gray-500 mt-1">{option.description}</p>
+                    )}
+                  </div>
+                  <span className="text-gray-700 font-bold">¥{option.price.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Payment Methods */}
+          <div className="mb-12">
+            <div className="bg-[#c9a876] text-white text-center py-3 mb-6">
+              <h3 className="font-bold text-lg" style={{ letterSpacing: "0.1em" }}>お支払い</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-700">現金</span>
+                <span className="text-gray-700">◯</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-700">クレジット</span>
+                <span className="text-gray-700">◯</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                <span className="text-gray-700">電子マネー</span>
+                <span className="text-gray-700">◯</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Flow Section */}
+          <div className="mb-12">
+            <div className="bg-white border-2 border-[#c9a876] rounded-lg p-6">
+              <h3 
+                className="text-2xl font-bold text-center mb-6"
+                style={{ 
+                  color: "#8b7355",
+                  fontFamily: "'Noto Serif JP', serif",
+                  letterSpacing: "0.2em"
+                }}
+              >
+                FLOW
+              </h3>
+              <p className="text-sm text-center mb-6" style={{ color: "#a89586", letterSpacing: "0.1em" }}>ご利用の流れ</p>
+              
+              <div className="space-y-4 text-sm text-gray-700">
+                <div>
+                  <p className="font-bold mb-1">お電話にて</p>
+                  <p>・コース・指名をお伝えください</p>
+                  <p>・ご希望のお時間をお伝えください</p>
+                  <p>・ご利用場所をお伝えください</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notice Section */}
+          <div className="mb-12">
+            <div className="bg-white border-2 border-[#c9a876] rounded-lg p-6">
+              <h3 
+                className="text-2xl font-bold text-center mb-6"
+                style={{ 
+                  color: "#8b7355",
+                  fontFamily: "'Noto Serif JP', serif",
+                  letterSpacing: "0.2em"
+                }}
+              >
+                NOTICE
+              </h3>
+              <p className="text-sm text-center mb-6" style={{ color: "#a89586", letterSpacing: "0.1em" }}>ご注意事項</p>
+              
+              <div className="space-y-3 text-sm text-gray-700">
+                <p>・全てのコースに消費税が含まれております</p>
+                <p>・表示価格は全て税込み価格となります</p>
+                <p>・ご予約のキャンセルは前日まで無料、当日は50%、無断キャンセルは100%のキャンセル料が発生いたします</p>
+                <p>・セラピストの指名は無料です</p>
+                <p>・延長は10分単位で承っております</p>
+                <p>・お支払いは現金、クレジットカード、電子マネーをご利用いただけます</p>
+                <p>・風俗店ではございません</p>
+                <p>・18歳未満の方のご利用はお断りしております</p>
+                <p>・泥酔状態でのご利用はお断りする場合がございます</p>
+                <p>・セラピストへの迷惑行為は固くお断りいたします</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Shop Section */}
+          <div className="mb-8">
+            <div className="bg-white border-2 border-[#c9a876] rounded-lg p-6">
+              <h3 
+                className="text-2xl font-bold text-center mb-6"
+                style={{ 
+                  color: "#8b7355",
+                  fontFamily: "'Noto Serif JP', serif",
+                  letterSpacing: "0.2em"
+                }}
+              >
+                SHOP
+              </h3>
+              <p className="text-sm text-center mb-6" style={{ color: "#a89586", letterSpacing: "0.1em" }}>店舗情報</p>
+              
+              <div className="space-y-4 text-sm text-gray-700">
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">店舗名</span>
+                  <span>全力エステ</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">営業時間</span>
+                  <span>12:00～26:00（24:40最終受付）</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">定休日</span>
+                  <span>年中無休</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-200">
+                  <span className="font-bold">エリア</span>
+                  <span>出張専門</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="gap-2 min-w-[200px] bg-[#c9a876] hover:bg-[#b89766]">
               <Phone size={20} />
               電話で予約
             </Button>
             <Link to="/public/casts">
-              <Button size="lg" variant="outline" className="gap-2 min-w-[200px]">
+              <Button size="lg" variant="outline" className="gap-2 min-w-[200px] border-[#c9a876] text-[#8b7355] hover:bg-[#f5e8e4]">
                 <Calendar size={20} />
                 キャスト一覧
               </Button>
