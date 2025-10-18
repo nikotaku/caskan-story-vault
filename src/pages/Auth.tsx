@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import caskanLogo from "@/assets/caskan-logo.png";
 
 const authSchema = z.object({
   email: z.string().email({ message: "正しいメールアドレスを入力してください" }),
@@ -125,8 +126,8 @@ export default function Auth() {
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
             <img 
-              src="/src/assets/caskan-logo.png" 
-              alt="Caskan" 
+              src={caskanLogo} 
+              alt="全力エステ" 
               className="h-12"
             />
           </div>

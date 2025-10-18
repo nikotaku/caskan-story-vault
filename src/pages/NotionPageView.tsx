@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import caskanLogo from "@/assets/caskan-logo.png";
 
 interface NotionPage {
   id: string;
@@ -130,7 +131,7 @@ export default function NotionPageView() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/public" className="flex items-center space-x-2">
-            <img src="/src/assets/caskan-logo.png" alt="Logo" className="h-8 w-auto" />
+            <img src={caskanLogo} alt="全力エステ" className="h-8 w-auto" />
           </Link>
           <nav className="hidden md:flex gap-6">
             <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
