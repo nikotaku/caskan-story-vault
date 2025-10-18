@@ -279,7 +279,7 @@ const BookingReservation = () => {
       <div className="bg-white py-6">
         <div className="container mx-auto text-center">
           <Link to="/public">
-            <img src={caskanLogo} alt="全力エステ" className="h-16 mx-auto" />
+            <img src={caskanLogo} alt="全力エステ" className="h-24 md:h-32 mx-auto object-contain" style={{ mixBlendMode: 'multiply' }} />
           </Link>
         </div>
       </div>

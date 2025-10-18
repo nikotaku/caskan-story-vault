@@ -41,7 +41,8 @@ const Home = () => {
           <img 
             src={caskanLogo} 
             alt="全力エステ" 
-            className="h-24 md:h-32 mx-auto"
+            className="h-32 md:h-48 mx-auto object-contain"
+            style={{ mixBlendMode: 'multiply' }}
           />
         </div>
       </div>
