@@ -100,45 +100,60 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
     const monthStr = format(currentMonth, "yyyy年M月", { locale: ja });
     const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
     
-    let template = `${monthStr}のルーム空き状況\n\n`;
-    template += "【インルーム】\n";
-    
-    const inRoomAvailability: string[] = [];
+    // 空きのある日を取得
+    const availableDays: Date[] = [];
     monthDays.forEach(day => {
-      const availability = getRoomAvailability(day, "インルーム");
-      if (availability.available && availability.booked < availability.total) {
-        const dateStr = format(day, "M/d(E)", { locale: ja });
-        const availableHours = availability.total - availability.booked;
-        inRoomAvailability.push(`${dateStr} ${availableHours}時間空き`);
+      const dayShifts = getDayShifts(day);
+      if (dayShifts.length > 0) {
+        availableDays.push(day);
       }
     });
-    
-    if (inRoomAvailability.length > 0) {
-      template += inRoomAvailability.join("\n") + "\n";
-    } else {
-      template += "空きなし\n";
+
+    // 連続した期間をグループ化
+    const periods: { start: Date; end: Date }[] = [];
+    if (availableDays.length > 0) {
+      let periodStart = availableDays[0];
+      let periodEnd = availableDays[0];
+
+      for (let i = 1; i < availableDays.length; i++) {
+        const currentDay = availableDays[i];
+        const prevDay = availableDays[i - 1];
+        const dayDiff = Math.abs(currentDay.getTime() - prevDay.getTime()) / (1000 * 60 * 60 * 24);
+
+        if (dayDiff === 1) {
+          periodEnd = currentDay;
+        } else {
+          periods.push({ start: periodStart, end: periodEnd });
+          periodStart = currentDay;
+          periodEnd = currentDay;
+        }
+      }
+      periods.push({ start: periodStart, end: periodEnd });
     }
-    
-    template += "\n【ラスルーム】\n";
-    
-    const lasRoomAvailability: string[] = [];
-    monthDays.forEach(day => {
-      const availability = getRoomAvailability(day, "ラスルーム");
-      if (availability.available && availability.booked < availability.total) {
-        const dateStr = format(day, "M/d(E)", { locale: ja });
-        const availableHours = availability.total - availability.booked;
-        lasRoomAvailability.push(`${dateStr} ${availableHours}時間空き`);
+
+    let template = "いつもお世話になっております。\n";
+    template += "全力エステ代表の加賀谷です。\n\n";
+    template += `${monthStr}のルーム空き状況\n\n`;
+
+    periods.forEach((period, index) => {
+      const circledNumber = String.fromCharCode(9312 + index); // ❶❷❸...
+      const startStr = format(period.start, "M/d", { locale: ja });
+      const endStr = format(period.end, "M/d", { locale: ja });
+      
+      if (period.start.getTime() === period.end.getTime()) {
+        template += `${circledNumber}${startStr}\n`;
+      } else {
+        template += `${circledNumber}${startStr}~${endStr}\n`;
       }
     });
-    
-    if (lasRoomAvailability.length > 0) {
-      template += lasRoomAvailability.join("\n") + "\n";
-    } else {
-      template += "空きなし\n";
+
+    if (periods.length === 0) {
+      template += "現在、空きはございません。\n";
     }
-    
-    template += "\n※詳細な時間帯についてはお問い合わせください。";
-    
+
+    template += "\n\n以上となります。\n";
+    template += "案件よろしくお願い致します！";
+
     setTemplateText(template);
     setShowTemplateDialog(true);
   };
