@@ -6,6 +6,7 @@ import { FaXTwitter, FaLine } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { ChatBot } from "@/components/ChatBot";
+import caskanLogo from "@/assets/caskan-logo.png";
 
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -34,34 +35,14 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Hero Section with Large Logo */}
-      <div className="relative py-16 text-center" style={{ background: "linear-gradient(180deg, #f5e8e4 0%, #edddd6 100%)" }}>
-        <div className="relative inline-block">
-          <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-[180px] font-bold opacity-10" style={{ color: "#d4a574", fontFamily: "'Noto Serif JP', serif" }}>
-            ZR
-          </div>
-          <h1 
-            className="text-8xl md:text-9xl font-bold tracking-wider relative z-10"
-            style={{
-              color: "#d4a574",
-              textShadow: "3px 3px 6px rgba(0,0,0,0.15)",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.2em"
-            }}
-          >
-            ZR
-          </h1>
-          <p 
-            className="text-3xl md:text-4xl mt-4 tracking-widest"
-            style={{
-              color: "#d4a574",
-              textShadow: "2px 2px 4px rgba(0,0,0,0.1)",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.3em"
-            }}
-          >
-            全力エステ
-          </p>
+      {/* Hero Section with Logo */}
+      <div className="relative py-12 text-center" style={{ background: "linear-gradient(180deg, #f5e8e4 0%, #edddd6 100%)" }}>
+        <div className="container mx-auto">
+          <img 
+            src={caskanLogo} 
+            alt="全力エステ" 
+            className="h-24 md:h-32 mx-auto"
+          />
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Star, Search } from "lucide-react";
 import { ChatBot } from "@/components/ChatBot";
+import caskanLogo from "@/assets/caskan-logo.png";
 
 interface Cast {
   id: string;
@@ -116,6 +117,15 @@ const Casts = () => {
       <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
         <div className="container mx-auto flex justify-center items-center">
           <span>12:00〜26:00(24:40最終受付)</span>
+        </div>
+      </div>
+
+      {/* Logo */}
+      <div className="bg-white py-6">
+        <div className="container mx-auto text-center">
+          <Link to="/public">
+            <img src={caskanLogo} alt="全力エステ" className="h-16 mx-auto" />
+          </Link>
         </div>
       </div>
 
