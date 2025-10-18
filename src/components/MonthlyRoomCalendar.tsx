@@ -86,6 +86,11 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
     };
   };
 
+  const getDayShifts = (date: Date) => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    return shifts.filter(s => s.shift_date === dateStr);
+  };
+
   const generateScoutTemplate = () => {
     const monthStr = format(currentMonth, "yyyy年M月", { locale: ja });
     const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -186,100 +191,53 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* インルーム */}
-        <Card>
-          <CardContent className="p-4">
-            <h4 className="font-semibold mb-3 text-center">インルーム</h4>
-            <div className="grid grid-cols-7 gap-1">
-              {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
-                <div key={day} className="text-center text-xs font-medium p-1">
-                  {day}
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-7 gap-1">
+            {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
+              <div key={day} className="text-center text-xs font-medium p-2 border-b">
+                {day}
+              </div>
+            ))}
+            {calendarDays.map((day, index) => {
+              const dayShifts = getDayShifts(day);
+              const isCurrentMonth = isSameMonth(day, currentMonth);
+              
+              return (
+                <div
+                  key={index}
+                  className={`
+                    border p-2 min-h-[100px] text-xs
+                    ${!isCurrentMonth ? "bg-muted/50 text-muted-foreground" : "bg-card"}
+                  `}
+                >
+                  <div className="font-semibold mb-1">{format(day, "d")}</div>
+                  {dayShifts.length > 0 && isCurrentMonth ? (
+                    <div className="space-y-1">
+                      {dayShifts.map((shift) => {
+                        const cast = casts.find(c => c.id === shift.cast_id);
+                        return (
+                          <div key={shift.id} className="bg-primary/10 rounded px-1 py-0.5">
+                            <div className="font-medium truncate">{cast?.name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
+                            </div>
+                            {shift.room && (
+                              <div className="text-[10px] text-muted-foreground">
+                                {shift.room}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
-              ))}
-              {calendarDays.map((day, index) => {
-                const availability = getRoomAvailability(day, "インルーム");
-                const isCurrentMonth = isSameMonth(day, currentMonth);
-                const availableHours = availability.available ? availability.total - availability.booked : 0;
-                
-                return (
-                  <div
-                    key={index}
-                    className={`
-                      text-center p-2 text-xs rounded
-                      ${!isCurrentMonth ? "text-muted-foreground opacity-40" : ""}
-                      ${availability.available && availableHours > 0 ? "bg-green-100 dark:bg-green-900" : ""}
-                      ${availability.available && availableHours === 0 ? "bg-red-100 dark:bg-red-900" : ""}
-                      ${!availability.available ? "bg-muted" : ""}
-                    `}
-                  >
-                    <div className="font-medium">{format(day, "d")}</div>
-                    {availability.available && isCurrentMonth && (
-                      <div className="text-[10px] mt-1">
-                        {availableHours}h空
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ラスルーム */}
-        <Card>
-          <CardContent className="p-4">
-            <h4 className="font-semibold mb-3 text-center">ラスルーム</h4>
-            <div className="grid grid-cols-7 gap-1">
-              {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
-                <div key={day} className="text-center text-xs font-medium p-1">
-                  {day}
-                </div>
-              ))}
-              {calendarDays.map((day, index) => {
-                const availability = getRoomAvailability(day, "ラスルーム");
-                const isCurrentMonth = isSameMonth(day, currentMonth);
-                const availableHours = availability.available ? availability.total - availability.booked : 0;
-                
-                return (
-                  <div
-                    key={index}
-                    className={`
-                      text-center p-2 text-xs rounded
-                      ${!isCurrentMonth ? "text-muted-foreground opacity-40" : ""}
-                      ${availability.available && availableHours > 0 ? "bg-green-100 dark:bg-green-900" : ""}
-                      ${availability.available && availableHours === 0 ? "bg-red-100 dark:bg-red-900" : ""}
-                      ${!availability.available ? "bg-muted" : ""}
-                    `}
-                  >
-                    <div className="font-medium">{format(day, "d")}</div>
-                    {availability.available && isCurrentMonth && (
-                      <div className="text-[10px] mt-1">
-                        {availableHours}h空
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex gap-4 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-100 dark:bg-green-900 rounded"></div>
-          <span>空きあり</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-100 dark:bg-red-900 rounded"></div>
-          <span>満席</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-muted rounded"></div>
-          <span>シフトなし</span>
-        </div>
-      </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
