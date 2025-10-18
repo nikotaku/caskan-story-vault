@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
 interface Shift {
@@ -41,6 +42,7 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templateText, setTemplateText] = useState("");
+  const [selectedRoom, setSelectedRoom] = useState<string>("all");
   const { toast } = useToast();
 
   const monthStart = startOfMonth(currentMonth);
@@ -86,8 +88,11 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
     };
   };
 
-  const getDayShifts = (date: Date) => {
+  const getDayShifts = (date: Date, room?: string) => {
     const dateStr = format(date, "yyyy-MM-dd");
+    if (room && room !== "all") {
+      return shifts.filter(s => s.shift_date === dateStr && s.room === room);
+    }
     return shifts.filter(s => s.shift_date === dateStr);
   };
 
@@ -191,53 +196,63 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
         </Dialog>
       </div>
 
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-7 gap-1">
-            {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
-              <div key={day} className="text-center text-xs font-medium p-2 border-b">
-                {day}
-              </div>
-            ))}
-            {calendarDays.map((day, index) => {
-              const dayShifts = getDayShifts(day);
-              const isCurrentMonth = isSameMonth(day, currentMonth);
-              
-              return (
-                <div
-                  key={index}
-                  className={`
-                    border p-2 min-h-[100px] text-xs
-                    ${!isCurrentMonth ? "bg-muted/50 text-muted-foreground" : "bg-card"}
-                  `}
-                >
-                  <div className="font-semibold mb-1">{format(day, "d")}</div>
-                  {dayShifts.length > 0 && isCurrentMonth ? (
-                    <div className="space-y-1">
-                      {dayShifts.map((shift) => {
-                        const cast = casts.find(c => c.id === shift.cast_id);
-                        return (
-                          <div key={shift.id} className="bg-primary/10 rounded px-1 py-0.5">
-                            <div className="font-medium truncate">{cast?.name}</div>
-                            <div className="text-[10px] text-muted-foreground">
-                              {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
-                            </div>
-                            {shift.room && (
-                              <div className="text-[10px] text-muted-foreground">
-                                {shift.room}
+      <Tabs value={selectedRoom} onValueChange={setSelectedRoom} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsTrigger value="all">全て</TabsTrigger>
+          <TabsTrigger value="インルーム">インルーム</TabsTrigger>
+          <TabsTrigger value="ラスルーム">ラスルーム</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={selectedRoom} className="mt-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-7 gap-1">
+                {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
+                  <div key={day} className="text-center text-xs font-medium p-2 border-b">
+                    {day}
+                  </div>
+                ))}
+                {calendarDays.map((day, index) => {
+                  const dayShifts = getDayShifts(day, selectedRoom);
+                  const isCurrentMonth = isSameMonth(day, currentMonth);
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`
+                        border p-2 min-h-[100px] text-xs
+                        ${!isCurrentMonth ? "bg-muted/50 text-muted-foreground" : "bg-card"}
+                      `}
+                    >
+                      <div className="font-semibold mb-1">{format(day, "d")}</div>
+                      {dayShifts.length > 0 && isCurrentMonth ? (
+                        <div className="space-y-1">
+                          {dayShifts.map((shift) => {
+                            const cast = casts.find(c => c.id === shift.cast_id);
+                            return (
+                              <div key={shift.id} className="bg-primary/10 rounded px-1 py-0.5">
+                                <div className="font-medium truncate">{cast?.name}</div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
+                                </div>
+                                {selectedRoom === "all" && shift.room && (
+                                  <div className="text-[10px] text-muted-foreground">
+                                    {shift.room}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
