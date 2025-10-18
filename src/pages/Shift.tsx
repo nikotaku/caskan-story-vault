@@ -4,6 +4,7 @@ import { ja } from "date-fns/locale";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { ShiftCalendar } from "@/components/ShiftCalendar";
+import { MonthlyRoomCalendar } from "@/components/MonthlyRoomCalendar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -579,8 +580,9 @@ const Shift = () => {
             </div>
 
             <Tabs defaultValue="shift" className="w-full">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsList className="grid w-full max-w-2xl grid-cols-3">
                 <TabsTrigger value="shift">シフトカレンダー</TabsTrigger>
+                <TabsTrigger value="monthly">月次カレンダー</TabsTrigger>
                 <TabsTrigger value="reservations">予約ダッシュボード</TabsTrigger>
               </TabsList>
 
@@ -745,6 +747,14 @@ const Shift = () => {
                     onShiftUpdate={fetchShifts}
                   />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="monthly" className="space-y-4">
+                <MonthlyRoomCalendar 
+                  shifts={shifts}
+                  reservations={reservations}
+                  casts={casts}
+                />
               </TabsContent>
 
               <TabsContent value="reservations" className="space-y-4">
