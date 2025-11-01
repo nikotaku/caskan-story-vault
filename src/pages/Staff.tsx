@@ -57,6 +57,7 @@ export default function Staff() {
     status: "未着手",
     profile: "",
     photo: "",
+    photos: [] as string[],
   });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -147,7 +148,8 @@ export default function Staff() {
           room: formData.room,
           status: formData.status,
           profile: formData.profile,
-          photo: formData.photo || null,
+          photo: formData.photos[0] || formData.photo || null,
+          photos: formData.photos.length > 0 ? formData.photos : null,
         }]);
 
       if (error) throw error;
@@ -165,6 +167,7 @@ export default function Staff() {
         status: "未着手",
         profile: "",
         photo: "",
+        photos: [],
       });
     } catch (error) {
       console.error('Error adding cast:', error);
@@ -192,6 +195,7 @@ export default function Staff() {
     }
 
     try {
+      const photos = editingCast.photos || [];
       const { error } = await supabase
         .from('casts')
         .update({
@@ -200,7 +204,8 @@ export default function Staff() {
           room: editingCast.room,
           status: editingCast.status,
           profile: editingCast.profile,
-          photo: editingCast.photo || null,
+          photo: photos[0] || editingCast.photo || null,
+          photos: photos.length > 0 ? photos : null,
           x_account: editingCast.x_account || null,
           hp_notice: editingCast.hp_notice || null,
         })
@@ -394,6 +399,17 @@ export default function Staff() {
       return;
     }
 
+    const currentPhotos = isEdit && editingCast ? (editingCast.photos || []) : formData.photos;
+    
+    if (currentPhotos.length >= 5) {
+      toast({
+        title: "アップロード制限",
+        description: "写真は最大5枚までアップロードできます",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setUploadingPhoto(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -418,9 +434,19 @@ export default function Staff() {
       console.log('Photo uploaded successfully:', publicUrl);
 
       if (isEdit && editingCast) {
-        setEditingCast({ ...editingCast, photo: publicUrl });
+        const updatedPhotos = [...currentPhotos, publicUrl];
+        setEditingCast({ 
+          ...editingCast, 
+          photos: updatedPhotos,
+          photo: updatedPhotos[0]
+        });
       } else {
-        setFormData({ ...formData, photo: publicUrl });
+        const updatedPhotos = [...currentPhotos, publicUrl];
+        setFormData({ 
+          ...formData, 
+          photos: updatedPhotos,
+          photo: updatedPhotos[0]
+        });
       }
 
       // ファイル入力をリセット
@@ -432,7 +458,7 @@ export default function Staff() {
 
       toast({
         title: "アップロード完了",
-        description: "写真がアップロードされました",
+        description: `写真がアップロードされました (${currentPhotos.length + 1}/5)`,
       });
     } catch (error) {
       console.error('Error uploading photo:', error);
@@ -444,6 +470,29 @@ export default function Staff() {
     } finally {
       setUploadingPhoto(false);
     }
+  };
+
+  const handleRemovePhoto = (index: number, isEdit: boolean = false) => {
+    if (isEdit && editingCast) {
+      const updatedPhotos = (editingCast.photos || []).filter((_, i) => i !== index);
+      setEditingCast({ 
+        ...editingCast, 
+        photos: updatedPhotos,
+        photo: updatedPhotos[0] || null
+      });
+    } else {
+      const updatedPhotos = formData.photos.filter((_, i) => i !== index);
+      setFormData({ 
+        ...formData, 
+        photos: updatedPhotos,
+        photo: updatedPhotos[0] || ""
+      });
+    }
+    
+    toast({
+      title: "写真削除",
+      description: "写真を削除しました",
+    });
   };
 
   if (authLoading || loading) {
@@ -556,7 +605,7 @@ export default function Staff() {
                       </div>
                       
                       <div>
-                        <Label htmlFor="photo">写真</Label>
+                        <Label htmlFor="photo">写真 ({formData.photos.length}/5)</Label>
                         <div className="space-y-2">
                           <input
                             ref={fileInputRef}
@@ -573,26 +622,36 @@ export default function Staff() {
                             variant="outline"
                             className="w-full"
                             onClick={() => fileInputRef.current?.click()}
-                            disabled={uploadingPhoto}
+                            disabled={uploadingPhoto || formData.photos.length >= 5}
                           >
                             <Upload className="mr-2 h-4 w-4" />
-                            {uploadingPhoto ? "アップロード中..." : "写真をアップロード"}
+                            {uploadingPhoto ? "アップロード中..." : formData.photos.length >= 5 ? "最大5枚までです" : "写真をアップロード"}
                           </Button>
-                          {formData.photo && (
-                            <div className="relative">
-                              <img 
-                                src={formData.photo} 
-                                alt="プレビュー" 
-                                className="w-full h-32 object-cover rounded-md"
-                              />
+                          {formData.photos.length > 0 && (
+                            <div className="grid grid-cols-3 gap-2">
+                              {formData.photos.map((photo, index) => (
+                                <div key={index} className="relative group">
+                                  <img 
+                                    src={photo} 
+                                    alt={`プレビュー ${index + 1}`} 
+                                    className="w-full h-24 object-cover rounded-md"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    className="absolute top-1 right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => handleRemovePhoto(index, false)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                  <Badge className="absolute bottom-1 left-1 text-xs">
+                                    {index + 1}
+                                  </Badge>
+                                </div>
+                              ))}
                             </div>
                           )}
-                          <Input 
-                            id="photo" 
-                            placeholder="または写真URLを入力: https://..."
-                            value={formData.photo}
-                            onChange={(e) => setFormData({...formData, photo: e.target.value})}
-                          />
                         </div>
                       </div>
                       
@@ -700,7 +759,7 @@ export default function Staff() {
                     </div>
                     
                     <div>
-                      <Label htmlFor="edit-photo">写真</Label>
+                      <Label htmlFor="edit-photo">写真 ({(editingCast.photos || []).length}/5)</Label>
                       <div className="space-y-2">
                         <input
                           ref={editFileInputRef}
@@ -717,26 +776,36 @@ export default function Staff() {
                           variant="outline"
                           className="w-full"
                           onClick={() => editFileInputRef.current?.click()}
-                          disabled={uploadingPhoto}
+                          disabled={uploadingPhoto || (editingCast.photos || []).length >= 5}
                         >
                           <Upload className="mr-2 h-4 w-4" />
-                          {uploadingPhoto ? "アップロード中..." : "写真をアップロード"}
+                          {uploadingPhoto ? "アップロード中..." : (editingCast.photos || []).length >= 5 ? "最大5枚までです" : "写真をアップロード"}
                         </Button>
-                        {editingCast.photo && (
-                          <div className="relative">
-                            <img 
-                              src={editingCast.photo} 
-                              alt="プレビュー" 
-                              className="w-full h-32 object-cover rounded-md"
-                            />
+                        {(editingCast.photos || []).length > 0 && (
+                          <div className="grid grid-cols-3 gap-2">
+                            {(editingCast.photos || []).map((photo, index) => (
+                              <div key={index} className="relative group">
+                                <img 
+                                  src={photo} 
+                                  alt={`プレビュー ${index + 1}`} 
+                                  className="w-full h-24 object-cover rounded-md"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="absolute top-1 right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => handleRemovePhoto(index, true)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                                <Badge className="absolute bottom-1 left-1 text-xs">
+                                  {index + 1}
+                                </Badge>
+                              </div>
+                            ))}
                           </div>
                         )}
-                        <Input 
-                          id="edit-photo" 
-                          placeholder="または写真URLを入力: https://..."
-                          value={editingCast.photo || ""}
-                          onChange={(e) => setEditingCast({...editingCast, photo: e.target.value})}
-                        />
                       </div>
                     </div>
 
