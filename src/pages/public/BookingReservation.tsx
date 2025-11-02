@@ -457,49 +457,62 @@ const BookingReservation = () => {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* お客様情報 */}
+                {/* セラピスト選択 */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    お客様情報
+                    セラピストを選択
                   </h3>
                   
-                  <div>
-                    <Label htmlFor="customer_name">お名前 *</Label>
-                    <Input
-                      id="customer_name"
-                      placeholder="山田太郎"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      required
-                      maxLength={100}
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {casts.map((cast) => (
+                      <Card
+                        key={cast.id}
+                        className={cn(
+                          "cursor-pointer transition-all hover:shadow-lg",
+                          selectedCastId === cast.id 
+                            ? "ring-2 ring-[#d4a574] shadow-lg" 
+                            : "hover:ring-1 hover:ring-[#d4b5a8]"
+                        )}
+                        onClick={() => setSelectedCastId(cast.id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="aspect-[3/4] mb-3 overflow-hidden rounded-md bg-muted">
+                            {cast.photo ? (
+                              <img 
+                                src={cast.photo} 
+                                alt={cast.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                <User className="h-12 w-12" />
+                              </div>
+                            )}
+                          </div>
+                          <h4 className="font-semibold text-center mb-1" style={{ color: "#8b7355" }}>
+                            {cast.name}
+                          </h4>
+                          <p className="text-sm text-center text-muted-foreground">
+                            {cast.type}
+                          </p>
+                          <div className="mt-2 text-center">
+                            <span className={cn(
+                              "text-xs px-2 py-1 rounded-full",
+                              cast.status === "online" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                            )}>
+                              {cast.status === "online" ? "出勤中" : "待機"}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-
-                  <div>
-                    <Label htmlFor="customer_phone">電話番号 *</Label>
-                    <Input
-                      id="customer_phone"
-                      type="tel"
-                      placeholder="090-1234-5678"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      required
-                      maxLength={20}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="customer_email">メールアドレス（任意）</Label>
-                    <Input
-                      id="customer_email"
-                      type="email"
-                      placeholder="example@email.com"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      maxLength={255}
-                    />
-                  </div>
+                  {!selectedCastId && (
+                    <p className="text-sm text-muted-foreground text-center">
+                      ※セラピストを選択してください
+                    </p>
+                  )}
                 </div>
 
                 {/* 予約内容 */}
@@ -508,22 +521,6 @@ const BookingReservation = () => {
                     <CalendarIcon className="h-5 w-5" />
                     予約内容
                   </h3>
-
-                  <div>
-                    <Label>セラピスト *</Label>
-                    <Select value={selectedCastId} onValueChange={setSelectedCastId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="セラピストを選択してください" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {casts.map((cast) => (
-                          <SelectItem key={cast.id} value={cast.id}>
-                            {cast.name} ({cast.type})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -677,6 +674,51 @@ const BookingReservation = () => {
                         ¥{totalPrice.toLocaleString()}
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* お客様情報 */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    お客様情報
+                  </h3>
+                  
+                  <div>
+                    <Label htmlFor="customer_name">お名前 *</Label>
+                    <Input
+                      id="customer_name"
+                      placeholder="山田太郎"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      required
+                      maxLength={100}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="customer_phone">電話番号 *</Label>
+                    <Input
+                      id="customer_phone"
+                      type="tel"
+                      placeholder="090-1234-5678"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      required
+                      maxLength={20}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="customer_email">メールアドレス（任意）</Label>
+                    <Input
+                      id="customer_email"
+                      type="email"
+                      placeholder="example@email.com"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      maxLength={255}
+                    />
                   </div>
                 </div>
 
