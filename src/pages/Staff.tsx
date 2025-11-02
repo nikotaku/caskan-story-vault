@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
-import { NotionSync } from "@/components/NotionSync";
-import { NotionPageSync } from "@/components/NotionPageSync";
 import { WebsitePhotoSync } from "@/components/WebsitePhotoSync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -843,12 +841,10 @@ export default function Staff() {
               </Dialog>
             )}
 
-            {/* Notion Sync */}
+            {/* Website Photo Sync */}
             {isAdmin && (
-              <div className="mb-6 space-y-4">
+              <div className="mb-6">
                 <WebsitePhotoSync />
-                <NotionSync />
-                <NotionPageSync />
               </div>
             )}
 
