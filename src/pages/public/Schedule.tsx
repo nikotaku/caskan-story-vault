@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChatBot } from "@/components/ChatBot";
@@ -167,106 +165,151 @@ const Schedule = () => {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
+    <div className="min-h-screen bg-[#1a1a1a]">
       {/* Top Contact Bar */}
-      <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
+      <div className="bg-[#2a2a2a] text-white py-2 px-4 text-sm">
         <div className="container mx-auto flex justify-center items-center">
           <span>12:00〜26:00(24:40最終受付)</span>
         </div>
       </div>
 
       {/* Logo */}
-      <div className="bg-white py-6">
+      <div className="bg-[#2a2a2a] py-6 border-b border-[#3a3a3a]">
         <div className="container mx-auto text-center">
           <Link to="/">
-            <img src={caskanLogo} alt="全力エステ" className="h-24 md:h-32 mx-auto object-contain" style={{ mixBlendMode: 'multiply' }} />
+            <img src={caskanLogo} alt="全力エステ" className="h-20 md:h-24 mx-auto object-contain brightness-0 invert" />
           </Link>
         </div>
       </div>
 
       {/* Navigation Menu */}
-      <nav className="bg-white border-y border-[#e5d5cc] sticky top-0 z-50 shadow-sm">
+      <nav className="bg-[#2a2a2a] border-b border-[#3a3a3a] sticky top-0 z-50">
         <div className="container mx-auto">
           <div className="flex justify-center items-center flex-wrap">
-            <Link to="/" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">TOP</div>
-              <div className="text-xs text-[#a89586]">トップ</div>
+            <Link to="/" className="px-6 py-3 text-white/80 hover:text-white hover:bg-[#3a3a3a] transition-colors text-sm">
+              店舗トップ
             </Link>
-            <Link to="/schedule" className="px-8 py-4 bg-[#f5e8e4] transition-colors border-b-2 border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">SCHEDULE</div>
-              <div className="text-xs text-[#a89586]">出勤情報</div>
+            <Link to="/system" className="px-6 py-3 text-white/80 hover:text-white hover:bg-[#3a3a3a] transition-colors text-sm">
+              料金システム
             </Link>
-            <Link to="/casts" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">THERAPIST</div>
-              <div className="text-xs text-[#a89586]">セラピスト</div>
+            <Link to="/casts" className="px-6 py-3 text-white/80 hover:text-white hover:bg-[#3a3a3a] transition-colors text-sm">
+              セラピスト
             </Link>
-            <Link to="/system" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
-              <div className="text-xs text-[#a89586]">システム</div>
+            <Link to="/schedule" className="px-6 py-3 text-yellow-500 bg-[#3a3a3a] transition-colors text-sm border-b-2 border-yellow-500">
+              出勤表
             </Link>
-            <Link to="/booking" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">BOOKING</div>
-              <div className="text-xs text-[#a89586]">WEB予約</div>
+            <Link to="/booking" className="px-6 py-3 text-white/80 hover:text-white hover:bg-[#3a3a3a] transition-colors text-sm">
+              WEB予約
             </Link>
           </div>
         </div>
       </nav>
 
+      {/* Hero Section */}
+      <div className="relative py-20 bg-gradient-to-br from-[#2a2a2a] to-[#1a1a1a]">
+        <div className="container mx-auto text-center">
+          <h1 className="text-6xl md:text-8xl font-bold text-white mb-4 tracking-widest">
+            SCHEDULE
+          </h1>
+          <p className="text-xl text-white/70">出勤日</p>
+        </div>
+      </div>
+
       <main className="container py-8 px-4">
         <div className="max-w-6xl mx-auto">
-          <h1 
-            className="text-4xl font-bold mb-8 text-center"
-            style={{ 
-              color: "#8b7355",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.1em"
-            }}
-          >
-            SCHEDULE - 出勤情報
-          </h1>
-
-          {/* Calendar Section */}
-          <div className="mb-8">
-            <Card className="max-w-md mx-auto">
-              <CardHeader>
-                <CardTitle className="text-center">日付を選択</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  locale={ja}
-                  className="rounded-md border"
-                />
-              </CardContent>
-            </Card>
+          {/* View Toggle */}
+          <div className="flex justify-center gap-4 mb-8">
+            <Button 
+              className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold px-8 py-3"
+            >
+              日付で見る
+            </Button>
+            <Button 
+              variant="outline" 
+              className="border-white/30 text-white hover:bg-white/10 px-8 py-3"
+            >
+              セラピスト別に見る
+            </Button>
           </div>
 
-          {/* Schedule Title */}
-          <h2 className="text-2xl font-bold text-center mb-6" style={{ color: "#8b7355" }}>
-            {format(selectedDate, "M月d日（E）", { locale: ja })} の出勤情報
-          </h2>
+          {/* Week Navigation */}
+          <div className="mb-8 bg-[#2a2a2a] rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <Button 
+                variant="ghost" 
+                className="text-white hover:bg-[#3a3a3a]"
+                onClick={() => {
+                  const newDate = new Date(selectedDate);
+                  newDate.setDate(newDate.getDate() - 7);
+                  setSelectedDate(newDate);
+                }}
+              >
+                ← 前の1週間
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="text-white hover:bg-[#3a3a3a]"
+                onClick={() => {
+                  const newDate = new Date(selectedDate);
+                  newDate.setDate(newDate.getDate() + 7);
+                  setSelectedDate(newDate);
+                }}
+              >
+                次の1週間 →
+              </Button>
+            </div>
+            
+            {/* Week Days */}
+            <div className="grid grid-cols-7 gap-2">
+              {Array.from({ length: 7 }, (_, i) => {
+                const date = new Date(selectedDate);
+                date.setDate(date.getDate() - date.getDay() + i);
+                const isSelected = format(date, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedDate(date)}
+                    className={`p-3 rounded-lg text-center transition-colors ${
+                      isSelected 
+                        ? 'bg-yellow-500 text-black' 
+                        : 'bg-[#1a1a1a] text-white hover:bg-[#3a3a3a]'
+                    }`}
+                  >
+                    <div className="text-xs mb-1">
+                      {format(date, "M/d", { locale: ja })}
+                    </div>
+                    <div className="text-sm font-semibold">
+                      ({format(date, "E", { locale: ja })})
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Schedule Info */}
+          <div className="text-white mb-6">
+            <p className="text-lg">
+              出勤セラピスト： <span className="text-yellow-500 font-bold">{shifts.length}人</span>
+            </p>
+          </div>
 
           {/* Shifts Grid */}
           {shifts.length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-12">
-                <p className="text-muted-foreground text-lg">
-                  この日の出勤予定はありません
-                </p>
-              </CardContent>
-            </Card>
+            <div className="bg-[#2a2a2a] rounded-lg p-12 text-center">
+              <p className="text-white/70 text-lg">
+                この日の出勤予定はありません
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {shifts.map((shift) => (
-                <Card 
+                <div 
                   key={shift.id} 
-                  className="overflow-hidden hover:shadow-lg transition-shadow duration-300"
-                  style={{ borderColor: "#d4b5a8" }}
+                  className="bg-[#2a2a2a] rounded-lg overflow-hidden hover:shadow-2xl transition-all duration-300 hover:scale-105"
                 >
                   {/* Cast Photo */}
-                  <div className="relative w-full h-64 bg-gradient-to-br from-[#f5e8e4] to-[#e5d5cc]">
+                  <div className="relative w-full h-80 bg-[#1a1a1a]">
                     {shift.casts.photo ? (
                       <img
                         src={shift.casts.photo}
@@ -275,69 +318,64 @@ const Schedule = () => {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-6xl text-[#d4b5a8]">
+                        <span className="text-6xl text-white/30">
                           {shift.casts.name.charAt(0)}
                         </span>
                       </div>
                     )}
-                    {/* Status Badge */}
-                    <div className="absolute top-3 right-3">
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-white/90 text-[#8b7355] border-[#d4b5a8]"
-                      >
-                        {shift.casts.type}
-                      </Badge>
+                    
+                    {/* Time Badge */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                      <div className="text-yellow-500 font-bold text-lg">
+                        {shift.start_time.substring(0, 5)} 〜 {shift.end_time.substring(0, 5)}
+                      </div>
                     </div>
                   </div>
 
                   {/* Cast Info */}
-                  <CardContent className="p-6">
+                  <div className="p-4">
                     {/* Name */}
-                    <h3 className="text-2xl font-bold mb-3 text-center" style={{ color: "#8b7355" }}>
+                    <h3 className="text-2xl font-bold mb-2 text-white text-center">
                       {shift.casts.name}
                     </h3>
 
-                    {/* Working Hours */}
-                    <div className="mb-4 text-center">
-                      <div className="text-sm text-muted-foreground mb-1">出勤時間</div>
-                      <div className="text-lg font-semibold" style={{ color: "#d4a574" }}>
-                        {shift.start_time.substring(0, 5)} 〜 {shift.end_time.substring(0, 5)}
-                      </div>
+                    {/* Type Badge */}
+                    <div className="text-center mb-3">
+                      <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/50">
+                        {shift.casts.type}
+                      </Badge>
                     </div>
 
                     {/* Room Info */}
                     {shift.room && (
-                      <div className="mb-4 text-center">
-                        <div 
-                          className="inline-block px-4 py-2 rounded-md text-sm font-medium"
-                          style={{ backgroundColor: "#f5e8e4", color: "#8b7355" }}
-                        >
-                          ■ {shift.room} ■
-                        </div>
+                      <div className="mb-3 text-center">
+                        <span className="text-white/60 text-sm">■ {shift.room} ■</span>
                       </div>
                     )}
 
                     {/* Notes */}
                     {shift.notes && (
-                      <p className="text-sm text-center mb-4 text-muted-foreground">
+                      <p className="text-sm text-center mb-4 text-white/60">
                         {shift.notes}
                       </p>
                     )}
 
-                    {/* Booking Button */}
+                    {/* Booking Status */}
+                    <div className="text-center">
+                      <span className="inline-block px-6 py-2 bg-green-600 text-white rounded-full text-sm font-semibold">
+                        ○ ご案内可能
+                      </span>
+                    </div>
+
+                    {/* View Detail Button */}
                     <Button
-                      className="w-full"
-                      style={{ 
-                        backgroundColor: "#d4a574",
-                        color: "white"
-                      }}
+                      className="w-full mt-4 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
                       onClick={() => handleBooking(shift.cast_id, shift.casts.name, shift.start_time)}
                     >
-                      予約する
+                      詳細を見る / 予約する
                     </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -345,31 +383,14 @@ const Schedule = () => {
       </main>
 
       {/* Footer */}
-      <footer className="py-16 px-4 text-white" style={{ background: "linear-gradient(180deg, #d4b5a8 0%, #c5a89b 100%)" }}>
-        <div className="container max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
-            <div>
-              <h4 className="font-bold mb-4 text-lg">営業時間</h4>
-              <p className="text-white/95">12:00〜26:00</p>
-              <p className="text-sm text-white/80">(24:40最終受付)</p>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-lg">メニュー</h4>
-              <div className="flex flex-col gap-3 text-sm">
-                <Link to="/casts" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  セラピスト
-                </Link>
-                <Link to="/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  出勤情報
-                </Link>
-                <Link to="/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  システム
-                </Link>
-              </div>
-            </div>
+      <footer className="py-12 px-4 bg-[#0a0a0a] text-white/60 border-t border-[#2a2a2a] mt-16">
+        <div className="container max-w-6xl mx-auto text-center">
+          <div className="mb-6">
+            <p className="text-lg mb-2">営業時間: 12:00〜26:00 (24:40最終受付)</p>
+            <p className="text-sm">定休日: 年中無休</p>
           </div>
-          <div className="text-center text-sm text-white/70 pt-10 border-t border-white/20">
-            © 2025 全力エステ ZR. All rights reserved.
+          <div className="text-sm">
+            © 2025 全力エステ 仙台. All rights reserved.
           </div>
         </div>
       </footer>
