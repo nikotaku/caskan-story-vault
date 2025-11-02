@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,6 +13,7 @@ interface EstamaShift {
   startTime: string;
   endTime: string;
   status: string;
+  room?: string;
 }
 
 serve(async (req) => {
@@ -26,18 +28,41 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // エステ魂のスケジュールページを取得
-    const estamaUrl = 'https://estama.jp/shop/43923/schedule/';
-    console.log('Fetching Estama schedule from:', estamaUrl);
+    // エステ魂のスケジュールページを取得（次の7日間分）
+    const shifts: EstamaShift[] = [];
+    const today = new Date();
     
-    const response = await fetch(estamaUrl);
-    const html = await response.text();
-    
-    console.log('HTML fetched, length:', html.length);
+    for (let i = 0; i < 7; i++) {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + i);
+      const dateStr = targetDate.toISOString().split('T')[0];
+      
+      // 日付ごとにページを取得
+      const estamaUrl = `https://estama.jp/shop/43923/schedule/?date=${dateStr}`;
+      console.log(`Fetching Estama schedule for ${dateStr} from:`, estamaUrl);
+      
+      try {
+        const response = await fetch(estamaUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        const html = await response.text();
+        console.log(`HTML fetched for ${dateStr}, length:`, html.length);
 
-    // HTMLをパースしてスケジュール情報を抽出
-    const shifts: EstamaShift[] = parseEstamaSchedule(html);
-    console.log('Parsed shifts:', shifts.length);
+        // HTMLをパースしてスケジュール情報を抽出
+        const dayShifts = parseEstamaSchedule(html, dateStr);
+        shifts.push(...dayShifts);
+        console.log(`Parsed ${dayShifts.length} shifts for ${dateStr}`);
+        
+        // レート制限を避けるため少し待機
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.error(`Error fetching schedule for ${dateStr}:`, error);
+      }
+    }
+    
+    console.log('Total parsed shifts:', shifts.length);
 
     // 既存のキャストを取得
     const { data: casts, error: castsError } = await supabase
@@ -117,37 +142,75 @@ serve(async (req) => {
   }
 });
 
-function parseEstamaSchedule(html: string): EstamaShift[] {
+function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
   const shifts: EstamaShift[] = [];
   
   try {
-    // 簡易的なHTMLパース（実際のHTMLの構造に合わせて調整が必要）
-    // セラピスト名のパターンを探す
-    const namePattern = /####\s+([^\n(]+)/g;
-    // 時間のパターンを探す
-    const timePattern = /(\d{2}:\d{2})/g;
-    // 日付のパターンを探す
-    const datePattern = /(\d{1,2})\/(\d{1,2})/g;
-    
-    const names = [...html.matchAll(namePattern)].map(m => m[1].trim());
-    const times = [...html.matchAll(timePattern)].map(m => m[1]);
-    
-    console.log('Found names:', names);
-    console.log('Found times:', times);
-    
-    // 簡易的なマッピング（実際のデータ構造に応じて改善が必要）
-    for (let i = 0; i < names.length && i < times.length / 2; i++) {
-      const today = new Date();
-      const dateStr = today.toISOString().split('T')[0];
-      
-      shifts.push({
-        castName: names[i],
-        date: dateStr,
-        startTime: times[i * 2] || '12:00',
-        endTime: times[i * 2 + 1] || '26:00',
-        status: 'scheduled'
-      });
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (!doc) {
+      console.error('Failed to parse HTML');
+      return shifts;
     }
+    
+    // セラピストの勤務情報を含むテーブル行を探す
+    // エステ魂のHTMLではセラピスト情報がテーブル形式で表示される
+    const rows = doc.querySelectorAll('tr');
+    
+    for (const row of rows) {
+      try {
+        // セラピスト名を探す（h4タグまたは特定のクラス）
+        const nameElement = row.querySelector('h4');
+        if (!nameElement) continue;
+        
+        const castName = nameElement.textContent?.trim().replace(/\(\d+\)/g, '').trim();
+        if (!castName) continue;
+        
+        // 時間情報を探す（○マークや時間表示のあるセル）
+        const timeCell = row.querySelector('td:last-child');
+        if (!timeCell) continue;
+        
+        const timeText = timeCell.textContent?.trim();
+        
+        // 時間のパターンをマッチング (例: "12:00", "24:30")
+        const timeMatches = timeText?.match(/(\d{1,2}):(\d{2})/g);
+        
+        if (timeMatches && timeMatches.length >= 2) {
+          shifts.push({
+            castName: castName,
+            date: dateStr,
+            startTime: timeMatches[0],
+            endTime: timeMatches[1],
+            status: 'scheduled',
+            room: null
+          });
+        } else if (timeMatches && timeMatches.length === 1) {
+          // 終了時間が明示されていない場合は、標準的な勤務時間を仮定
+          shifts.push({
+            castName: castName,
+            date: dateStr,
+            startTime: timeMatches[0],
+            endTime: '26:00', // デフォルトの終了時間
+            status: 'scheduled',
+            room: null
+          });
+        } else if (timeText?.includes('○')) {
+          // ○マークがある場合は予約可能
+          shifts.push({
+            castName: castName,
+            date: dateStr,
+            startTime: '12:00', // デフォルトの開始時間
+            endTime: '26:00',
+            status: 'scheduled',
+            room: null
+          });
+        }
+      } catch (rowError) {
+        console.error('Error parsing row:', rowError);
+        continue;
+      }
+    }
+    
+    console.log(`Parsed ${shifts.length} shifts from HTML`);
   } catch (error) {
     console.error('Error parsing HTML:', error);
   }
