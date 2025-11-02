@@ -180,8 +180,10 @@ export default function Staff() {
   };
 
   const handleEditCast = (cast: Cast) => {
+    console.log('handleEditCast called', { cast, isAdmin });
     setEditingCast(cast);
     setIsEditDialogOpen(true);
+    console.log('Dialog state set to true');
   };
 
   const handleUpdateCast = async () => {
@@ -656,7 +658,7 @@ export default function Staff() {
             </div>
 
             {/* Edit Dialog */}
-            {isAdmin && editingCast && (
+            {editingCast && (
               <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
