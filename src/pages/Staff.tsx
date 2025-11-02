@@ -198,6 +198,7 @@ export default function Staff() {
 
     try {
       const photos = editingCast.photos || [];
+      console.log('Updating cast with photos:', photos);
       const { error } = await supabase
         .from('casts')
         .update({
@@ -206,7 +207,7 @@ export default function Staff() {
           room: editingCast.room,
           status: editingCast.status,
           profile: editingCast.profile,
-          photo: photos[0] || editingCast.photo || null,
+          photo: photos.length > 0 ? photos[0] : null,
           photos: photos.length > 0 ? photos : null,
           x_account: editingCast.x_account || null,
           hp_notice: editingCast.hp_notice || null,
