@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Star, Camera, Clock, TrendingUp, Sparkles, Database, Link as LinkIcon, Copy, Upload } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { NotionSync } from "@/components/NotionSync";
@@ -519,21 +519,11 @@ export default function Staff() {
             <Tabs defaultValue="management" className="w-full">
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h1 className="text-2xl font-bold">キャスト管理・セラピストDB</h1>
-                  <p className="text-muted-foreground">キャストの登録・管理・データベース参照</p>
+                  <h1 className="text-2xl font-bold">キャスト管理</h1>
+                  <p className="text-muted-foreground">キャストの登録・管理</p>
                 </div>
                 
                 <div className="flex gap-2 items-center">
-                  <TabsList>
-                    <TabsTrigger value="management">
-                      <Star className="mr-2 h-4 w-4" />
-                      キャスト管理
-                    </TabsTrigger>
-                    <TabsTrigger value="database">
-                      <Database className="mr-2 h-4 w-4" />
-                      セラピストDB
-                    </TabsTrigger>
-                  </TabsList>
                   
                   {isAdmin && (
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -1073,25 +1063,6 @@ export default function Staff() {
             )}
             </TabsContent>
 
-            <TabsContent value="database" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Database className="h-5 w-5" />
-                    セラピストデータベース
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="w-full bg-white rounded-lg shadow-lg" style={{ height: 'calc(100vh - 300px)', minHeight: '600px' }}>
-                    <iframe
-                      src="https://cherry-worm-418.notion.site/ebd/204f9507f0cf818ea0c6e2602c100b36"
-                      className="w-full h-full border-0 rounded-lg"
-                      title="セラピストデータベース"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
           </Tabs>
           </div>
         </main>
