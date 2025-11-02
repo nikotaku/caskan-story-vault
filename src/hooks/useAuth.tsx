@@ -14,19 +14,21 @@ export function useAuth() {
     // 認証状態リスナーを設定
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', { event, userId: session?.user?.id, email: session?.user?.email });
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
           // 管理者権限をチェック
           setTimeout(async () => {
-            const { data } = await supabase
+            const { data, error } = await supabase
               .from("user_roles")
               .select("role")
               .eq("user_id", session.user.id)
               .eq("role", "admin")
               .maybeSingle();
             
+            console.log('Admin check result:', { userId: session.user.id, data, error, isAdmin: !!data });
             setIsAdmin(!!data);
           }, 0);
         } else {
