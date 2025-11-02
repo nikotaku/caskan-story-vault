@@ -892,7 +892,11 @@ export default function Staff() {
             {/* Cast List */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredCasts.map((cast) => (
-                <Card key={cast.id} className="overflow-hidden">
+                <Card 
+                  key={cast.id} 
+                  className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => handleEditCast(cast)}
+                >
                   <div className="aspect-[4/3] relative overflow-hidden bg-muted">
                     {cast.photo ? (
                       <img 
@@ -957,7 +961,10 @@ export default function Staff() {
                           <Button 
                             variant={cast.status === "waiting" ? "default" : "outline"}
                             size="sm" 
-                            onClick={() => handleStatusChange(cast.id, "waiting")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(cast.id, "waiting");
+                            }}
                             className="flex-1 text-xs"
                             disabled={cast.status === "waiting"}
                           >
@@ -966,7 +973,10 @@ export default function Staff() {
                           <Button 
                             variant={cast.status === "busy" ? "default" : "outline"}
                             size="sm" 
-                            onClick={() => handleStatusChange(cast.id, "busy")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(cast.id, "busy");
+                            }}
                             className="flex-1 text-xs"
                             disabled={cast.status === "busy"}
                           >
@@ -975,7 +985,10 @@ export default function Staff() {
                           <Button 
                             variant={cast.status === "offline" ? "default" : "outline"}
                             size="sm" 
-                            onClick={() => handleStatusChange(cast.id, "offline")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(cast.id, "offline");
+                            }}
                             className="flex-1 text-xs"
                             disabled={cast.status === "offline"}
                           >
@@ -988,7 +1001,10 @@ export default function Staff() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => copyPortalLink(cast.access_token!)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyPortalLink(cast.access_token!);
+                            }}
                             className="w-full mt-3"
                           >
                             <Copy size={14} className="mr-1" />
@@ -998,7 +1014,10 @@ export default function Staff() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => generateAccessToken(cast.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              generateAccessToken(cast.id);
+                            }}
                             className="w-full mt-3"
                           >
                             <LinkIcon size={14} className="mr-1" />
@@ -1010,7 +1029,10 @@ export default function Staff() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => handleEditCast(cast)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditCast(cast);
+                            }}
                             className="flex-1"
                           >
                             <Edit size={14} />
@@ -1022,7 +1044,10 @@ export default function Staff() {
                               <Button 
                                 variant="destructive" 
                                 size="sm"
-                                onClick={() => handleDeleteCast(cast.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteCast(cast.id);
+                                }}
                                 className="text-xs"
                               >
                                 確認
@@ -1030,7 +1055,10 @@ export default function Staff() {
                               <Button 
                                 variant="outline" 
                                 size="sm"
-                                onClick={() => setDeleteConfirmId(null)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmId(null);
+                                }}
                                 className="text-xs"
                               >
                                 キャンセル
@@ -1040,7 +1068,10 @@ export default function Staff() {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              onClick={() => setDeleteConfirmId(cast.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmId(cast.id);
+                              }}
                               className="hover:bg-destructive hover:text-destructive-foreground"
                             >
                               <Trash2 size={14} />
