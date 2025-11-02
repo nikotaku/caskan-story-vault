@@ -125,14 +125,14 @@ export default function Agreement() {
           </DialogHeader>
           <div className="flex flex-col h-[calc(95vh-80px)]">
             <div className="flex-1 p-4">
-              <div className="border-2 border-primary rounded-lg overflow-hidden bg-background h-full">
+              <div className="border-2 border-primary rounded-lg overflow-hidden bg-white h-full">
                 <SignatureCanvas
                   ref={signatureRef}
                   canvasProps={{
                     className: "w-full h-full",
                   }}
-                  backgroundColor="hsl(var(--background))"
-                  penColor="hsl(var(--foreground))"
+                  backgroundColor="white"
+                  penColor="black"
                 />
               </div>
             </div>
