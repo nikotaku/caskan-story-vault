@@ -25,17 +25,17 @@ export default function Auth() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // 既にログインしている場合はホームにリダイレクト
+    // 既にログインしている場合はダッシュボードにリダイレクト
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/");
+        navigate("/dashboard");
       }
     });
 
     // 認証状態の変更を監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session && event === "SIGNED_IN") {
-        navigate("/");
+        navigate("/dashboard");
       }
     });
 
@@ -74,7 +74,7 @@ export default function Auth() {
         });
       } else {
         // サインアップ
-        const redirectUrl = `${window.location.origin}/`;
+        const redirectUrl = `${window.location.origin}/dashboard`;
         
         const { error } = await supabase.auth.signUp({
           email: validatedData.email,

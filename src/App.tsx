@@ -37,8 +37,19 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
+          {/* Public Pages */}
+          <Route path="/" element={<PublicHome />} />
+          <Route path="/casts" element={<PublicCasts />} />
+          <Route path="/casts/:id" element={<PublicCastDetail />} />
+          <Route path="/schedule" element={<PublicSchedule />} />
+          <Route path="/pricing" element={<PublicPricing />} />
+          <Route path="/system" element={<PublicSystem />} />
+          <Route path="/booking" element={<BookingReservation />} />
+          <Route path="/page/:slug" element={<NotionPageView />} />
+          
+          {/* Admin/Staff Pages */}
+          <Route path="/login" element={<Auth />} />
+          <Route path="/dashboard" element={<Index />} />
           <Route path="/staff" element={<Staff />} />
           <Route path="/shift" element={<Shift />} />
           <Route path="/shift/submission" element={<ShiftSubmission />} />
@@ -47,23 +58,13 @@ const App = () => (
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
           <Route path="/salary" element={<Salary />} />
-          <Route path="/pricing" element={<PricingManagement />} />
+          <Route path="/pricing-management" element={<PricingManagement />} />
           <Route path="/text-generation" element={<TextGeneration />} />
           <Route path="/estama" element={<EstamaIntegration />} />
           <Route path="/shop" element={<Settings />} />
           
           {/* Therapist Portal - Token-based access */}
           <Route path="/therapist/:token" element={<TherapistPortal />} />
-          
-          {/* Public Pages */}
-          <Route path="/public" element={<PublicHome />} />
-          <Route path="/public/casts" element={<PublicCasts />} />
-          <Route path="/public/casts/:id" element={<PublicCastDetail />} />
-          <Route path="/public/schedule" element={<PublicSchedule />} />
-          <Route path="/public/pricing" element={<PublicPricing />} />
-          <Route path="/public/system" element={<PublicSystem />} />
-          <Route path="/page/:slug" element={<NotionPageView />} />
-          <Route path="/public/booking" element={<BookingReservation />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

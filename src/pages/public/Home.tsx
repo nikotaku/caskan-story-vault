@@ -51,23 +51,23 @@ const Home = () => {
       <nav className="bg-white border-y border-[#e5d5cc] sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto">
           <div className="flex justify-center items-center flex-wrap">
-            <Link to="/public" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+            <Link to="/" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">TOP</div>
               <div className="text-xs text-[#a89586]">トップ</div>
             </Link>
-            <Link to="/public/schedule" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+            <Link to="/schedule" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">SCHEDULE</div>
               <div className="text-xs text-[#a89586]">出勤情報</div>
             </Link>
-            <Link to="/public/casts" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+            <Link to="/casts" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">THERAPIST</div>
               <div className="text-xs text-[#a89586]">セラピスト</div>
             </Link>
-            <Link to="/public/system" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+            <Link to="/system" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
               <div className="text-xs text-[#a89586]">システム</div>
             </Link>
-            <Link to="/public/booking" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+            <Link to="/booking" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">BOOKING</div>
               <div className="text-xs text-[#a89586]">WEB予約</div>
             </Link>
@@ -177,7 +177,7 @@ const Home = () => {
       <section className="py-16 px-4" style={{ backgroundColor: "#f5e8e4" }}>
         <div className="container max-w-4xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Link to="/public/schedule">
+            <Link to="/schedule">
               <Card className="hover:shadow-2xl transition-all cursor-pointer h-full bg-white border-[#e5d5cc] hover:scale-105 transform">
                 <CardContent className="p-10 text-center">
                   <div 
@@ -193,7 +193,7 @@ const Home = () => {
               </Card>
             </Link>
 
-            <Link to="/public/casts">
+            <Link to="/casts">
               <Card className="hover:shadow-2xl transition-all cursor-pointer h-full bg-white border-[#e5d5cc] hover:scale-105 transform">
                 <CardContent className="p-10 text-center">
                   <div 
@@ -263,13 +263,13 @@ const Home = () => {
             <div>
               <h4 className="font-bold mb-4 text-lg">メニュー</h4>
               <div className="flex flex-col gap-3 text-sm">
-                <Link to="/public/casts" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                <Link to="/casts" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   セラピスト
                 </Link>
-                <Link to="/public/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                <Link to="/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   出勤情報
                 </Link>
-                <Link to="/public/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
+                <Link to="/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
                   システム
                 </Link>
               </div>
