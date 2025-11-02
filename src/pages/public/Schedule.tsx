@@ -17,6 +17,8 @@ interface Shift {
   end_time: string;
   status: string;
   cast_id: string;
+  room: string | null;
+  notes: string | null;
   casts: {
     name: string;
     photo: string | null;
@@ -223,11 +225,11 @@ const Schedule = () => {
             SCHEDULE - 出勤情報
           </h1>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Calendar */}
-            <Card className="lg:col-span-1">
+          {/* Calendar Section */}
+          <div className="mb-8">
+            <Card className="max-w-md mx-auto">
               <CardHeader>
-                <CardTitle>日付を選択</CardTitle>
+                <CardTitle className="text-center">日付を選択</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center">
                 <Calendar
@@ -239,99 +241,106 @@ const Schedule = () => {
                 />
               </CardContent>
             </Card>
-
-            {/* Timetable */}
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    {format(selectedDate, "M月d日（E）", { locale: ja })} の出勤タイムテーブル
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {shifts.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">
-                        この日の出勤予定はありません
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr>
-                            <th className="border border-[#d4b5a8] bg-[#f5e8e4] p-2 text-left min-w-[120px]">
-                              セラピスト
-                            </th>
-                            {timeSlots.map((time) => (
-                              <th key={time} className="border border-[#d4b5a8] bg-[#f5e8e4] p-2 text-center min-w-[80px] text-xs">
-                                {time}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {shifts.map((shift) => (
-                            <tr key={shift.id}>
-                              <td className="border border-[#d4b5a8] p-2">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-20 h-20 relative flex-shrink-0 rounded-full overflow-hidden">
-                                    {shift.casts.photo ? (
-                                      <img
-                                        src={shift.casts.photo}
-                                        alt={shift.casts.name}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                                        <span className="text-lg text-muted-foreground">
-                                          {shift.casts.name.charAt(0)}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <div className="font-semibold text-base">{shift.casts.name}</div>
-                                    <Badge variant="outline" className="text-xs">{shift.casts.type}</Badge>
-                                  </div>
-                                </div>
-                              </td>
-                              {timeSlots.map((time) => {
-                                const inShift = isTimeSlotInShift(shift, time);
-                                const isBooked = isTimeSlotBooked(shift.cast_id, time);
-                                
-                                return (
-                                  <td 
-                                    key={time} 
-                                    className={`border border-[#d4b5a8] p-1 text-center ${
-                                      !inShift ? 'bg-gray-100' : isBooked ? 'bg-red-100' : 'bg-green-50'
-                                    }`}
-                                  >
-                                    {inShift && !isBooked && (
-                                      <Button
-                                        size="sm"
-                                        className="text-xs px-2 py-1 h-auto"
-                                        onClick={() => handleBooking(shift.cast_id, shift.casts.name, time)}
-                                      >
-                                        予約
-                                      </Button>
-                                    )}
-                                    {inShift && isBooked && (
-                                      <span className="text-xs text-red-600 font-semibold">予約済</span>
-                                    )}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
           </div>
+
+          {/* Schedule Title */}
+          <h2 className="text-2xl font-bold text-center mb-6" style={{ color: "#8b7355" }}>
+            {format(selectedDate, "M月d日（E）", { locale: ja })} の出勤情報
+          </h2>
+
+          {/* Shifts Grid */}
+          {shifts.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <p className="text-muted-foreground text-lg">
+                  この日の出勤予定はありません
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {shifts.map((shift) => (
+                <Card 
+                  key={shift.id} 
+                  className="overflow-hidden hover:shadow-lg transition-shadow duration-300"
+                  style={{ borderColor: "#d4b5a8" }}
+                >
+                  {/* Cast Photo */}
+                  <div className="relative w-full h-64 bg-gradient-to-br from-[#f5e8e4] to-[#e5d5cc]">
+                    {shift.casts.photo ? (
+                      <img
+                        src={shift.casts.photo}
+                        alt={shift.casts.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-6xl text-[#d4b5a8]">
+                          {shift.casts.name.charAt(0)}
+                        </span>
+                      </div>
+                    )}
+                    {/* Status Badge */}
+                    <div className="absolute top-3 right-3">
+                      <Badge 
+                        variant="secondary" 
+                        className="bg-white/90 text-[#8b7355] border-[#d4b5a8]"
+                      >
+                        {shift.casts.type}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Cast Info */}
+                  <CardContent className="p-6">
+                    {/* Name */}
+                    <h3 className="text-2xl font-bold mb-3 text-center" style={{ color: "#8b7355" }}>
+                      {shift.casts.name}
+                    </h3>
+
+                    {/* Working Hours */}
+                    <div className="mb-4 text-center">
+                      <div className="text-sm text-muted-foreground mb-1">出勤時間</div>
+                      <div className="text-lg font-semibold" style={{ color: "#d4a574" }}>
+                        {shift.start_time.substring(0, 5)} 〜 {shift.end_time.substring(0, 5)}
+                      </div>
+                    </div>
+
+                    {/* Room Info */}
+                    {shift.room && (
+                      <div className="mb-4 text-center">
+                        <div 
+                          className="inline-block px-4 py-2 rounded-md text-sm font-medium"
+                          style={{ backgroundColor: "#f5e8e4", color: "#8b7355" }}
+                        >
+                          ■ {shift.room} ■
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {shift.notes && (
+                      <p className="text-sm text-center mb-4 text-muted-foreground">
+                        {shift.notes}
+                      </p>
+                    )}
+
+                    {/* Booking Button */}
+                    <Button
+                      className="w-full"
+                      style={{ 
+                        backgroundColor: "#d4a574",
+                        color: "white"
+                      }}
+                      onClick={() => handleBooking(shift.cast_id, shift.casts.name, shift.start_time)}
+                    >
+                      予約する
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
