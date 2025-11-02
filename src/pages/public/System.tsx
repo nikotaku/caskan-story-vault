@@ -25,6 +25,10 @@ const System = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    document.title = "全力エステ - システム";
+  }, []);
+
+  useEffect(() => {
     fetchPricing();
   }, []);
 

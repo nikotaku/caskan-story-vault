@@ -29,6 +29,10 @@ const Casts = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
+    document.title = "全力エステ - セラピスト";
+  }, []);
+
+  useEffect(() => {
     fetchCasts();
 
     const channel = supabase

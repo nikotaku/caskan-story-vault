@@ -41,6 +41,10 @@ const Schedule = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
+    document.title = "全力エステ - スケジュール";
+  }, []);
+
+  useEffect(() => {
     fetchData();
 
     const shiftsChannel = supabase

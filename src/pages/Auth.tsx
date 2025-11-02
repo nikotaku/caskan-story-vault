@@ -25,6 +25,10 @@ export default function Auth() {
   const { toast } = useToast();
 
   useEffect(() => {
+    document.title = "全力エステ - ログイン";
+  }, []);
+
+  useEffect(() => {
     // 既にログインしている場合はダッシュボードにリダイレクト
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {

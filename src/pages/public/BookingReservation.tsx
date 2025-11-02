@@ -93,6 +93,10 @@ const BookingReservation = () => {
   const [notes, setNotes] = useState<string>("");
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
+  useEffect(() => {
+    document.title = "全力エステ - WEB予約";
+  }, []);
+
   const { toast } = useToast();
   const navigate = useNavigate();
 

@@ -17,6 +17,10 @@ const Home = () => {
   ];
 
   useEffect(() => {
+    document.title = "全力エステ - ホーム";
+  }, []);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
