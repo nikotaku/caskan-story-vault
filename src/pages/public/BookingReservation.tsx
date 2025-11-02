@@ -174,6 +174,7 @@ const BookingReservation = () => {
       const { data, error } = await supabase
         .from("casts")
         .select("id, name, type, photo, status, profile, age, height, cup_size, room")
+        .eq("status", "online")
         .order("name");
 
       if (error) throw error;
