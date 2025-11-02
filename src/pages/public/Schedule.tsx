@@ -152,7 +152,7 @@ const Schedule = () => {
 
   const handleBooking = (castId: string, castName: string, time: string) => {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    navigate(`/public/booking?castId=${castId}&date=${dateStr}&time=${time}`);
+    navigate(`/booking?castId=${castId}&date=${dateStr}&time=${time}`);
   };
 
   if (loading) {
