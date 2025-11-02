@@ -77,6 +77,7 @@ export type Database = {
           room: string | null
           specialties: string | null
           status: string
+          tags: string[] | null
           type: string
           updated_at: string
           upload_check: string | null
@@ -112,6 +113,7 @@ export type Database = {
           room?: string | null
           specialties?: string | null
           status?: string
+          tags?: string[] | null
           type: string
           updated_at?: string
           upload_check?: string | null
@@ -147,6 +149,7 @@ export type Database = {
           room?: string | null
           specialties?: string | null
           status?: string
+          tags?: string[] | null
           type?: string
           updated_at?: string
           upload_check?: string | null

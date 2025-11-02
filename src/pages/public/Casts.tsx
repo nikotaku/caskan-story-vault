@@ -17,6 +17,8 @@ interface Cast {
   type: string;
   status: string;
   photo: string | null;
+  photos: string[] | null;
+  tags: string[] | null;
   join_date: string;
 }
 
@@ -219,14 +221,27 @@ const Casts = () => {
                 <div key={cast.id} className="relative">
                   <Link to={`/casts/${cast.id}`} className="block group">
                     <figure className="bg-white rounded overflow-hidden shadow hover:shadow-lg transition-shadow relative">
-                      {/* 新人バッジ */}
-                      {isNewFace(cast.join_date) && (
-                        <div className="absolute top-2 left-2 z-10">
-                          <span className="bg-pink-500 text-white text-xs px-2 py-1 rounded">
+                      {/* タグバッジ */}
+                      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                        {cast.tags && cast.tags.map((tag, idx) => (
+                          <span 
+                            key={idx}
+                            className={`text-white text-xs font-bold px-2 py-1 rounded shadow-md ${
+                              tag === '人気セラピスト' ? 'bg-red-500' :
+                              tag === '新人' ? 'bg-pink-500' :
+                              'bg-blue-500'
+                            }`}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                        {/* 新人バッジ（タグにない場合のみ表示） */}
+                        {isNewFace(cast.join_date) && (!cast.tags || !cast.tags.includes('新人')) && (
+                          <span className="bg-pink-500 text-white text-xs font-bold px-2 py-1 rounded shadow-md">
                             新人
                           </span>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       
                       {/* 写真 */}
                       {cast.photo ? (

@@ -10,8 +10,10 @@ const corsHeaders = {
 interface TherapistData {
   name: string;
   photoUrl: string;
+  photoUrls: string[];
   castId: string;
   age: number;
+  tags: string[];
   height?: number;
   bust?: number;
   cupSize?: string;
@@ -97,6 +99,16 @@ serve(async (req) => {
         
         console.log(`Processing: ${name} (${age}) - ID: ${castId}`);
         
+        // タグを取得（人気セラピスト、新人など）
+        const tags: string[] = [];
+        const badgeElements = block.querySelectorAll('.icon-badge');
+        for (const badge of badgeElements) {
+          const tagText = badge.textContent?.trim();
+          if (tagText) {
+            tags.push(tagText);
+          }
+        }
+        
         // サイズ情報を取得
         const sizeElement = block.querySelector('.therapist_details p');
         const sizeText = sizeElement?.textContent?.trim() || '';
@@ -105,8 +117,10 @@ serve(async (req) => {
         const therapistData: TherapistData = {
           name: name,
           photoUrl: photoUrl,
+          photoUrls: [photoUrl],
           castId: castId,
           age: age,
+          tags: tags,
         };
         
         if (sizeMatch) {
@@ -191,6 +205,30 @@ serve(async (req) => {
                   therapistData.xAccount = xMatch[1];
                 }
               }
+              
+              // 画像を全て取得（メイン画像 + ギャラリー画像）
+              const allPhotoUrls: string[] = [photoUrl];
+              
+              // ギャラリー画像を取得
+              const galleryImages = detailDoc.querySelectorAll('.therapist__gallery img, .therapist__photo img, .slider img');
+              for (const img of galleryImages) {
+                const imgSrc = img.getAttribute('src');
+                if (imgSrc && !allPhotoUrls.includes(imgSrc)) {
+                  allPhotoUrls.push(imgSrc);
+                }
+              }
+              
+              // data-srcやdata-lazy属性もチェック
+              const lazyImages = detailDoc.querySelectorAll('img[data-src], img[data-lazy]');
+              for (const img of lazyImages) {
+                const imgSrc = img.getAttribute('data-src') || img.getAttribute('data-lazy');
+                if (imgSrc && !allPhotoUrls.includes(imgSrc)) {
+                  allPhotoUrls.push(imgSrc);
+                }
+              }
+              
+              therapistData.photoUrls = allPhotoUrls.slice(0, 5); // 最大5枚
+              console.log(`Found ${therapistData.photoUrls.length} photos for ${name}`);
             }
           } else {
             console.log(`Failed to fetch detail page for ${name}: ${detailResponse.status}`);
@@ -275,18 +313,26 @@ serve(async (req) => {
           continue;
         }
 
-        // 写真をダウンロードしてストレージに保存
-        const uploadedPhotoUrl = await downloadAndUploadPhoto(
-          therapist.photoUrl,
-          therapist.name,
-          therapist.castId
-        );
+        // 全ての写真をダウンロードしてストレージに保存
+        const uploadedPhotoUrls: string[] = [];
+        for (const photoUrl of therapist.photoUrls) {
+          const uploadedUrl = await downloadAndUploadPhoto(
+            photoUrl,
+            therapist.name,
+            therapist.castId
+          );
+          if (uploadedUrl) {
+            uploadedPhotoUrls.push(uploadedUrl);
+          }
+        }
         
         // プロフィール情報を準備
         const profileData: any = { 
-          photo: uploadedPhotoUrl || therapist.photoUrl,
+          photo: uploadedPhotoUrls[0] || therapist.photoUrl,
+          photos: uploadedPhotoUrls.length > 0 ? uploadedPhotoUrls : [therapist.photoUrl],
           name: therapist.name,
           type: 'therapist', // デフォルト値
+          tags: therapist.tags,
         };
         
         if (therapist.age !== undefined) profileData.age = therapist.age;
