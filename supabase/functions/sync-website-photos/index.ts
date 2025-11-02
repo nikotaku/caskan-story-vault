@@ -1,10 +1,34 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+interface TherapistData {
+  name: string;
+  photoUrl: string;
+  castId: string;
+  age: number;
+  height?: number;
+  bust?: number;
+  cupSize?: string;
+  waist?: number;
+  hip?: number;
+  bodyType?: string;
+  experienceYears?: number;
+  specialties?: string;
+  bloodType?: string;
+  favoriteFood?: string;
+  idealType?: string;
+  celebrityLookalike?: string;
+  dayOffActivities?: string;
+  hobbies?: string;
+  message?: string;
+  xAccount?: string;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -31,111 +55,161 @@ serve(async (req) => {
     
     const html = await websiteResponse.text();
     
-    // エステ魂サイトのHTML解析
-    interface TherapistData {
-      name: string;
-      photoUrl: string;
-      castId: string;
-      age?: number;
-      height?: number;
-      bust?: number;
-      cupSize?: string;
-      waist?: number;
-      hip?: number;
-      bodyType?: string;
-      experienceYears?: number;
-      specialties?: string;
-      bloodType?: string;
-      favoriteFood?: string;
-      idealType?: string;
-      celebrityLookalike?: string;
-      dayOffActivities?: string;
-      hobbies?: string;
-      message?: string;
-      xAccount?: string;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    if (!doc) {
+      throw new Error('Failed to parse HTML');
     }
     
     const therapists: TherapistData[] = [];
-
-    // 各セラピストのブロックを抽出
-    // パターン: 画像 -> 名前(年齢) -> サイズ -> VIEW DETAILリンク
-    const castBlockRegex = /!\[([^\]]+)\]\((https:\/\/img\.estama\.jp\/shop_data\/[^\)]+)\)[\s\S]*?####\s*([^\(]+)\((\d+)\)[\s\S]*?\[VIEW DETAIL\]\(https:\/\/estama\.jp\/shop\/43923\/cast\/(\d+)\/\)/g;
-    let match;
     
-    while ((match = castBlockRegex.exec(html)) !== null) {
-      const name = match[3].trim();
-      const photoUrl = match[2];
-      const age = parseInt(match[4]);
-      const castId = match[5];
-      
-      if (name && photoUrl && castId) {
-        console.log(`Found therapist: ${name} (ID: ${castId})`);
+    // 各セラピストのブロックを取得
+    const castBlocks = doc.querySelectorAll('.mix');
+    
+    console.log(`Found ${castBlocks.length} cast blocks on page`);
+    
+    for (const block of castBlocks) {
+      try {
+        // 画像URLを取得
+        const imgElement = block.querySelector('.therapist__img');
+        const photoUrl = imgElement?.getAttribute('src');
+        const altName = imgElement?.getAttribute('alt');
+        
+        // 名前と年齢を取得
+        const h4Element = block.querySelector('h4');
+        const h4Text = h4Element?.textContent?.trim() || '';
+        const nameMatch = h4Text.match(/^(.+?)\((\d+)\)$/);
+        
+        // 詳細ページURLを取得
+        const linkElement = block.querySelector('.link-detail');
+        const detailUrl = linkElement?.getAttribute('href');
+        const castIdMatch = detailUrl?.match(/\/cast\/(\d+)\//);
+        
+        if (!photoUrl || !nameMatch || !castIdMatch) {
+          console.log('Skipping incomplete cast entry');
+          continue;
+        }
+        
+        const name = nameMatch[1].trim();
+        const age = parseInt(nameMatch[2]);
+        const castId = castIdMatch[1];
+        
+        console.log(`Processing: ${name} (${age}) - ID: ${castId}`);
+        
+        // サイズ情報を取得
+        const sizeElement = block.querySelector('.therapist_details p');
+        const sizeText = sizeElement?.textContent?.trim() || '';
+        const sizeMatch = sizeText.match(/T\.(\d+)\s+B\.(\d+)\(([A-Z])\)\s+W\.(\d+)\s+H\.(\d+)/);
+        
+        const therapistData: TherapistData = {
+          name: name,
+          photoUrl: photoUrl,
+          castId: castId,
+          age: age,
+        };
+        
+        if (sizeMatch) {
+          therapistData.height = parseInt(sizeMatch[1]);
+          therapistData.bust = parseInt(sizeMatch[2]);
+          therapistData.cupSize = sizeMatch[3];
+          therapistData.waist = parseInt(sizeMatch[4]);
+          therapistData.hip = parseInt(sizeMatch[5]);
+        }
         
         // 詳細ページから追加情報を取得
         try {
-          const detailResponse = await fetch(`https://estama.jp/shop/43923/cast/${castId}/`);
+          console.log(`Fetching detail page: ${detailUrl}`);
+          const detailResponse = await fetch(detailUrl);
           
           if (detailResponse.ok) {
             const detailHtml = await detailResponse.text();
+            const detailDoc = parser.parseFromString(detailHtml, 'text/html');
             
-            // サイズ情報を抽出: T.157B.85(E)W.58H.80
-            const sizeMatch = detailHtml.match(/T\.(\d+)B\.(\d+)\(([A-Z])\)W\.(\d+)H\.(\d+)/);
-            
-            // プロフィール詳細を抽出
-            const profileMatch = detailHtml.match(/体型([^\s]+)エステ歴(\d+)年得意な施術([^血]+)血液型([^\s]+)好きな食べ物([^好]+)好きな男性のタイプ([^似]+)似ている芸能人([^休]+)休みの日は何してる？([^趣]+)趣味・特技([^セ]+)/);
-            
-            // メッセージを抽出
-            const messageMatch = detailHtml.match(/セラピストからのメッセージ<\/h2>\s*<p[^>]*>([\s\S]*?)<\/p>/);
-            
-            // Xアカウントを抽出
-            const xAccountMatch = detailHtml.match(/https:\/\/twitter\.com\/([^"']+)/);
-            
-            therapists.push({
-              name: name.toUpperCase(),
-              photoUrl: photoUrl,
-              castId: castId,
-              age: age,
-              height: sizeMatch ? parseInt(sizeMatch[1]) : undefined,
-              bust: sizeMatch ? parseInt(sizeMatch[2]) : undefined,
-              cupSize: sizeMatch ? sizeMatch[3] : undefined,
-              waist: sizeMatch ? parseInt(sizeMatch[4]) : undefined,
-              hip: sizeMatch ? parseInt(sizeMatch[5]) : undefined,
-              bodyType: profileMatch ? profileMatch[1] : undefined,
-              experienceYears: profileMatch ? parseInt(profileMatch[2]) : undefined,
-              specialties: profileMatch ? profileMatch[3].trim() : undefined,
-              bloodType: profileMatch ? profileMatch[4] : undefined,
-              favoriteFood: profileMatch ? profileMatch[5].trim() : undefined,
-              idealType: profileMatch ? profileMatch[6].trim() : undefined,
-              celebrityLookalike: profileMatch ? profileMatch[7].trim() : undefined,
-              dayOffActivities: profileMatch ? profileMatch[8].trim() : undefined,
-              hobbies: profileMatch ? profileMatch[9].trim() : undefined,
-              message: messageMatch ? messageMatch[1].replace(/<[^>]+>/g, '').trim() : undefined,
-              xAccount: xAccountMatch ? xAccountMatch[1] : undefined,
-            });
+            if (detailDoc) {
+              // プロフィールテーブルから情報を抽出
+              const profileRows = detailDoc.querySelectorAll('.therapist__profile-table tr');
+              
+              for (const row of profileRows) {
+                const th = row.querySelector('th')?.textContent?.trim();
+                const td = row.querySelector('td')?.textContent?.trim();
+                
+                if (!th || !td) continue;
+                
+                switch (th) {
+                  case '体型':
+                    therapistData.bodyType = td;
+                    break;
+                  case 'エステ歴':
+                    const yearsMatch = td.match(/(\d+)/);
+                    if (yearsMatch) {
+                      therapistData.experienceYears = parseInt(yearsMatch[1]);
+                    }
+                    break;
+                  case '得意な施術':
+                    therapistData.specialties = td;
+                    break;
+                  case '血液型':
+                    therapistData.bloodType = td;
+                    break;
+                  case '好きな食べ物':
+                    therapistData.favoriteFood = td;
+                    break;
+                  case '好きな男性のタイプ':
+                    therapistData.idealType = td;
+                    break;
+                  case '似ている芸能人':
+                    therapistData.celebrityLookalike = td;
+                    break;
+                  case '休みの日は何してる？':
+                    therapistData.dayOffActivities = td;
+                    break;
+                  case '趣味・特技':
+                    therapistData.hobbies = td;
+                    break;
+                }
+              }
+              
+              // メッセージを抽出
+              const messageSection = detailDoc.querySelector('.therapist__message');
+              if (messageSection) {
+                const messageParagraphs = messageSection.querySelectorAll('p');
+                const messages: string[] = [];
+                for (const p of messageParagraphs) {
+                  const text = p.textContent?.trim();
+                  if (text) messages.push(text);
+                }
+                therapistData.message = messages.join('\n');
+              }
+              
+              // Xアカウントを抽出
+              const xLink = detailDoc.querySelector('a[href*="twitter.com"], a[href*="x.com"]');
+              if (xLink) {
+                const href = xLink.getAttribute('href');
+                const xMatch = href?.match(/(?:twitter\.com|x\.com)\/([^\/\?]+)/);
+                if (xMatch) {
+                  therapistData.xAccount = xMatch[1];
+                }
+              }
+            }
           } else {
             console.log(`Failed to fetch detail page for ${name}: ${detailResponse.status}`);
-            // 詳細情報なしでも基本情報は保存
-            therapists.push({
-              name: name.toUpperCase(),
-              photoUrl: photoUrl,
-              castId: castId,
-              age: age,
-            });
           }
         } catch (error) {
           console.error(`Error fetching detail page for ${name}:`, error);
-          // 詳細情報なしでも基本情報は保存
-          therapists.push({
-            name: name.toUpperCase(),
-            photoUrl: photoUrl,
-            castId: castId,
-            age: age,
-          });
         }
+        
+        therapists.push(therapistData);
+        
+        // レート制限を避けるため、少し待機
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (error) {
+        console.error('Error processing cast block:', error);
       }
     }
 
-    console.log(`Found ${therapists.length} therapists on website`);
+    console.log(`Successfully parsed ${therapists.length} therapists`);
 
     const syncResults = [];
     const errors = [];
@@ -146,7 +220,7 @@ serve(async (req) => {
         // 名前で検索（大文字小文字を区別しない）
         const { data: existingCast, error: searchError } = await supabase
           .from('casts')
-          .select('id, name, photo')
+          .select('id, name')
           .ilike('name', therapist.name)
           .maybeSingle();
 
@@ -190,18 +264,25 @@ serve(async (req) => {
             console.error(`Error updating ${therapist.name}:`, updateError);
             errors.push({ name: therapist.name, error: updateError.message });
           } else {
-            console.log(`Updated profile for ${therapist.name}`);
+            console.log(`✓ Updated profile for ${therapist.name}`);
             syncResults.push({
               name: therapist.name,
               action: 'updated',
-              photoUrl: therapist.photoUrl
+              photoUrl: therapist.photoUrl,
+              profileData: {
+                age: therapist.age,
+                height: therapist.height,
+                measurements: therapist.bust && therapist.waist && therapist.hip 
+                  ? `${therapist.bust}(${therapist.cupSize})-${therapist.waist}-${therapist.hip}`
+                  : undefined,
+              }
             });
           }
         } else {
           console.log(`No matching cast found for ${therapist.name}`);
           errors.push({ 
             name: therapist.name, 
-            error: 'Cast not found in database' 
+            error: 'Cast not found in database. Please add this therapist manually first.' 
           });
         }
       } catch (error) {
@@ -218,6 +299,7 @@ serve(async (req) => {
         success: true,
         synced: syncResults.length,
         errors: errors.length,
+        total: therapists.length,
         details: {
           syncResults,
           errors,

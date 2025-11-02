@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.generate-sms-message]
 verify_jwt = true
+
+[functions.sync-website-photos]
+verify_jwt = true
