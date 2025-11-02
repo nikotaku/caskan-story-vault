@@ -27,6 +27,7 @@ import NotionPageView from "./pages/NotionPageView";
 import BookingReservation from "./pages/public/BookingReservation";
 import TextGeneration from "./pages/TextGeneration";
 import EstamaIntegration from "./pages/EstamaIntegration";
+import Agreement from "./pages/Agreement";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
           <Route path="/shift/submission" element={<ShiftSubmission />} />
           <Route path="/reservations" element={<Reservations />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/agreement" element={<Agreement />} />
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
           <Route path="/salary" element={<Salary />} />

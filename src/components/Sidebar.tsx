@@ -19,7 +19,8 @@ import {
   ExternalLink,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ const menuItems = [
   { href: "/shift", label: "シフト", icon: Clock },
   { href: "/reservations", label: "予約管理", icon: BookOpen },
   { href: "/customers", label: "顧客管理", icon: UserCheck },
+  { href: "/agreement", label: "誓約書", icon: FileText },
   { href: "/pricing-management", label: "料金設定", icon: DollarSign },
   { href: "/salary", label: "給与", icon: Wallet },
   { href: "/report", label: "レポート", icon: BarChart3 },
