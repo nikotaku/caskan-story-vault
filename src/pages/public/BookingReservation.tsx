@@ -25,6 +25,24 @@ interface Cast {
   status: string;
 }
 
+interface Shift {
+  id: string;
+  cast_id: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  room: string | null;
+  status: string;
+}
+
+interface Reservation {
+  id: string;
+  cast_id: string;
+  reservation_date: string;
+  start_time: string;
+  duration: number;
+}
+
 interface BackRate {
   id: string;
   course_type: string;
@@ -56,6 +74,9 @@ const BookingReservation = () => {
   const [backRates, setBackRates] = useState<BackRate[]>([]);
   const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
   const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   
@@ -79,6 +100,22 @@ const BookingReservation = () => {
     fetchCasts();
     fetchRates();
   }, []);
+
+  // Fetch shifts and reservations when date or cast changes
+  useEffect(() => {
+    if (selectedDate && selectedCastId) {
+      fetchShiftsAndReservations();
+    } else {
+      setAvailableTimeSlots([]);
+    }
+  }, [selectedDate, selectedCastId]);
+
+  // Calculate available time slots when shifts, reservations, or duration changes
+  useEffect(() => {
+    if (selectedDate && selectedCastId && shifts.length > 0) {
+      calculateAvailableTimeSlots();
+    }
+  }, [shifts, reservations, duration, selectedDate, selectedCastId]);
 
   // Calculate price when course, options, or nomination changes
   useEffect(() => {
@@ -157,6 +194,88 @@ const BookingReservation = () => {
       if (nominationData) setNominationRates(nominationData);
     } catch (error) {
       console.error('Error fetching rates:', error);
+    }
+  };
+
+  const fetchShiftsAndReservations = async () => {
+    if (!selectedDate || !selectedCastId) return;
+
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+    try {
+      const { data: shiftsData, error: shiftsError } = await supabase
+        .from("shifts")
+        .select("*")
+        .eq("cast_id", selectedCastId)
+        .eq("shift_date", dateStr);
+
+      const { data: reservationsData, error: reservationsError } = await supabase
+        .from("reservations")
+        .select("*")
+        .eq("cast_id", selectedCastId)
+        .eq("reservation_date", dateStr);
+
+      if (shiftsError) throw shiftsError;
+      if (reservationsError) throw reservationsError;
+
+      setShifts(shiftsData || []);
+      setReservations(reservationsData || []);
+    } catch (error) {
+      console.error("Error fetching shifts and reservations:", error);
+      toast({
+        title: "エラー",
+        description: "スケジュール情報の取得に失敗しました",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const calculateAvailableTimeSlots = () => {
+    if (!selectedDate || !selectedCastId || shifts.length === 0) {
+      setAvailableTimeSlots([]);
+      return;
+    }
+
+    const shift = shifts[0]; // 1日1シフトを想定
+    if (!shift) {
+      setAvailableTimeSlots([]);
+      return;
+    }
+
+    // シフト時間をパース
+    const [shiftStartHour, shiftStartMinute] = shift.start_time.split(':').map(Number);
+    const [shiftEndHour, shiftEndMinute] = shift.end_time.split(':').map(Number);
+    
+    const shiftStart = shiftStartHour * 60 + shiftStartMinute;
+    const shiftEnd = shiftEndHour * 60 + shiftEndMinute;
+
+    // 30分刻みで可能な時間を生成
+    const slots: string[] = [];
+    for (let time = shiftStart; time + duration <= shiftEnd; time += 30) {
+      const hour = Math.floor(time / 60);
+      const minute = time % 60;
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+      // この時間帯に予約が重複しないかチェック
+      const isBooked = reservations.some(reservation => {
+        const [resHour, resMinute] = reservation.start_time.split(':').map(Number);
+        const resStart = resHour * 60 + resMinute;
+        const resEnd = resStart + reservation.duration;
+
+        // 重複判定
+        return (time < resEnd && time + duration > resStart);
+      });
+
+      if (!isBooked) {
+        slots.push(timeStr);
+      }
+    }
+
+    setAvailableTimeSlots(slots);
+    
+    // 最初の利用可能な時間を選択
+    if (slots.length > 0 && !slots.includes(startTime)) {
+      setStartTime(slots[0]);
     }
   };
 
@@ -502,8 +621,9 @@ const BookingReservation = () => {
                           mode="single"
                           selected={selectedDate}
                           onSelect={setSelectedDate}
-                          disabled={(date) => date < new Date()}
+                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                           initialFocus
+                          locale={ja}
                           className="pointer-events-auto"
                         />
                       </PopoverContent>
@@ -512,13 +632,26 @@ const BookingReservation = () => {
 
                   <div>
                     <Label htmlFor="start_time">開始時刻 *</Label>
-                    <Input
-                      id="start_time"
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      required
-                    />
+                    {availableTimeSlots.length > 0 ? (
+                      <Select value={startTime} onValueChange={setStartTime} required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="時間を選択してください" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTimeSlots.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="text-sm text-muted-foreground p-2 border rounded">
+                        {selectedDate && selectedCastId 
+                          ? "選択されたセラピストは、この日時には空きがありません。"
+                          : "セラピストと日付を選択してください。"}
+                      </div>
+                    )}
                   </div>
 
                   <div>
