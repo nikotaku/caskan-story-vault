@@ -23,6 +23,11 @@ interface Cast {
   type: string;
   photo: string | null;
   status: string;
+  profile: string | null;
+  age: number | null;
+  height: number | null;
+  cup_size: string | null;
+  room: string | null;
 }
 
 interface Shift {
@@ -64,8 +69,9 @@ interface NominationRate {
 
 const reservationSchema = z.object({
   customer_name: z.string().trim().min(1, "お名前を入力してください").max(100, "お名前は100文字以内で入力してください"),
+  customer_furigana: z.string().trim().min(1, "フリガナを入力してください").max(100, "フリガナは100文字以内で入力してください"),
   customer_phone: z.string().trim().min(10, "電話番号を入力してください").max(20, "電話番号は20文字以内で入力してください"),
-  customer_email: z.string().trim().email("有効なメールアドレスを入力してください").max(255, "メールアドレスは255文字以内で入力してください").optional().or(z.literal("")),
+  customer_email: z.string().trim().email("有効なメールアドレスを入力してください").max(255, "メールアドレスは255文字以内で入力してください"),
   notes: z.string().max(1000, "備考は1000文字以内で入力してください").optional(),
 });
 
@@ -79,18 +85,23 @@ const BookingReservation = () => {
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number>(1);
   
-  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedCastId, setSelectedCastId] = useState<string>("");
   const [courseType, setCourseType] = useState<string>("aroma");
-  const [startTime, setStartTime] = useState<string>("14:00");
+  const [startTime, setStartTime] = useState<string>("");
   const [duration, setDuration] = useState<number>(80);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [nominationType, setNominationType] = useState<string>("none");
   const [customerName, setCustomerName] = useState<string>("");
+  const [customerFurigana, setCustomerFurigana] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [customerEmail, setCustomerEmail] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
+  const [referralSource, setReferralSource] = useState<string>("");
+  const [referralOther, setReferralOther] = useState<string>("");
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
   useEffect(() => {
@@ -162,7 +173,7 @@ const BookingReservation = () => {
     try {
       const { data, error } = await supabase
         .from("casts")
-        .select("id, name, type, photo, status")
+        .select("id, name, type, photo, status, profile, age, height, cup_size, room")
         .order("name");
 
       if (error) throw error;
@@ -240,33 +251,29 @@ const BookingReservation = () => {
       return;
     }
 
-    const shift = shifts[0]; // 1日1シフトを想定
+    const shift = shifts[0];
     if (!shift) {
       setAvailableTimeSlots([]);
       return;
     }
 
-    // シフト時間をパース
     const [shiftStartHour, shiftStartMinute] = shift.start_time.split(':').map(Number);
     const [shiftEndHour, shiftEndMinute] = shift.end_time.split(':').map(Number);
     
     const shiftStart = shiftStartHour * 60 + shiftStartMinute;
     const shiftEnd = shiftEndHour * 60 + shiftEndMinute;
 
-    // 30分刻みで可能な時間を生成
+    // 10分刻みで可能な時間を生成
     const slots: string[] = [];
-    for (let time = shiftStart; time + duration <= shiftEnd; time += 30) {
+    for (let time = shiftStart; time + duration <= shiftEnd; time += 10) {
       const hour = Math.floor(time / 60);
       const minute = time % 60;
       const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
-      // この時間帯に予約が重複しないかチェック
       const isBooked = reservations.some(reservation => {
         const [resHour, resMinute] = reservation.start_time.split(':').map(Number);
         const resStart = resHour * 60 + resMinute;
         const resEnd = resStart + reservation.duration;
-
-        // 重複判定
         return (time < resEnd && time + duration > resStart);
       });
 
@@ -277,7 +284,6 @@ const BookingReservation = () => {
 
     setAvailableTimeSlots(slots);
     
-    // 最初の利用可能な時間を選択
     if (slots.length > 0 && !slots.includes(startTime)) {
       setStartTime(slots[0]);
     }
@@ -286,10 +292,10 @@ const BookingReservation = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // バリデーション
     try {
       reservationSchema.parse({
         customer_name: customerName,
+        customer_furigana: customerFurigana,
         customer_phone: customerPhone,
         customer_email: customerEmail,
         notes: notes,
@@ -305,7 +311,7 @@ const BookingReservation = () => {
       }
     }
 
-    if (!selectedDate || !selectedCastId || !courseType) {
+    if (!selectedDate || !selectedCastId || !courseType || !startTime) {
       toast({
         title: "入力エラー",
         description: "必須項目をすべて入力してください",
@@ -327,7 +333,7 @@ const BookingReservation = () => {
           cast_id: selectedCastId,
           customer_name: customerName.trim(),
           customer_phone: customerPhone.trim(),
-          customer_email: customerEmail.trim() || null,
+          customer_email: customerEmail.trim(),
           reservation_date: format(selectedDate, "yyyy-MM-dd"),
           start_time: startTime,
           duration: duration,
@@ -339,7 +345,7 @@ const BookingReservation = () => {
           notes: notes.trim() || null,
           status: "pending",
           payment_status: "unpaid",
-          created_by: "00000000-0000-0000-0000-000000000000", // 匿名ユーザー
+          created_by: "00000000-0000-0000-0000-000000000000",
         }]);
 
       if (error) throw error;
@@ -349,22 +355,8 @@ const BookingReservation = () => {
         description: "ご予約を承りました。担当者より確認のご連絡をさせていただきます。",
       });
 
-      // フォームをリセット
-      setSelectedDate(undefined);
-      setSelectedCastId("");
-      setCourseType("aroma");
-      setStartTime("14:00");
-      setDuration(80);
-      setSelectedOptions([]);
-      setNominationType("none");
-      setCustomerName("");
-      setCustomerPhone("");
-      setCustomerEmail("");
-      setNotes("");
-
-      // 少し待ってからトップページに戻る
       setTimeout(() => {
-        navigate("/public");
+        navigate("/");
       }, 2000);
     } catch (error) {
       console.error("Error creating reservation:", error);
@@ -377,6 +369,19 @@ const BookingReservation = () => {
       setSubmitting(false);
     }
   };
+
+  const selectedCast = casts.find(c => c.id === selectedCastId);
+
+  const referralSources = [
+    "メンズエステランキング", "エステ魂", "メンズエステマガジン", "週刊エステ",
+    "アロマパンダ", "シティヘブン", "駅ちか", "口コミ風俗情報局",
+    "X（旧Twitter）", "TikTok", "Instagram", "GoogleMap",
+    "店舗HP", "看板", "知人の紹介", "エステクイーン",
+    "エステアイ", "エスナビ", "ME（メンエス）", "メンズエステタウン",
+    "メンズエステLIFE", "メンズリラク", "メンズエステガイド", "エステラブ",
+    "エステナビ", "メンエスじゃぱん", "メンエスイキタイ", "エスラブ",
+    "エステ図鑑", "チョイエス", "メンズビズ", "該当なし"
+  ];
 
   if (loading) {
     return (
@@ -436,7 +441,7 @@ const BookingReservation = () => {
       </nav>
 
       <main className="container py-8 px-4">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h1 
             className="text-4xl font-bold mb-2 text-center"
             style={{ 
@@ -445,292 +450,503 @@ const BookingReservation = () => {
               letterSpacing: "0.1em"
             }}
           >
-            BOOKING - WEB予約
+            WEB予約
           </h1>
           <p className="text-center mb-8" style={{ color: "#a89586" }}>
-            下記のフォームよりご予約ください。担当者より確認のご連絡をさせていただきます。
+            下記のフォームよりご予約ください
           </p>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>予約情報入力</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* セラピスト選択 */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    セラピストを選択
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {casts.map((cast) => (
-                      <Card
-                        key={cast.id}
-                        className={cn(
-                          "cursor-pointer transition-all hover:shadow-lg",
-                          selectedCastId === cast.id 
-                            ? "ring-2 ring-[#d4a574] shadow-lg" 
-                            : "hover:ring-1 hover:ring-[#d4b5a8]"
-                        )}
-                        onClick={() => setSelectedCastId(cast.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="aspect-[3/4] mb-3 overflow-hidden rounded-md bg-muted">
-                            {cast.photo ? (
-                              <img 
-                                src={cast.photo} 
-                                alt={cast.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                <User className="h-12 w-12" />
-                              </div>
-                            )}
-                          </div>
-                          <h4 className="font-semibold text-center mb-1" style={{ color: "#8b7355" }}>
-                            {cast.name}
-                          </h4>
-                          <p className="text-sm text-center text-muted-foreground">
-                            {cast.type}
-                          </p>
-                          <div className="mt-2 text-center">
-                            <span className={cn(
-                              "text-xs px-2 py-1 rounded-full",
-                              cast.status === "online" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-                            )}>
-                              {cast.status === "online" ? "出勤中" : "待機"}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+          {/* ステップインジケーター */}
+          <div className="flex justify-center mb-8">
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4].map((step) => (
+                <div key={step} className="flex items-center">
+                  <div
+                    className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all",
+                      currentStep === step
+                        ? "bg-[#d4a574] text-white"
+                        : currentStep > step
+                        ? "bg-[#d4b5a8] text-white"
+                        : "bg-gray-200 text-gray-500"
+                    )}
+                  >
+                    {step}
                   </div>
-                  {!selectedCastId && (
-                    <p className="text-sm text-muted-foreground text-center">
-                      ※セラピストを選択してください
-                    </p>
+                  {step < 4 && (
+                    <div
+                      className={cn(
+                        "w-12 h-1 mx-2",
+                        currentStep > step ? "bg-[#d4b5a8]" : "bg-gray-200"
+                      )}
+                    />
                   )}
                 </div>
+              ))}
+            </div>
+          </div>
 
-                {/* 予約内容 */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <CalendarIcon className="h-5 w-5" />
-                    予約内容
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>コースタイプ *</Label>
-                      <Select value={courseType} onValueChange={setCourseType} required>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="aroma">アロマオイルコース</SelectItem>
-                          <SelectItem value="zenryoku">全力コース（無限DR/🔥）</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>時間 *</Label>
-                      <Select value={duration.toString()} onValueChange={(v) => setDuration(parseInt(v))} required>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {courseType === "aroma" ? (
-                            <>
-                              <SelectItem value="80">80分 - ¥12,000</SelectItem>
-                              <SelectItem value="100">100分 - ¥15,000</SelectItem>
-                              <SelectItem value="120">120分 - ¥18,000</SelectItem>
-                            </>
-                          ) : (
-                            <>
-                              <SelectItem value="60">60分 - ¥15,000</SelectItem>
-                              <SelectItem value="80">80分 - ¥19,000</SelectItem>
-                            </>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
+          <Card>
+            <CardContent className="p-6">
+              {/* ステップ1: セラピスト選択 */}
+              {currentStep === 1 && (
+                <div className="space-y-6">
                   <div>
-                    <Label>オプション</Label>
-                    <div className="space-y-2 mt-2">
-                      {optionRates.map((option) => (
-                        <div key={option.id} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id={`option-${option.id}`}
-                            checked={selectedOptions.includes(option.option_name)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedOptions([...selectedOptions, option.option_name]);
-                              } else {
-                                setSelectedOptions(selectedOptions.filter(o => o !== option.option_name));
-                              }
-                            }}
-                            className="rounded border-gray-300"
-                          />
-                          <label htmlFor={`option-${option.id}`} className="text-sm">
-                            {option.option_name} (+¥{option.customer_price.toLocaleString()})
-                          </label>
-                        </div>
+                    <h2 className="text-2xl font-bold mb-4" style={{ color: "#8b7355" }}>
+                      1. セラピストを選んでください
+                    </h2>
+                    
+                    {/* 日付選択 */}
+                    <div className="flex items-center justify-center gap-4 mb-6">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newDate = new Date(selectedDate);
+                          newDate.setDate(newDate.getDate() - 1);
+                          setSelectedDate(newDate);
+                        }}
+                      >
+                        前の日
+                      </Button>
+                      <div className="text-lg font-semibold" style={{ color: "#8b7355" }}>
+                        {format(selectedDate, "M月d日 (E)", { locale: ja })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newDate = new Date(selectedDate);
+                          newDate.setDate(newDate.getDate() + 1);
+                          setSelectedDate(newDate);
+                        }}
+                      >
+                        次の日
+                      </Button>
+                    </div>
+
+                    {/* セラピストカード */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {casts.map((cast) => (
+                        <Card
+                          key={cast.id}
+                          className={cn(
+                            "cursor-pointer transition-all hover:shadow-lg",
+                            selectedCastId === cast.id 
+                              ? "ring-2 ring-[#d4a574] shadow-lg" 
+                              : "hover:ring-1 hover:ring-[#d4b5a8]"
+                          )}
+                          onClick={() => setSelectedCastId(cast.id)}
+                        >
+                          <CardContent className="p-0">
+                            <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted">
+                              {cast.photo ? (
+                                <img 
+                                  src={cast.photo} 
+                                  alt={cast.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                  <User className="h-12 w-12" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-4">
+                              <h3 className="text-xl font-bold mb-1" style={{ color: "#8b7355" }}>
+                                {cast.name}
+                              </h3>
+                              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                {cast.profile || "プロフィール情報なし"}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                                <span>{cast.age || "-"}歳</span>
+                                <span>•</span>
+                                <span>{cast.height || "-"}cm</span>
+                                {cast.cup_size && (
+                                  <>
+                                    <span>•</span>
+                                    <span>({cast.cup_size})</span>
+                                  </>
+                                )}
+                              </div>
+                              {cast.room && (
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  ■{cast.room}■
+                                </p>
+                              )}
+                              <Button
+                                className="w-full"
+                                variant={selectedCastId === cast.id ? "default" : "outline"}
+                              >
+                                {selectedCastId === cast.id ? "選択中" : "予約"}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
                       ))}
                     </div>
                   </div>
-
-                  <div>
-                    <Label>指名</Label>
-                    <Select value={nominationType} onValueChange={setNominationType}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">指名なし</SelectItem>
-                        {nominationRates.map((nom) => (
-                          <SelectItem key={nom.id} value={nom.nomination_type}>
-                            {nom.nomination_type} (+¥{nom.customer_price.toLocaleString()})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => {
+                        if (!selectedCastId) {
+                          toast({
+                            title: "セラピストを選択してください",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setCurrentStep(2);
+                      }}
+                      size="lg"
+                    >
+                      次へ
+                    </Button>
                   </div>
+                </div>
+              )}
 
+              {/* ステップ2: 時間選択 */}
+              {currentStep === 2 && (
+                <div className="space-y-6">
                   <div>
-                    <Label>ご希望日 *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !selectedDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {selectedDate ? format(selectedDate, "PPP", { locale: ja }) : <span>日付を選択</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={selectedDate}
-                          onSelect={setSelectedDate}
-                          disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                          initialFocus
-                          locale={ja}
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="start_time">開始時刻 *</Label>
+                    <h2 className="text-2xl font-bold mb-4" style={{ color: "#8b7355" }}>
+                      2. 予約時間を選んでください
+                    </h2>
+                    {selectedCast && (
+                      <div className="mb-4 p-4 bg-muted rounded-lg">
+                        <p className="font-semibold">選択中: {selectedCast.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {format(selectedDate, "M月d日 (E)", { locale: ja })}
+                        </p>
+                      </div>
+                    )}
                     {availableTimeSlots.length > 0 ? (
-                      <Select value={startTime} onValueChange={setStartTime} required>
+                      <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                        {availableTimeSlots.map((time) => (
+                          <Button
+                            key={time}
+                            variant={startTime === time ? "default" : "outline"}
+                            onClick={() => setStartTime(time)}
+                            className="h-12"
+                          >
+                            {time}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center p-8 text-muted-foreground">
+                        この日は空きがありません
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                      戻る
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (!startTime) {
+                          toast({
+                            title: "時間を選択してください",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setCurrentStep(3);
+                      }}
+                      size="lg"
+                    >
+                      次へ
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ステップ3: コース・オプション選択 */}
+              {currentStep === 3 && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold mb-4" style={{ color: "#8b7355" }}>
+                    3. コースを選んでください
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    {/* アロマオイルコース */}
+                    <div
+                      className={cn(
+                        "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                        courseType === "aroma" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
+                      )}
+                      onClick={() => setCourseType("aroma")}
+                    >
+                      <h3 className="text-lg font-bold mb-2">アロマオイルコース</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        クイーンオイルを使用して全身で全身をアロマオイルトリートメントしていきます。
+                      </p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button
+                          variant={courseType === "aroma" && duration === 80 ? "default" : "outline"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseType("aroma");
+                            setDuration(80);
+                          }}
+                        >
+                          80分<br/>¥12,000
+                        </Button>
+                        <Button
+                          variant={courseType === "aroma" && duration === 100 ? "default" : "outline"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseType("aroma");
+                            setDuration(100);
+                          }}
+                        >
+                          100分<br/>¥15,000
+                        </Button>
+                        <Button
+                          variant={courseType === "aroma" && duration === 120 ? "default" : "outline"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseType("aroma");
+                            setDuration(120);
+                          }}
+                        >
+                          120分<br/>¥18,000
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* 全力コース */}
+                    <div
+                      className={cn(
+                        "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                        courseType === "zenryoku" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
+                      )}
+                      onClick={() => setCourseType("zenryoku")}
+                    >
+                      <h3 className="text-lg font-bold mb-2">疲れも悩みも全てを出し切るSPコース</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant={courseType === "zenryoku" && duration === 60 ? "default" : "outline"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseType("zenryoku");
+                            setDuration(60);
+                          }}
+                        >
+                          60分<br/>¥15,000
+                        </Button>
+                        <Button
+                          variant={courseType === "zenryoku" && duration === 80 ? "default" : "outline"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCourseType("zenryoku");
+                            setDuration(80);
+                          }}
+                        >
+                          80分<br/>¥19,000
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* オプション */}
+                    <div>
+                      <h3 className="font-semibold mb-2">オプション</h3>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        ※オプションはセラピストごとに異なりますのでお問い合わせ下さい。
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {optionRates.map((option) => (
+                          <div
+                            key={option.id}
+                            className={cn(
+                              "border rounded-lg p-3 cursor-pointer transition-all",
+                              selectedOptions.includes(option.option_name)
+                                ? "border-[#d4a574] bg-[#f5e8e4]/50"
+                                : "border-gray-200"
+                            )}
+                            onClick={() => {
+                              if (selectedOptions.includes(option.option_name)) {
+                                setSelectedOptions(selectedOptions.filter(o => o !== option.option_name));
+                              } else {
+                                setSelectedOptions([...selectedOptions, option.option_name]);
+                              }
+                            }}
+                          >
+                            <div className="font-semibold">{option.option_name}</div>
+                            <div className="text-sm">+¥{option.customer_price.toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 合計金額 */}
+                    <div className="bg-muted p-4 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-lg font-semibold">合計金額:</span>
+                        <span className="text-2xl font-bold" style={{ color: "#d4a574" }}>
+                          ¥{totalPrice.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                      戻る
+                    </Button>
+                    <Button onClick={() => setCurrentStep(4)} size="lg">
+                      次へ
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ステップ4: お客様情報入力 */}
+              {currentStep === 4 && (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <h2 className="text-2xl font-bold mb-4" style={{ color: "#8b7355" }}>
+                    4. お客様情報をご入力ください
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="customer_name">お名前（必須）</Label>
+                      <Input
+                        id="customer_name"
+                        placeholder="山田太郎"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        required
+                        maxLength={100}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="customer_furigana">フリガナ（必須）</Label>
+                      <Input
+                        id="customer_furigana"
+                        placeholder="ヤマダタロウ"
+                        value={customerFurigana}
+                        onChange={(e) => setCustomerFurigana(e.target.value)}
+                        required
+                        maxLength={100}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">カタカナ or ひらがな</p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="customer_email">メールアドレス（必須）</Label>
+                      <Input
+                        id="customer_email"
+                        type="email"
+                        placeholder="example@email.com"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        required
+                        maxLength={255}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="customer_phone">電話番号（必須）</Label>
+                      <Input
+                        id="customer_phone"
+                        type="tel"
+                        placeholder="090-1234-5678"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        required
+                        maxLength={20}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="notes">その他ご希望</Label>
+                      <Textarea
+                        id="notes"
+                        rows={4}
+                        placeholder="ご要望やご質問などがございましたらご記入ください"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        maxLength={1000}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>お支払い方法</Label>
+                      <div className="space-y-2 mt-2">
+                        {[
+                          { value: "cash", label: "現金" },
+                          { value: "card", label: "カード（別途手数料が発生します）" },
+                          { value: "paypay", label: "PayPay（別途手数料が発生します）" },
+                        ].map((method) => (
+                          <div key={method.value} className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id={`payment-${method.value}`}
+                              checked={paymentMethod === method.value}
+                              onChange={() => setPaymentMethod(method.value)}
+                              className="rounded-full"
+                            />
+                            <label htmlFor={`payment-${method.value}`} className="text-sm">
+                              {method.label}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <h4 className="font-semibold mb-2">注意事項</h4>
+                      <p className="text-sm text-muted-foreground">
+                        『08031921209』より予約詳細をショートメッセージにてお送りします。必ずショートメッセージを受け取れるように設定をお願いします。また、ひとこと返信をいただいた時点で予約確定となります。<br/>
+                        領収書の発行は出来かねます。ご了承ください。
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label>当店を知ったきっかけを教えてください</Label>
+                      <Select value={referralSource} onValueChange={setReferralSource}>
                         <SelectTrigger>
-                          <SelectValue placeholder="時間を選択してください" />
+                          <SelectValue placeholder="選択肢から選んでください" />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableTimeSlots.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
+                          {referralSources.map((source) => (
+                            <SelectItem key={source} value={source}>
+                              {source}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    ) : (
-                      <div className="text-sm text-muted-foreground p-2 border rounded">
-                        {selectedDate && selectedCastId 
-                          ? "選択されたセラピストは、この日時には空きがありません。"
-                          : "セラピストと日付を選択してください。"}
+                    </div>
+
+                    {referralSource && !referralSources.includes(referralSource) && (
+                      <div>
+                        <Label htmlFor="referral_other">選択肢にない場合はこちらに記入ください</Label>
+                        <Input
+                          id="referral_other"
+                          placeholder="その他の情報源"
+                          value={referralOther}
+                          onChange={(e) => setReferralOther(e.target.value)}
+                          maxLength={100}
+                        />
                       </div>
                     )}
                   </div>
 
-                  <div>
-                    <Label htmlFor="notes">ご要望・備考（任意）</Label>
-                    <Textarea
-                      id="notes"
-                      rows={4}
-                      placeholder="ご要望やご質問などがございましたらご記入ください"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      maxLength={1000}
-                    />
+                  <div className="flex justify-between">
+                    <Button type="button" variant="outline" onClick={() => setCurrentStep(3)}>
+                      戻る
+                    </Button>
+                    <Button type="submit" size="lg" disabled={submitting}>
+                      {submitting ? "送信中..." : "確認画面へ"}
+                    </Button>
                   </div>
-
-                  <div className="bg-muted p-4 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">合計金額:</span>
-                      <span className="text-2xl font-bold" style={{ color: "#d4a574" }}>
-                        ¥{totalPrice.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* お客様情報 */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    お客様情報
-                  </h3>
-                  
-                  <div>
-                    <Label htmlFor="customer_name">お名前 *</Label>
-                    <Input
-                      id="customer_name"
-                      placeholder="山田太郎"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      required
-                      maxLength={100}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="customer_phone">電話番号 *</Label>
-                    <Input
-                      id="customer_phone"
-                      type="tel"
-                      placeholder="090-1234-5678"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      required
-                      maxLength={20}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="customer_email">メールアドレス（任意）</Label>
-                    <Input
-                      id="customer_email"
-                      type="email"
-                      placeholder="example@email.com"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      maxLength={255}
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4">
-                  <Button type="submit" className="w-full" size="lg" disabled={submitting}>
-                    {submitting ? "送信中..." : "予約を確定する"}
-                  </Button>
-                  <p className="text-sm text-muted-foreground text-center mt-4">
-                    ※予約確定後、担当者より確認のご連絡をさせていただきます
-                  </p>
-                </div>
-              </form>
+                </form>
+              )}
             </CardContent>
           </Card>
         </div>
