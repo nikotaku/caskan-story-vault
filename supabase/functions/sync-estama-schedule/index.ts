@@ -31,11 +31,11 @@ serve(async (req) => {
 
     // エステ魂のスケジュールページを取得（次の7日間分）
     const shifts: EstamaShift[] = [];
-    const today = new Date();
+    const now = new Date();
     
     for (let i = 0; i < 7; i++) {
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + i);
+      const targetDate = new Date(now);
+      targetDate.setDate(now.getDate() + i);
       const dateStr = targetDate.toISOString().split('T')[0];
       
       // 日付ごとにページを取得
@@ -118,11 +118,11 @@ serve(async (req) => {
     console.log('Shifts to insert:', shiftsToInsert.length);
 
     // 既存のシフトを削除（今日以降）
-    const today = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
     const { error: deleteError } = await supabase
       .from('shifts')
       .delete()
-      .gte('shift_date', today);
+      .gte('shift_date', todayStr);
 
     if (deleteError) {
       console.error('Error deleting old shifts:', deleteError);
@@ -178,57 +178,54 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
       return shifts;
     }
     
-    // セラピストの勤務情報を含むテーブル行を探す
-    const rows = doc.querySelectorAll('tr');
+    // セラピストの勤務情報を含むセクションを探す
+    // エステ魂のHTMLではセラピスト情報がh4タグで表示される
+    const nameElements = doc.querySelectorAll('h4');
+    console.log(`Found ${nameElements.length} h4 elements`);
     
-    for (const row of rows) {
+    for (const nameElement of nameElements) {
       try {
-        // セラピスト名を探す（h4タグまたは特定のクラス）
-        const nameElement = row.querySelector('h4');
-        if (!nameElement) continue;
-        
         const fullText = nameElement.textContent?.trim() || '';
+        // 年齢を除去してセラピスト名を取得
         const castName = fullText.replace(/\(\d+\)/g, '').trim();
-        if (!castName) continue;
+        if (!castName || castName.length < 2) continue;
         
-        // セラピストのタイプを判定（バッジやラベルから）
-        let castType = 'standard'; // デフォルト
-        const parentContainer = row.closest('div');
+        console.log(`Processing cast: ${castName}`);
         
-        // エステ魂のHTMLではセラピストタイプがバッジやラベルで表示される
-        // 例：「新人」「本指名」「ランクアップ」など
-        if (parentContainer) {
-          const badges = parentContainer.querySelectorAll('.badge, span[class*="label"], span[class*="tag"]');
-          for (const badge of badges) {
-            const badgeText = badge.textContent?.trim().toLowerCase();
-            if (badgeText?.includes('新人') || badgeText?.includes('new')) {
-              castType = 'newbie';
-            } else if (badgeText?.includes('本指名') || badgeText?.includes('regular')) {
-              castType = 'regular';
-            } else if (badgeText?.includes('姫') || badgeText?.includes('premium')) {
-              castType = 'premium';
-            } else if (badgeText?.includes('ランクアップ')) {
-              castType = 'rankup';
-            }
-          }
-        }
+        // デフォルトのタイプ
+        let castType = 'therapist'; // デフォルトをtherapistに変更
         
-        // タイトルやURLからも判定を試みる
-        const linkElement = row.querySelector('a[href*="/cast/"]');
-        if (linkElement) {
-          const href = linkElement.getAttribute('href') || '';
-          // URLパターンから推測
-          if (href.includes('new') || href.includes('rookie')) {
+        // セラピストのタイプを親要素から判定
+        // HTMLを文字列として検索
+        const htmlStr = html.toLowerCase();
+        const castSection = htmlStr.indexOf(castName.toLowerCase());
+        
+        if (castSection >= 0) {
+          // セラピスト名の周辺1000文字を取得して判定
+          const contextStart = Math.max(0, castSection - 500);
+          const contextEnd = Math.min(htmlStr.length, castSection + 500);
+          const context = htmlStr.substring(contextStart, contextEnd);
+          
+          // バッジやラベルから判定
+          if (context.includes('新人') || context.includes('new')) {
             castType = 'newbie';
+          } else if (context.includes('本指名') || context.includes('regular')) {
+            castType = 'regular';
+          } else if (context.includes('姫') || context.includes('premium')) {
+            castType = 'premium';
+          } else if (context.includes('ランクアップ')) {
+            castType = 'rankup';
           }
         }
         
-        // 時間情報を探す
-        const timeCell = row.querySelector('td:last-child');
-        if (!timeCell) continue;
+        // シフト情報を探す（時間表示を検索）
+        // h4タグの後の要素から時間情報を探す
+        const timePattern = /(\d{1,2}:\d{2})/g;
+        const siblingText = nameElement.textContent + ' ' + (nameElement.nextSibling?.textContent || '');
+        const timeMatches = siblingText.match(timePattern);
         
-        const timeText = timeCell.textContent?.trim();
-        const timeMatches = timeText?.match(/(\d{1,2}):(\d{2})/g);
+        // ○マークの確認
+        const hasAvailable = siblingText.includes('○');
         
         if (timeMatches && timeMatches.length >= 2) {
           shifts.push({
@@ -240,6 +237,7 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
             room: null,
             castType: castType
           });
+          console.log(`Added shift for ${castName}: ${timeMatches[0]} - ${timeMatches[1]}`);
         } else if (timeMatches && timeMatches.length === 1) {
           shifts.push({
             castName: castName,
@@ -250,7 +248,8 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
             room: null,
             castType: castType
           });
-        } else if (timeText?.includes('○')) {
+          console.log(`Added shift for ${castName}: ${timeMatches[0]} - 26:00`);
+        } else if (hasAvailable) {
           shifts.push({
             castName: castName,
             date: dateStr,
@@ -260,9 +259,10 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
             room: null,
             castType: castType
           });
+          console.log(`Added shift for ${castName}: 12:00 - 26:00 (available)`);
         }
       } catch (rowError) {
-        console.error('Error parsing row:', rowError);
+        console.error('Error parsing cast:', rowError);
         continue;
       }
     }
