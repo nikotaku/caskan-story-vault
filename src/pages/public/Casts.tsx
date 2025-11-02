@@ -1,32 +1,29 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, Search } from "lucide-react";
 import { ChatBot } from "@/components/ChatBot";
 import caskanLogo from "@/assets/caskan-logo.png";
 
 interface Cast {
   id: string;
   name: string;
+  age: number | null;
+  height: number | null;
+  bust: number | null;
+  cup_size: string | null;
+  waist: number | null;
+  hip: number | null;
   type: string;
   status: string;
   photo: string | null;
-  photos: string[] | null;
-  profile: string | null;
-  room: string | null;
+  join_date: string;
 }
 
 const Casts = () => {
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<'all' | 'today' | 'newface'>('all');
 
   useEffect(() => {
     document.title = "全力エステ - セラピスト";
@@ -71,37 +68,38 @@ const Casts = () => {
     }
   };
 
-  const filteredCasts = casts.filter((cast) => {
-    const matchesSearch = cast.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = typeFilter === "all" || cast.type === typeFilter;
-    const matchesStatus = statusFilter === "all" || cast.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "working":
-        return "bg-green-500";
-      case "waiting":
-        return "bg-yellow-500";
-      case "offline":
-        return "bg-gray-500";
-      default:
-        return "bg-gray-500";
-    }
+  // 新人判定（入店から30日以内）
+  const isNewFace = (joinDate: string) => {
+    const join = new Date(joinDate);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - join.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 30;
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "working":
-        return "接客中";
-      case "waiting":
-        return "待機中";
-      case "offline":
-        return "退勤";
-      default:
-        return status;
+  // 本日出勤判定（シフトテーブルから取得する必要があるが、今は status === 'waiting' で代用）
+  const isWorkingToday = (status: string) => {
+    return status === 'waiting' || status === 'working';
+  };
+
+  const filteredCasts = casts.filter((cast) => {
+    if (filter === 'today') return isWorkingToday(cast.status);
+    if (filter === 'newface') return isNewFace(cast.join_date);
+    return true;
+  });
+
+  const formatSize = (cast: Cast) => {
+    if (!cast.height) return '';
+    
+    let sizeStr = `T.${cast.height}`;
+    
+    if (cast.bust && cast.cup_size && cast.waist && cast.hip) {
+      sizeStr += ` B.${cast.bust}(${cast.cup_size}) W.${cast.waist} H.${cast.hip}`;
+    } else if (cast.bust && cast.waist && cast.hip) {
+      sizeStr += ` B.${cast.bust} W.${cast.waist} H.${cast.hip}`;
     }
+    
+    return sizeStr;
   };
 
   if (loading) {
@@ -163,102 +161,112 @@ const Casts = () => {
 
       <main className="container py-8 px-4">
         <div className="max-w-7xl mx-auto">
-          <h1 
-            className="text-4xl font-bold mb-8 text-center"
-            style={{ 
-              color: "#8b7355",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.1em"
-            }}
-          >
-            THERAPIST - セラピスト
-          </h1>
-
-          {/* Search and Filters */}
-          <div className="mb-8 space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="名前で検索..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="タイプで絞り込み" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全てのタイプ</SelectItem>
-                  <SelectItem value="premium">プレミアム</SelectItem>
-                  <SelectItem value="standard">スタンダード</SelectItem>
-                  <SelectItem value="新人">新人</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="ステータスで絞り込み" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全てのステータス</SelectItem>
-                  <SelectItem value="waiting">待機中</SelectItem>
-                  <SelectItem value="working">接客中</SelectItem>
-                  <SelectItem value="offline">退勤</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold mb-4" style={{ color: "#8b7355" }}>
+              <small className="text-sm block mb-1">THERAPIST</small>
+              セラピスト
+            </h2>
+            <Link 
+              to="/schedule" 
+              className="inline-block bg-white hover:bg-[#f5e8e4] text-[#8b7355] border border-[#d4b5a8] px-6 py-2 rounded transition-colors"
+            >
+              出勤表はこちら
+            </Link>
           </div>
 
-          {/* Casts Grid */}
+          {/* Filter Buttons */}
+          <div className="mb-8 flex flex-wrap gap-3">
+            <Button
+              onClick={() => setFilter('all')}
+              className={`px-8 py-6 text-base ${
+                filter === 'all' 
+                  ? 'bg-[#d4a574] hover:bg-[#c59564] text-white' 
+                  : 'bg-white hover:bg-[#f5e8e4] text-[#8b7355] border border-[#d4b5a8]'
+              }`}
+            >
+              すべて
+            </Button>
+            <Button
+              onClick={() => setFilter('today')}
+              className={`px-8 py-6 text-base ${
+                filter === 'today' 
+                  ? 'bg-[#d4a574] hover:bg-[#c59564] text-white' 
+                  : 'bg-white hover:bg-[#f5e8e4] text-[#8b7355] border border-[#d4b5a8]'
+              }`}
+            >
+              本日出勤
+            </Button>
+            <Button
+              onClick={() => setFilter('newface')}
+              className={`px-8 py-6 text-base ${
+                filter === 'newface' 
+                  ? 'bg-[#d4a574] hover:bg-[#c59564] text-white' 
+                  : 'bg-white hover:bg-[#f5e8e4] text-[#8b7355] border border-[#d4b5a8]'
+              }`}
+            >
+              新人
+            </Button>
+          </div>
+
+          {/* Therapist Grid - エステ魂スタイル */}
           {filteredCasts.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">該当するセラピストが見つかりませんでした</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {filteredCasts.map((cast) => (
-                <Card key={cast.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="relative">
-                    {cast.photo ? (
-                      <img
-                        src={cast.photo}
-                        alt={cast.name}
-                        className="w-full h-64 object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-64 bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                        <span className="text-4xl text-muted-foreground">
-                          {cast.name.charAt(0)}
+                <div key={cast.id} className="relative">
+                  <Link to={`/casts/${cast.id}`} className="block group">
+                    <figure className="bg-white rounded overflow-hidden shadow hover:shadow-lg transition-shadow relative">
+                      {/* 新人バッジ */}
+                      {isNewFace(cast.join_date) && (
+                        <div className="absolute top-2 left-2 z-10">
+                          <span className="bg-pink-500 text-white text-xs px-2 py-1 rounded">
+                            新人
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 写真 */}
+                      {cast.photo ? (
+                        <img
+                          src={cast.photo}
+                          alt={cast.name}
+                          className="w-full aspect-[357/556] object-cover"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[357/556] bg-gradient-to-br from-[#d4b5a8] to-[#c5a89b] flex items-center justify-center">
+                          <span className="text-4xl text-white">
+                            {cast.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* セラピスト情報 */}
+                      <div className="p-3">
+                        <small className="block text-xs text-[#a89586] mb-1">
+                          <br />
+                        </small>
+                        <h4 className="font-bold text-[#8b7355] mb-1">
+                          {cast.name}{cast.age ? `(${cast.age})` : ''}
+                        </h4>
+                        {formatSize(cast) && (
+                          <p className="text-xs text-[#a89586]">
+                            {formatSize(cast)}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* VIEW DETAIL リンク */}
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-white text-sm flex items-center justify-center gap-1">
+                          VIEW DETAIL <i className="fa fa-angle-right"></i>
                         </span>
                       </div>
-                    )}
-                    <Badge
-                      className={`absolute top-2 right-2 ${getStatusColor(cast.status)} text-white`}
-                    >
-                      {getStatusText(cast.status)}
-                    </Badge>
-                  </div>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xl font-bold">{cast.name}</h3>
-                      <Badge variant="outline">{cast.room || cast.type}</Badge>
-                    </div>
-                    {cast.profile && (
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                        {cast.profile}
-                      </p>
-                    )}
-                  </CardContent>
-                  <CardFooter className="p-4 pt-0">
-                    <Button asChild className="w-full">
-                      <Link to={`/casts/${cast.id}`}>
-                        詳細を見る
-                      </Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
+                    </figure>
+                  </Link>
+                </div>
               ))}
             </div>
           )}

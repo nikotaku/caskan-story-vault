@@ -213,6 +213,51 @@ serve(async (req) => {
 
     const syncResults = [];
     const errors = [];
+    
+    // 写真をダウンロードしてSupabaseストレージに保存する関数
+    const downloadAndUploadPhoto = async (photoUrl: string, castName: string, castId: string): Promise<string | null> => {
+      try {
+        console.log(`Downloading photo for ${castName} from ${photoUrl}`);
+        
+        // 写真をダウンロード
+        const photoResponse = await fetch(photoUrl);
+        if (!photoResponse.ok) {
+          throw new Error(`Failed to download photo: ${photoResponse.status}`);
+        }
+        
+        const photoBlob = await photoResponse.arrayBuffer();
+        
+        // ファイル名を生成（cast_id + timestamp）
+        const fileExtension = photoUrl.includes('.jpg') ? 'jpg' : photoUrl.includes('.png') ? 'png' : 'webp';
+        const fileName = `${castId}_${Date.now()}.${fileExtension}`;
+        const filePath = `${fileName}`;
+        
+        // Supabaseストレージにアップロード
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('cast-photos')
+          .upload(filePath, photoBlob, {
+            contentType: `image/${fileExtension}`,
+            upsert: true
+          });
+        
+        if (uploadError) {
+          console.error(`Upload error for ${castName}:`, uploadError);
+          return null;
+        }
+        
+        // 公開URLを取得
+        const { data: publicUrlData } = supabase.storage
+          .from('cast-photos')
+          .getPublicUrl(filePath);
+        
+        console.log(`✓ Uploaded photo for ${castName}: ${publicUrlData.publicUrl}`);
+        return publicUrlData.publicUrl;
+        
+      } catch (error) {
+        console.error(`Error downloading/uploading photo for ${castName}:`, error);
+        return null;
+      }
+    };
 
     // 各セラピストの情報をデータベースに更新
     for (const therapist of therapists) {
@@ -231,9 +276,16 @@ serve(async (req) => {
         }
 
         if (existingCast) {
+          // 写真をダウンロードしてストレージに保存
+          const uploadedPhotoUrl = await downloadAndUploadPhoto(
+            therapist.photoUrl,
+            therapist.name,
+            therapist.castId
+          );
+          
           // 既存のキャストを更新
           const updateData: any = { 
-            photo: therapist.photoUrl,
+            photo: uploadedPhotoUrl || therapist.photoUrl, // アップロード失敗時は元のURLを使用
           };
           
           // プロフィール情報を追加
