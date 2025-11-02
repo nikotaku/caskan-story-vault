@@ -259,7 +259,7 @@ serve(async (req) => {
       }
     };
 
-    // 各セラピストの情報をデータベースに更新
+    // 各セラピストの情報をデータベースに更新または作成
     for (const therapist of therapists) {
       try {
         // 名前で検索（大文字小文字を区別しない）
@@ -275,41 +275,43 @@ serve(async (req) => {
           continue;
         }
 
-        if (existingCast) {
-          // 写真をダウンロードしてストレージに保存
-          const uploadedPhotoUrl = await downloadAndUploadPhoto(
-            therapist.photoUrl,
-            therapist.name,
-            therapist.castId
-          );
-          
-          // 既存のキャストを更新
-          const updateData: any = { 
-            photo: uploadedPhotoUrl || therapist.photoUrl, // アップロード失敗時は元のURLを使用
-          };
-          
-          // プロフィール情報を追加
-          if (therapist.age !== undefined) updateData.age = therapist.age;
-          if (therapist.height !== undefined) updateData.height = therapist.height;
-          if (therapist.bust !== undefined) updateData.bust = therapist.bust;
-          if (therapist.cupSize !== undefined) updateData.cup_size = therapist.cupSize;
-          if (therapist.waist !== undefined) updateData.waist = therapist.waist;
-          if (therapist.hip !== undefined) updateData.hip = therapist.hip;
-          if (therapist.bodyType !== undefined) updateData.body_type = therapist.bodyType;
-          if (therapist.experienceYears !== undefined) updateData.experience_years = therapist.experienceYears;
-          if (therapist.specialties !== undefined) updateData.specialties = therapist.specialties;
-          if (therapist.bloodType !== undefined) updateData.blood_type = therapist.bloodType;
-          if (therapist.favoriteFood !== undefined) updateData.favorite_food = therapist.favoriteFood;
-          if (therapist.idealType !== undefined) updateData.ideal_type = therapist.idealType;
-          if (therapist.celebrityLookalike !== undefined) updateData.celebrity_lookalike = therapist.celebrityLookalike;
-          if (therapist.dayOffActivities !== undefined) updateData.day_off_activities = therapist.dayOffActivities;
-          if (therapist.hobbies !== undefined) updateData.hobbies = therapist.hobbies;
-          if (therapist.message !== undefined) updateData.message = therapist.message;
-          if (therapist.xAccount !== undefined) updateData.x_account = therapist.xAccount;
+        // 写真をダウンロードしてストレージに保存
+        const uploadedPhotoUrl = await downloadAndUploadPhoto(
+          therapist.photoUrl,
+          therapist.name,
+          therapist.castId
+        );
+        
+        // プロフィール情報を準備
+        const profileData: any = { 
+          photo: uploadedPhotoUrl || therapist.photoUrl,
+          name: therapist.name,
+          type: 'therapist', // デフォルト値
+        };
+        
+        if (therapist.age !== undefined) profileData.age = therapist.age;
+        if (therapist.height !== undefined) profileData.height = therapist.height;
+        if (therapist.bust !== undefined) profileData.bust = therapist.bust;
+        if (therapist.cupSize !== undefined) profileData.cup_size = therapist.cupSize;
+        if (therapist.waist !== undefined) profileData.waist = therapist.waist;
+        if (therapist.hip !== undefined) profileData.hip = therapist.hip;
+        if (therapist.bodyType !== undefined) profileData.body_type = therapist.bodyType;
+        if (therapist.experienceYears !== undefined) profileData.experience_years = therapist.experienceYears;
+        if (therapist.specialties !== undefined) profileData.specialties = therapist.specialties;
+        if (therapist.bloodType !== undefined) profileData.blood_type = therapist.bloodType;
+        if (therapist.favoriteFood !== undefined) profileData.favorite_food = therapist.favoriteFood;
+        if (therapist.idealType !== undefined) profileData.ideal_type = therapist.idealType;
+        if (therapist.celebrityLookalike !== undefined) profileData.celebrity_lookalike = therapist.celebrityLookalike;
+        if (therapist.dayOffActivities !== undefined) profileData.day_off_activities = therapist.dayOffActivities;
+        if (therapist.hobbies !== undefined) profileData.hobbies = therapist.hobbies;
+        if (therapist.message !== undefined) profileData.message = therapist.message;
+        if (therapist.xAccount !== undefined) profileData.x_account = therapist.xAccount;
 
+        if (existingCast) {
+          // 既存のキャストを更新
           const { error: updateError } = await supabase
             .from('casts')
-            .update(updateData)
+            .update(profileData)
             .eq('id', existingCast.id);
 
           if (updateError) {
@@ -331,11 +333,29 @@ serve(async (req) => {
             });
           }
         } else {
-          console.log(`No matching cast found for ${therapist.name}`);
-          errors.push({ 
-            name: therapist.name, 
-            error: 'Cast not found in database. Please add this therapist manually first.' 
-          });
+          // 新規キャストを作成
+          const { error: insertError } = await supabase
+            .from('casts')
+            .insert(profileData);
+
+          if (insertError) {
+            console.error(`Error creating ${therapist.name}:`, insertError);
+            errors.push({ name: therapist.name, error: insertError.message });
+          } else {
+            console.log(`✓ Created new profile for ${therapist.name}`);
+            syncResults.push({
+              name: therapist.name,
+              action: 'created',
+              photoUrl: therapist.photoUrl,
+              profileData: {
+                age: therapist.age,
+                height: therapist.height,
+                measurements: therapist.bust && therapist.waist && therapist.hip 
+                  ? `${therapist.bust}(${therapist.cupSize})-${therapist.waist}-${therapist.hip}`
+                  : undefined,
+              }
+            });
+          }
         }
       } catch (error) {
         console.error(`Error processing ${therapist.name}:`, error);
