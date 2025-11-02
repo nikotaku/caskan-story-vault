@@ -14,6 +14,7 @@ interface EstamaShift {
   endTime: string;
   status: string;
   room?: string;
+  castType?: string;
 }
 
 serve(async (req) => {
@@ -76,6 +77,31 @@ serve(async (req) => {
 
     const castMap = new Map(casts.map(cast => [cast.name, cast.id]));
     console.log('Found casts:', castMap.size);
+
+    // キャストのタイプ情報を更新
+    const castTypeUpdates = new Map<string, string>();
+    for (const shift of shifts) {
+      if (shift.castType && castMap.has(shift.castName)) {
+        castTypeUpdates.set(shift.castName, shift.castType);
+      }
+    }
+
+    // キャストタイプを更新
+    for (const [castName, castType] of castTypeUpdates.entries()) {
+      const castId = castMap.get(castName);
+      if (castId) {
+        const { error: updateError } = await supabase
+          .from('casts')
+          .update({ type: castType })
+          .eq('id', castId);
+        
+        if (updateError) {
+          console.error(`Error updating cast type for ${castName}:`, updateError);
+        } else {
+          console.log(`Updated cast type for ${castName} to ${castType}`);
+        }
+      }
+    }
 
     // シフトデータを準備
     const shiftsToInsert = shifts
@@ -153,7 +179,6 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
     }
     
     // セラピストの勤務情報を含むテーブル行を探す
-    // エステ魂のHTMLではセラピスト情報がテーブル形式で表示される
     const rows = doc.querySelectorAll('tr');
     
     for (const row of rows) {
@@ -162,16 +187,47 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
         const nameElement = row.querySelector('h4');
         if (!nameElement) continue;
         
-        const castName = nameElement.textContent?.trim().replace(/\(\d+\)/g, '').trim();
+        const fullText = nameElement.textContent?.trim() || '';
+        const castName = fullText.replace(/\(\d+\)/g, '').trim();
         if (!castName) continue;
         
-        // 時間情報を探す（○マークや時間表示のあるセル）
+        // セラピストのタイプを判定（バッジやラベルから）
+        let castType = 'standard'; // デフォルト
+        const parentContainer = row.closest('div');
+        
+        // エステ魂のHTMLではセラピストタイプがバッジやラベルで表示される
+        // 例：「新人」「本指名」「ランクアップ」など
+        if (parentContainer) {
+          const badges = parentContainer.querySelectorAll('.badge, span[class*="label"], span[class*="tag"]');
+          for (const badge of badges) {
+            const badgeText = badge.textContent?.trim().toLowerCase();
+            if (badgeText?.includes('新人') || badgeText?.includes('new')) {
+              castType = 'newbie';
+            } else if (badgeText?.includes('本指名') || badgeText?.includes('regular')) {
+              castType = 'regular';
+            } else if (badgeText?.includes('姫') || badgeText?.includes('premium')) {
+              castType = 'premium';
+            } else if (badgeText?.includes('ランクアップ')) {
+              castType = 'rankup';
+            }
+          }
+        }
+        
+        // タイトルやURLからも判定を試みる
+        const linkElement = row.querySelector('a[href*="/cast/"]');
+        if (linkElement) {
+          const href = linkElement.getAttribute('href') || '';
+          // URLパターンから推測
+          if (href.includes('new') || href.includes('rookie')) {
+            castType = 'newbie';
+          }
+        }
+        
+        // 時間情報を探す
         const timeCell = row.querySelector('td:last-child');
         if (!timeCell) continue;
         
         const timeText = timeCell.textContent?.trim();
-        
-        // 時間のパターンをマッチング (例: "12:00", "24:30")
         const timeMatches = timeText?.match(/(\d{1,2}):(\d{2})/g);
         
         if (timeMatches && timeMatches.length >= 2) {
@@ -181,27 +237,28 @@ function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
             startTime: timeMatches[0],
             endTime: timeMatches[1],
             status: 'scheduled',
-            room: null
+            room: null,
+            castType: castType
           });
         } else if (timeMatches && timeMatches.length === 1) {
-          // 終了時間が明示されていない場合は、標準的な勤務時間を仮定
           shifts.push({
             castName: castName,
             date: dateStr,
             startTime: timeMatches[0],
-            endTime: '26:00', // デフォルトの終了時間
+            endTime: '26:00',
             status: 'scheduled',
-            room: null
+            room: null,
+            castType: castType
           });
         } else if (timeText?.includes('○')) {
-          // ○マークがある場合は予約可能
           shifts.push({
             castName: castName,
             date: dateStr,
-            startTime: '12:00', // デフォルトの開始時間
+            startTime: '12:00',
             endTime: '26:00',
             status: 'scheduled',
-            room: null
+            room: null,
+            castType: castType
           });
         }
       } catch (rowError) {
