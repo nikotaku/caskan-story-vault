@@ -31,7 +31,7 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { href: "/", label: "ホーム", icon: Home },
+  { href: "/dashboard", label: "ホーム", icon: Home },
   { href: "/staff", label: "キャスト管理", icon: User },
   { href: "/shift", label: "シフト", icon: Clock },
   { href: "/reservations", label: "予約管理", icon: BookOpen },
@@ -89,7 +89,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             <hr className="my-2 border-border" />
             
             <Link
-              to="/public"
+              to="/"
               className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50 rounded-md transition-colors"
             >
               <ExternalLink size={16} />

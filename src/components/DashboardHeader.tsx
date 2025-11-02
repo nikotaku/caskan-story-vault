@@ -31,7 +31,7 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
 
         {/* Logo */}
         <div className="flex-1 flex justify-center md:justify-start">
-          <a href="/" className="block">
+          <a href="/dashboard" className="block">
             <img 
               src={caskanLogo} 
               alt="Caskan" 
