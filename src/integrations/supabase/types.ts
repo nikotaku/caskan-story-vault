@@ -440,7 +440,7 @@ export type Database = {
         Row: {
           cast_id: string
           created_at: string
-          created_by: string
+          created_by: string | null
           end_time: string
           id: string
           notes: string | null
@@ -453,7 +453,7 @@ export type Database = {
         Insert: {
           cast_id: string
           created_at?: string
-          created_by: string
+          created_by?: string | null
           end_time: string
           id?: string
           notes?: string | null
@@ -466,7 +466,7 @@ export type Database = {
         Update: {
           cast_id?: string
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           end_time?: string
           id?: string
           notes?: string | null

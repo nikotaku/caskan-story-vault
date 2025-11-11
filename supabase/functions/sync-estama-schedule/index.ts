@@ -112,7 +112,7 @@ serve(async (req) => {
         start_time: shift.startTime,
         end_time: shift.endTime,
         status: shift.status,
-        created_by: '00000000-0000-0000-0000-000000000000', // システムユーザー
+        created_by: null, // 自動同期はNULL
       }));
 
     console.log('Shifts to insert:', shiftsToInsert.length);
