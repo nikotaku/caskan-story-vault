@@ -18,30 +18,29 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
 
   return (
     <header className="fixed top-0 left-0 right-0 h-[60px] bg-card border-b border-border z-40">
-      <div className="flex items-center justify-between h-full px-4">
-        {/* Mobile menu button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggleSidebar}
-          className="md:hidden"
-        >
-          <Menu size={20} />
-        </Button>
+      <div className="flex items-center justify-between h-full px-4 gap-2">
+        {/* Mobile menu button and Logo */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleSidebar}
+            className="md:hidden flex-shrink-0"
+          >
+            <Menu size={20} />
+          </Button>
 
-        {/* Logo */}
-        <div className="flex-1 flex justify-center md:justify-start">
-          <a href="/dashboard" className="block">
+          <a href="/dashboard" className="block flex-shrink-0">
             <img 
               src={caskanLogo} 
               alt="Caskan" 
-              className="h-9 w-auto"
+              className="h-8 w-auto"
             />
           </a>
         </div>
 
         {/* Account info */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="hidden md:block text-right">
             <div className="text-xs text-muted-foreground">全力エステ..</div>
             {isAdmin && (
@@ -49,20 +48,18 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
             )}
           </div>
           
-          <div className="flex items-center gap-2">
-            <img 
-              src="https://cdn2-caskan.com/caskan/img/shop_icon/1401_icon_1750161414.jpeg" 
-              alt="全力エステ 仙台"
-              className="w-10 h-10 rounded border border-border object-cover"
-            />
-          </div>
+          <img 
+            src="https://cdn2-caskan.com/caskan/img/shop_icon/1401_icon_1750161414.jpeg" 
+            alt="全力エステ 仙台"
+            className="w-9 h-9 rounded border border-border object-cover flex-shrink-0"
+          />
           
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="flex items-center gap-1 flex-shrink-0">
                   <User size={14} />
-                  <span className="text-xs">店舗</span>
+                  <span className="text-xs hidden sm:inline">店舗</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -73,9 +70,9 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
               <User size={14} />
-              <span>店舗</span>
+              <span className="hidden sm:inline">店舗</span>
             </div>
           )}
         </div>
