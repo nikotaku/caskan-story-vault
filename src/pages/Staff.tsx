@@ -289,6 +289,9 @@ export default function Staff() {
 
       if (error) throw error;
 
+      // ローカルステートから削除されたキャストを除外
+      setCasts(prevCasts => prevCasts.filter(cast => cast.id !== id));
+
       toast({
         title: "キャスト削除",
         description: "キャストが削除されました",
