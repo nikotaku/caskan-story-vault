@@ -17,8 +17,8 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
   const { user, signOut, isAdmin } = useAuth();
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[60px] bg-card border-b border-border z-40">
-      <div className="flex items-center justify-between h-full px-2 sm:px-4 gap-1 sm:gap-2">
+    <header className="fixed top-0 left-0 right-0 h-[52px] sm:h-[60px] bg-card border-b border-border z-40">
+      <div className="flex items-center justify-between h-full px-1 sm:px-4 gap-0.5 sm:gap-2 flex-nowrap">
         {/* Mobile menu button and Logo */}
         <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
           <Button
@@ -34,13 +34,13 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
             <img 
               src={caskanLogo} 
               alt="Caskan" 
-              className="h-7 sm:h-8 w-auto"
+              className="h-6 sm:h-8 w-auto"
             />
           </a>
         </div>
 
         {/* Account info */}
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 whitespace-nowrap">
           <div className="hidden lg:block text-right">
             <div className="text-xs text-muted-foreground">全力エステ..</div>
             {isAdmin && (
@@ -51,13 +51,13 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
           <img 
             src="https://cdn2-caskan.com/caskan/img/shop_icon/1401_icon_1750161414.jpeg" 
             alt="全力エステ 仙台"
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded border border-border object-cover flex-shrink-0"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded border border-border object-cover flex-shrink-0 max-[360px]:hidden"
           />
           
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="flex items-center gap-1 flex-shrink-0 h-8 px-2">
+                <Button variant="ghost" size="sm" aria-label="店舗メニュー" className="flex items-center gap-1 flex-shrink-0 h-8 w-8 p-0 sm:w-auto sm:px-2">
                   <User size={14} />
                   <span className="text-xs hidden md:inline">店舗</span>
                 </Button>
