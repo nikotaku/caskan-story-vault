@@ -177,11 +177,28 @@ export default function Staff() {
     }
   };
 
-  const handleEditCast = (cast: Cast) => {
+  const handleEditCast = async (cast: Cast) => {
     console.log('handleEditCast called', { cast, isAdmin });
-    setEditingCast(cast);
-    setIsEditDialogOpen(true);
-    console.log('Dialog state set to true');
+    
+    // 最新のデータを取得してから編集ダイアログを開く
+    try {
+      const { data, error } = await supabase
+        .from('casts')
+        .select('*')
+        .eq('id', cast.id)
+        .single();
+      
+      if (error) throw error;
+      
+      setEditingCast(data as Cast);
+      setIsEditDialogOpen(true);
+      console.log('Dialog opened with latest data:', data);
+    } catch (error) {
+      console.error('Error fetching latest cast data:', error);
+      // エラーの場合は渡されたcastデータを使用
+      setEditingCast(cast);
+      setIsEditDialogOpen(true);
+    }
   };
 
   const handleUpdateCast = async () => {
