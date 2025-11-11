@@ -20,7 +20,8 @@ import {
   Menu,
   X,
   Sparkles,
-  FileText
+  FileText,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ const menuItems = [
   { href: "/report", label: "レポート", icon: BarChart3 },
   { href: "/text-generation", label: "文章生成", icon: Sparkles },
   { href: "/estama", label: "Estama連携", icon: ExternalLink },
+  { href: "/sync", label: "同期状況", icon: RefreshCw },
   { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/shop", label: "設定", icon: Settings },
 ];

@@ -28,6 +28,7 @@ import BookingReservation from "./pages/public/BookingReservation";
 import TextGeneration from "./pages/TextGeneration";
 import EstamaIntegration from "./pages/EstamaIntegration";
 import Agreement from "./pages/Agreement";
+import SyncDashboard from "./pages/SyncDashboard";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
           <Route path="/pricing-management" element={<PricingManagement />} />
           <Route path="/text-generation" element={<TextGeneration />} />
           <Route path="/estama" element={<EstamaIntegration />} />
+          <Route path="/sync" element={<SyncDashboard />} />
           <Route path="/shop" element={<Settings />} />
           
           {/* Therapist Portal - Token-based access */}
