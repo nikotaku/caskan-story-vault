@@ -911,14 +911,6 @@ export default function Staff() {
                         <Camera size={48} className="text-muted-foreground" />
                       </div>
                     )}
-                    <div className="absolute top-2 right-2">
-                      <Badge className={getStatusColor(cast.status)}>
-                        {cast.status}
-                      </Badge>
-                    </div>
-                    <div className="absolute top-2 left-2">
-                      <Badge variant="secondary">{cast.room || cast.type}</Badge>
-                    </div>
                   </div>
                   
                   <CardHeader className="pb-3">
