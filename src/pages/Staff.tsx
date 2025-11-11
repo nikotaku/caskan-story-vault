@@ -900,7 +900,31 @@ export default function Staff() {
                   onClick={() => handleEditCast(cast)}
                 >
                   <div className="aspect-[4/3] relative overflow-hidden bg-muted">
-                    {cast.photo ? (
+                    {cast.photos && cast.photos.length > 0 ? (
+                      <div className="relative w-full h-full">
+                        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide w-full h-full">
+                          {cast.photos.map((photo, index) => (
+                            <div key={index} className="flex-shrink-0 w-full h-full snap-center">
+                              <img 
+                                src={photo} 
+                                alt={`${cast.name} - ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {cast.photos.length > 1 && (
+                          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1">
+                            {cast.photos.map((_, index) => (
+                              <div 
+                                key={index} 
+                                className="w-1.5 h-1.5 rounded-full bg-white/60 backdrop-blur-sm"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : cast.photo ? (
                       <img 
                         src={cast.photo} 
                         alt={cast.name}
