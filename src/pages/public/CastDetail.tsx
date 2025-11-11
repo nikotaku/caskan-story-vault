@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Star, Calendar, ArrowLeft, Phone } from "lucide-react";
 import caskanLogo from "@/assets/caskan-logo.png";
+import useEmblaCarousel from "embla-carousel-react";
 
 interface Cast {
   id: string;
@@ -26,12 +27,29 @@ const CastDetail = () => {
   const navigate = useNavigate();
   const [cast, setCast] = useState<Cast | null>(null);
   const [loading, setLoading] = useState(true);
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
     if (id) {
       fetchCastDetail();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+
+    const onSelect = () => {
+      setSelectedIndex(emblaApi.selectedScrollSnap());
+    };
+
+    emblaApi.on("select", onSelect);
+    onSelect();
+
+    return () => {
+      emblaApi.off("select", onSelect);
+    };
+  }, [emblaApi]);
 
   const fetchCastDetail = async () => {
     try {
@@ -92,6 +110,18 @@ const CastDetail = () => {
     return null;
   }
 
+  // メイン写真とサブ写真を統合
+  const allPhotos = [
+    ...(cast.photo ? [cast.photo] : []),
+    ...(cast.photos || [])
+  ].filter(Boolean);
+
+  const scrollToImage = (index: number) => {
+    if (emblaApi) {
+      emblaApi.scrollTo(index);
+    }
+  };
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
       {/* Top Contact Bar */}
@@ -151,14 +181,53 @@ const CastDetail = () => {
 
           <Card className="overflow-hidden">
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Photo */}
+              {/* Photo Gallery */}
               <div className="relative">
-                {cast.photo ? (
-                  <img
-                    src={cast.photo}
-                    alt={cast.name}
-                    className="w-full h-full object-cover"
-                  />
+                {allPhotos.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* メインカルーセル */}
+                    <div className="overflow-hidden relative" ref={emblaRef}>
+                      <div className="flex">
+                        {allPhotos.map((photo, index) => (
+                          <div key={index} className="flex-[0_0_100%] min-w-0">
+                            <img
+                              src={photo}
+                              alt={`${cast.name} - ${index + 1}`}
+                              className="w-full h-[500px] object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <Badge
+                        className={`absolute top-4 right-4 ${getStatusColor(cast.status)} text-white text-lg px-4 py-2`}
+                      >
+                        {getStatusText(cast.status)}
+                      </Badge>
+                    </div>
+
+                    {/* サムネイル一覧 */}
+                    {allPhotos.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto px-2 pb-2">
+                        {allPhotos.map((photo, index) => (
+                          <button
+                            key={index}
+                            onClick={() => scrollToImage(index)}
+                            className={`flex-shrink-0 w-20 h-20 rounded-md overflow-hidden border-2 transition-all ${
+                              selectedIndex === index
+                                ? "border-primary scale-105"
+                                : "border-border opacity-60 hover:opacity-100"
+                            }`}
+                          >
+                            <img
+                              src={photo}
+                              alt={`サムネイル ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="w-full h-full min-h-[400px] bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
                     <span className="text-6xl text-muted-foreground">
@@ -166,11 +235,6 @@ const CastDetail = () => {
                     </span>
                   </div>
                 )}
-                <Badge
-                  className={`absolute top-4 right-4 ${getStatusColor(cast.status)} text-white text-lg px-4 py-2`}
-                >
-                  {getStatusText(cast.status)}
-                </Badge>
               </div>
 
               {/* Info */}
