@@ -170,107 +170,100 @@ serve(async (req) => {
 
 function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
   const shifts: EstamaShift[] = [];
-  
+
+  // Helpers inside the parser to keep scope local and avoid altering other code
+  const stripTags = (s: string) => s.replace(/<[^>]*>/g, '');
+  const normalizeTime = (t: string) => {
+    // Accepts HH:MM, possibly >= 24 for late-night times like 26:00
+    const m = t.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return '12:00:00';
+    let h = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    if (h >= 24) h = h - 24; // convert 26:00 -> 02:00
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
+  };
+  const detectCastType = (context: string) => {
+    // Lowercased context expected
+    // Try to align with Estama labels as much as possible
+    if (/(新人|new face|newbie|入店|初日|体験)/i.test(context)) return 'newbie';
+    if (/(本指名|regular)/i.test(context)) return 'regular';
+    if (/(姫|プリンセス|premium|vip)/i.test(context)) return 'premium';
+    if (/(ランクアップ|rank\s*up)/i.test(context)) return 'rankup';
+    return 'therapist';
+  };
+
   try {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    if (!doc) {
-      console.error('Failed to parse HTML');
-      return shifts;
-    }
-    
-    // セラピストの勤務情報を含むセクションを探す
-    // エステ魂のHTMLではセラピスト情報がh4タグで表示される
-    const nameElements = doc.querySelectorAll('h4');
-    console.log(`Found ${nameElements.length} h4 elements`);
-    
-    for (const nameElement of nameElements) {
+    const sectionRe = /<h4[^>]*>([\s\S]*?)<\/h4>([\s\S]*?)(?=<h4[^>]*>|$)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = sectionRe.exec(html)) !== null) {
       try {
-        const fullText = nameElement.textContent?.trim() || '';
-        // 年齢を除去してセラピスト名を取得
-        const castName = fullText.replace(/\(\d+\)/g, '').trim();
+        const nameHtml = match[1] || '';
+        let sectionHtml = match[2] || '';
+
+        const fullText = stripTags(nameHtml).trim();
+        const castName = fullText.replace(/\(\d+\)/g, '').trim(); // remove age like (22)
         if (!castName || castName.length < 2) continue;
-        
-        console.log(`Processing cast: ${castName}`);
-        
-        // デフォルトのタイプ
-        let castType = 'therapist'; // デフォルトをtherapistに変更
-        
-        // セラピストのタイプを親要素から判定
-        // HTMLを文字列として検索
-        const htmlStr = html.toLowerCase();
-        const castSection = htmlStr.indexOf(castName.toLowerCase());
-        
-        if (castSection >= 0) {
-          // セラピスト名の周辺1000文字を取得して判定
-          const contextStart = Math.max(0, castSection - 500);
-          const contextEnd = Math.min(htmlStr.length, castSection + 500);
-          const context = htmlStr.substring(contextStart, contextEnd);
-          
-          // バッジやラベルから判定
-          if (context.includes('新人') || context.includes('new')) {
-            castType = 'newbie';
-          } else if (context.includes('本指名') || context.includes('regular')) {
-            castType = 'regular';
-          } else if (context.includes('姫') || context.includes('premium')) {
-            castType = 'premium';
-          } else if (context.includes('ランクアップ')) {
-            castType = 'rankup';
-          }
+
+        const context = (nameHtml + ' ' + sectionHtml).toLowerCase();
+        const castType = detectCastType(context);
+
+        // Extract times in the section after the name
+        let timeMatches = [...sectionHtml.matchAll(/(\d{1,2}:\d{2})/g)].map(m => m[1]);
+
+        // Fallback: if not found, search a wider window after the <h4> occurrence
+        if (timeMatches.length < 1) {
+          const windowStart = match.index ?? 0;
+          const windowEnd = Math.min(html.length, windowStart + 4000);
+          const altContext = html.slice(windowStart, windowEnd);
+          timeMatches = [...altContext.matchAll(/(\d{1,2}:\d{2})/g)].map(m => m[1]);
         }
-        
-        // シフト情報を探す（時間表示を検索）
-        // h4タグの後の要素から時間情報を探す
-        const timePattern = /(\d{1,2}:\d{2})/g;
-        const siblingText = nameElement.textContent + ' ' + (nameElement.nextSibling?.textContent || '');
-        const timeMatches = siblingText.match(timePattern);
-        
-        // ○マークの確認
-        const hasAvailable = siblingText.includes('○');
-        
-        if (timeMatches && timeMatches.length >= 2) {
+
+        const hasAvailable = /[○◯]/.test(sectionHtml);
+
+        if (timeMatches.length >= 2) {
           shifts.push({
-            castName: castName,
+            castName,
             date: dateStr,
-            startTime: timeMatches[0],
-            endTime: timeMatches[1],
+            startTime: normalizeTime(timeMatches[0]),
+            endTime: normalizeTime(timeMatches[1]),
             status: 'scheduled',
-            room: null,
-            castType: castType
+            room: undefined,
+            castType,
           });
           console.log(`Added shift for ${castName}: ${timeMatches[0]} - ${timeMatches[1]}`);
-        } else if (timeMatches && timeMatches.length === 1) {
+        } else if (timeMatches.length === 1) {
           shifts.push({
-            castName: castName,
+            castName,
             date: dateStr,
-            startTime: timeMatches[0],
-            endTime: '26:00',
+            startTime: normalizeTime(timeMatches[0]),
+            endTime: normalizeTime('26:00'), // default to late-night end
             status: 'scheduled',
-            room: null,
-            castType: castType
+            room: undefined,
+            castType,
           });
           console.log(`Added shift for ${castName}: ${timeMatches[0]} - 26:00`);
         } else if (hasAvailable) {
           shifts.push({
-            castName: castName,
+            castName,
             date: dateStr,
-            startTime: '12:00',
-            endTime: '26:00',
+            startTime: normalizeTime('12:00'),
+            endTime: normalizeTime('26:00'),
             status: 'scheduled',
-            room: null,
-            castType: castType
+            room: undefined,
+            castType,
           });
           console.log(`Added shift for ${castName}: 12:00 - 26:00 (available)`);
         }
       } catch (rowError) {
-        console.error('Error parsing cast:', rowError);
+        console.error('Error parsing cast section:', rowError);
         continue;
       }
     }
-    
+
     console.log(`Parsed ${shifts.length} shifts from HTML`);
   } catch (error) {
     console.error('Error parsing HTML:', error);
   }
-  
+
   return shifts;
 }
