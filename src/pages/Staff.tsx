@@ -793,13 +793,13 @@ export default function Staff() {
                           {uploadingPhoto ? "アップロード中..." : (editingCast.photos || []).length >= 5 ? "最大5枚までです" : "写真をアップロード"}
                         </Button>
                         {(editingCast.photos || []).length > 0 && (
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-2">
                             {(editingCast.photos || []).map((photo, index) => (
                               <div key={index} className="relative group">
                                 <img 
                                   src={photo} 
                                   alt={`プレビュー ${index + 1}`} 
-                                  className="w-full h-24 object-cover rounded-md"
+                                  className="w-full h-[200px] object-cover rounded-md"
                                 />
                                 <Button
                                   type="button"
