@@ -111,7 +111,15 @@ const Schedule = () => {
       if (shiftsResult.error) throw shiftsResult.error;
       if (reservationsResult.error) throw reservationsResult.error;
       
-      setShifts(shiftsResult.data || []);
+      // Group shifts by cast_id to avoid duplicate displays
+      const groupedShifts = (shiftsResult.data || []).reduce((acc, shift) => {
+        if (!acc[shift.cast_id]) {
+          acc[shift.cast_id] = shift;
+        }
+        return acc;
+      }, {} as Record<string, Shift>);
+      
+      setShifts(Object.values(groupedShifts));
       setReservations(reservationsResult.data || []);
     } catch (error) {
       console.error("Error fetching data:", error);
