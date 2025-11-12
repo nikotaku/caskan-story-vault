@@ -193,91 +193,66 @@ serve(async (req) => {
 function parseEstamaSchedule(html: string, dateStr: string): EstamaShift[] {
   const shifts: EstamaShift[] = [];
 
-  // Helpers inside the parser to keep scope local and avoid altering other code
-  const stripTags = (s: string) => s.replace(/<[^>]*>/g, '');
+  const stripTags = (s: string) => s.replace(/<[^>]*>/g, '').trim();
   const normalizeTime = (t: string) => {
-    // Accepts HH:MM, possibly >= 24 for late-night times like 26:00
     const m = t.match(/^(\d{1,2}):(\d{2})$/);
     if (!m) return '12:00:00';
     let h = parseInt(m[1], 10);
     const mm = parseInt(m[2], 10);
-    if (h >= 24) h = h - 24; // convert 26:00 -> 02:00
+    if (h >= 24) h = h - 24;
     return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`;
-  };
-  const detectCastType = (context: string) => {
-    // Lowercased context expected
-    // Try to align with Estama labels as much as possible
-    if (/(新人|new face|newbie|入店|初日|体験)/i.test(context)) return 'newbie';
-    if (/(本指名|regular)/i.test(context)) return 'regular';
-    if (/(姫|プリンセス|premium|vip)/i.test(context)) return 'premium';
-    if (/(ランクアップ|rank\s*up)/i.test(context)) return 'rankup';
-    return 'therapist';
   };
 
   try {
-    const sectionRe = /<h4[^>]*>([\s\S]*?)<\/h4>([\s\S]*?)(?=<h4[^>]*>|$)/gi;
-    let match: RegExpExecArray | null;
-    while ((match = sectionRe.exec(html)) !== null) {
+    // テーブルのヘッダーセクションから出勤セラピスト情報を抽出
+    const theadMatch = html.match(/<thead>([\s\S]*?)<\/thead>/i);
+    if (!theadMatch) {
+      console.log('Table thead not found');
+      return shifts;
+    }
+    
+    const theadContent = theadMatch[1];
+    
+    // 各セラピストのthブロックを抽出
+    const thRegex = /<th[^>]*class="th_sce"[^>]*>([\s\S]*?)<\/th>/gi;
+    let thMatch: RegExpExecArray | null;
+    
+    while ((thMatch = thRegex.exec(theadContent)) !== null) {
       try {
-        const nameHtml = match[1] || '';
-        let sectionHtml = match[2] || '';
-
-        const fullText = stripTags(nameHtml).trim();
-        const castName = fullText.replace(/\(\d+\)/g, '').trim(); // remove age like (22)
+        const thContent = thMatch[1];
+        
+        // h4タグからセラピスト名を取得
+        const nameMatch = thContent.match(/<h4[^>]*>([\s\S]*?)<\/h4>/i);
+        if (!nameMatch) continue;
+        
+        const castName = stripTags(nameMatch[1]);
         if (!castName || castName.length < 2) continue;
-
-        const context = (nameHtml + ' ' + sectionHtml).toLowerCase();
-        const castType = detectCastType(context);
-
-        // Extract times in the section after the name
-        let timeMatches = [...sectionHtml.matchAll(/(\d{1,2}:\d{2})/g)].map(m => m[1]);
-
-        // Fallback: if not found, search a wider window after the <h4> occurrence
-        if (timeMatches.length < 1) {
-          const windowStart = match.index ?? 0;
-          const windowEnd = Math.min(html.length, windowStart + 4000);
-          const altContext = html.slice(windowStart, windowEnd);
-          timeMatches = [...altContext.matchAll(/(\d{1,2}:\d{2})/g)].map(m => m[1]);
-        }
-
-        const hasAvailable = /[○◯]/.test(sectionHtml);
-
-        if (timeMatches.length >= 2) {
+        
+        // item-dateから時間情報を取得
+        const dateMatch = thContent.match(/<div[^>]*class="item-date"[^>]*>([\s\S]*?)<\/div>/i);
+        if (!dateMatch) continue;
+        
+        const dateContent = dateMatch[1];
+        const timeSpans = [...dateContent.matchAll(/<span[^>]*>([^<]+)<\/span>/g)];
+        
+        if (timeSpans.length >= 3) {
+          const startTime = timeSpans[0][1].trim();
+          const endTime = timeSpans[2][1].trim();
+          
           shifts.push({
             castName,
             date: dateStr,
-            startTime: normalizeTime(timeMatches[0]),
-            endTime: normalizeTime(timeMatches[1]),
+            startTime: normalizeTime(startTime),
+            endTime: normalizeTime(endTime),
             status: 'scheduled',
             room: undefined,
-            castType,
+            castType: 'therapist',
           });
-          console.log(`Added shift for ${castName}: ${timeMatches[0]} - ${timeMatches[1]}`);
-        } else if (timeMatches.length === 1) {
-          shifts.push({
-            castName,
-            date: dateStr,
-            startTime: normalizeTime(timeMatches[0]),
-            endTime: normalizeTime('26:00'), // default to late-night end
-            status: 'scheduled',
-            room: undefined,
-            castType,
-          });
-          console.log(`Added shift for ${castName}: ${timeMatches[0]} - 26:00`);
-        } else if (hasAvailable) {
-          shifts.push({
-            castName,
-            date: dateStr,
-            startTime: normalizeTime('12:00'),
-            endTime: normalizeTime('26:00'),
-            status: 'scheduled',
-            room: undefined,
-            castType,
-          });
-          console.log(`Added shift for ${castName}: 12:00 - 26:00 (available)`);
+          
+          console.log(`Added shift for ${castName}: ${startTime} - ${endTime}`);
         }
       } catch (rowError) {
-        console.error('Error parsing cast section:', rowError);
+        console.error('Error parsing therapist block:', rowError);
         continue;
       }
     }
