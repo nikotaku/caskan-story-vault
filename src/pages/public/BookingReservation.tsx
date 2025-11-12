@@ -292,18 +292,27 @@ const BookingReservation = () => {
     const shiftStart = shiftStartHour * 60 + shiftStartMinute;
     const shiftEnd = shiftEndHour * 60 + shiftEndMinute;
 
-    // 10分刻みで可能な時間を生成
+    // インターバル時間（分）- 予約と予約の間に必要な準備時間
+    const intervalMinutes = 30;
+
+    // 30分刻みで可能な時間を生成
     const slots: string[] = [];
-    for (let time = shiftStart; time + duration <= shiftEnd; time += 10) {
+    for (let time = shiftStart; time + duration <= shiftEnd; time += 30) {
       const hour = Math.floor(time / 60);
       const minute = time % 60;
       const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
+      // この時間帯が予約可能かチェック（インターバルを考慮）
       const isBooked = reservations.some(reservation => {
         const [resHour, resMinute] = reservation.start_time.split(':').map(Number);
         const resStart = resHour * 60 + resMinute;
-        const resEnd = resStart + reservation.duration;
-        return (time < resEnd && time + duration > resStart);
+        const resEnd = resStart + reservation.duration + intervalMinutes; // 予約終了後にインターバルを追加
+        
+        // 新しい予約の終了時刻
+        const newEnd = time + duration;
+        
+        // 重複チェック（インターバルを含む）
+        return (time < resEnd && newEnd > resStart);
       });
 
       if (!isBooked) {
