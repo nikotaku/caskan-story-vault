@@ -103,9 +103,31 @@ serve(async (req) => {
       }
     }
 
-    // シフトデータを準備
-    const shiftsToInsert = shifts
-      .filter(shift => castMap.has(shift.castName))
+    // シフトデータを準備（重複を除去）
+    const uniqueShiftsMap = new Map<string, EstamaShift>();
+    
+    for (const shift of shifts) {
+      if (!castMap.has(shift.castName)) continue;
+      
+      const key = `${shift.castName}-${shift.date}`;
+      const existing = uniqueShiftsMap.get(key);
+      
+      if (!existing) {
+        uniqueShiftsMap.set(key, shift);
+      } else {
+        // 複数のシフトがある場合、最も早い開始時間と最も遅い終了時間を使用
+        const earlierStart = shift.startTime < existing.startTime ? shift.startTime : existing.startTime;
+        const laterEnd = shift.endTime > existing.endTime ? shift.endTime : existing.endTime;
+        
+        uniqueShiftsMap.set(key, {
+          ...existing,
+          startTime: earlierStart,
+          endTime: laterEnd
+        });
+      }
+    }
+    
+    const shiftsToInsert = Array.from(uniqueShiftsMap.values())
       .map(shift => ({
         cast_id: castMap.get(shift.castName),
         shift_date: shift.date,
