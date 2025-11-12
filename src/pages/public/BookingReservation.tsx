@@ -112,9 +112,16 @@ const BookingReservation = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCasts();
     fetchRates();
   }, []);
+
+  // Fetch available casts when date changes
+  useEffect(() => {
+    if (selectedDate) {
+      fetchAvailableCasts();
+      setSelectedCastId(""); // 日付変更時にセラピスト選択をリセット
+    }
+  }, [selectedDate]);
 
   // Fetch shifts and reservations when date or cast changes
   useEffect(() => {
@@ -169,18 +176,39 @@ const BookingReservation = () => {
     setTotalPrice(price);
   };
 
-  const fetchCasts = async () => {
+  const fetchAvailableCasts = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      
+      // Get shifts for the selected date
+      const { data: shiftsData, error: shiftsError } = await supabase
+        .from("shifts")
+        .select("cast_id")
+        .eq("shift_date", dateStr);
+
+      if (shiftsError) throw shiftsError;
+
+      // Get unique cast IDs from shifts
+      const castIds = [...new Set(shiftsData?.map(s => s.cast_id) || [])];
+
+      if (castIds.length === 0) {
+        setCasts([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch cast details for those IDs
+      const { data: castsData, error: castsError } = await supabase
         .from("casts")
         .select("id, name, type, photo, status, profile, age, height, cup_size, room")
-        .eq("status", "online")
+        .in("id", castIds)
         .order("name");
 
-      if (error) throw error;
-      setCasts(data || []);
+      if (castsError) throw castsError;
+      setCasts(castsData || []);
     } catch (error) {
-      console.error("Error fetching casts:", error);
+      console.error("Error fetching available casts:", error);
       toast({
         title: "エラー",
         description: "セラピスト情報の取得に失敗しました",
@@ -527,66 +555,73 @@ const BookingReservation = () => {
                     </div>
 
                     {/* セラピストカード */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {casts.map((cast) => (
-                        <Card
-                          key={cast.id}
-                          className={cn(
-                            "cursor-pointer transition-all hover:shadow-lg",
-                            selectedCastId === cast.id 
-                              ? "ring-2 ring-[#d4a574] shadow-lg" 
-                              : "hover:ring-1 hover:ring-[#d4b5a8]"
-                          )}
-                          onClick={() => setSelectedCastId(cast.id)}
-                        >
-                          <CardContent className="p-0">
-                            <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted">
-                              {cast.photo ? (
-                                <img 
-                                  src={cast.photo} 
-                                  alt={cast.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                  <User className="h-12 w-12" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-4">
-                              <h3 className="text-xl font-bold mb-1" style={{ color: "#8b7355" }}>
-                                {cast.name}
-                              </h3>
-                              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                                {cast.profile || "プロフィール情報なし"}
-                              </p>
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                                <span>{cast.age || "-"}歳</span>
-                                <span>•</span>
-                                <span>{cast.height || "-"}cm</span>
-                                {cast.cup_size && (
-                                  <>
-                                    <span>•</span>
-                                    <span>({cast.cup_size})</span>
-                                  </>
+                    {casts.length === 0 ? (
+                      <div className="text-center p-12 text-muted-foreground">
+                        <p className="text-lg mb-2">この日は出勤予定のセラピストがいません</p>
+                        <p className="text-sm">別の日付をお選びください</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {casts.map((cast) => (
+                          <Card
+                            key={cast.id}
+                            className={cn(
+                              "cursor-pointer transition-all hover:shadow-lg",
+                              selectedCastId === cast.id 
+                                ? "ring-2 ring-[#d4a574] shadow-lg" 
+                                : "hover:ring-1 hover:ring-[#d4b5a8]"
+                            )}
+                            onClick={() => setSelectedCastId(cast.id)}
+                          >
+                            <CardContent className="p-0">
+                              <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted">
+                                {cast.photo ? (
+                                  <img 
+                                    src={cast.photo} 
+                                    alt={cast.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                                    <User className="h-12 w-12" />
+                                  </div>
                                 )}
                               </div>
-                              {cast.room && (
-                                <p className="text-xs text-muted-foreground mb-2">
-                                  ■{cast.room}■
+                              <div className="p-4">
+                                <h3 className="text-xl font-bold mb-1" style={{ color: "#8b7355" }}>
+                                  {cast.name}
+                                </h3>
+                                <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                  {cast.profile || "プロフィール情報なし"}
                                 </p>
-                              )}
-                              <Button
-                                className="w-full"
-                                variant={selectedCastId === cast.id ? "default" : "outline"}
-                              >
-                                {selectedCastId === cast.id ? "選択中" : "予約"}
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                                  <span>{cast.age || "-"}歳</span>
+                                  <span>•</span>
+                                  <span>{cast.height || "-"}cm</span>
+                                  {cast.cup_size && (
+                                    <>
+                                      <span>•</span>
+                                      <span>({cast.cup_size})</span>
+                                    </>
+                                  )}
+                                </div>
+                                {cast.room && (
+                                  <p className="text-xs text-muted-foreground mb-2">
+                                    ■{cast.room}■
+                                  </p>
+                                )}
+                                <Button
+                                  className="w-full"
+                                  variant={selectedCastId === cast.id ? "default" : "outline"}
+                                >
+                                  {selectedCastId === cast.id ? "選択中" : "予約"}
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex justify-end">
                     <Button
