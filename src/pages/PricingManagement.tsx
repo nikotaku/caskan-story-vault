@@ -794,23 +794,129 @@ export default function PricingManagement() {
                   })}
                 </div>
               </CardContent>
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDeleteConfirmId(option.id)}
-                              className="hover:bg-destructive hover:text-destructive-foreground"
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          )
+            </Card>
+
+            {/* 指名料金管理 */}
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-6 w-6" />
+                    指名料金・バック率管理
+                  </CardTitle>
+                  {isAdmin && (
+                    <Dialog open={isAddNominationOpen} onOpenChange={setIsAddNominationOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="gap-1">
+                          <Plus className="h-4 w-4" />
+                          指名料金追加
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>新しい指名料金を追加</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="nomination-type">指名タイプ</Label>
+                            <Input
+                              id="nomination-type"
+                              value={nominationForm.nomination_type}
+                              onChange={(e) =>
+                                setNominationForm({ ...nominationForm, nomination_type: e.target.value })
+                              }
+                              placeholder="例: 本指名, フリー指名"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="nomination-price">お客様料金 (円)</Label>
+                            <Input
+                              id="nomination-price"
+                              type="number"
+                              value={nominationForm.customer_price}
+                              onChange={(e) =>
+                                setNominationForm({
+                                  ...nominationForm,
+                                  customer_price: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="nomination-therapist-back">セラピストバック (円)</Label>
+                            <Input
+                              id="nomination-therapist-back"
+                              type="number"
+                              value={nominationForm.therapist_back}
+                              onChange={(e) =>
+                                setNominationForm({
+                                  ...nominationForm,
+                                  therapist_back: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="nomination-shop-back">店舗バック (円)</Label>
+                            <Input
+                              id="nomination-shop-back"
+                              type="number"
+                              value={nominationForm.shop_back}
+                              onChange={(e) =>
+                                setNominationForm({
+                                  ...nominationForm,
+                                  shop_back: parseInt(e.target.value) || 0,
+                                })
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <Button onClick={handleAddNomination} className="w-full">
+                            追加
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {nominationRates.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">
+                    登録されている指名料金はありません
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {nominationRates.map((nomination) => (
+                      <div
+                        key={nomination.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium">{nomination.nomination_type}</p>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <p>お客様料金: ¥{nomination.customer_price.toLocaleString()}</p>
+                            <p>セラピストバック: ¥{nomination.therapist_back?.toLocaleString() || 0}</p>
+                            <p>店舗バック: ¥{nomination.shop_back?.toLocaleString() || 0}</p>
+                          </div>
+                        </div>
+                        {isAdmin && (
+                          <Button
+                            onClick={() => handleDeleteNomination(nomination.id)}
+                            variant="destructive"
+                            size="sm"
+                            className="gap-1"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            削除
+                          </Button>
                         )}
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
