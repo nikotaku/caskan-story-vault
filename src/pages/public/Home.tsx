@@ -6,6 +6,7 @@ import { FaXTwitter, FaLine } from "react-icons/fa6";
 import { Card, CardContent } from "@/components/ui/card";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { ChatBot } from "@/components/ChatBot";
+import { DailyReservationTimeline } from "@/components/DailyReservationTimeline";
 import caskanLogo from "@/assets/caskan-logo.png";
 
 const Home = () => {
@@ -120,6 +121,13 @@ const Home = () => {
           </div>
         </div>
       </div>
+
+      {/* Daily Reservation Timeline */}
+      <section className="py-12 px-4 bg-white">
+        <div className="container mx-auto">
+          <DailyReservationTimeline />
+        </div>
+      </section>
 
       {/* Concept Section */}
       <section className="py-20 px-4 bg-white">
