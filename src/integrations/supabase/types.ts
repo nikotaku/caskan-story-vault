@@ -438,33 +438,48 @@ export type Database = {
       }
       rooms: {
         Row: {
+          address: string | null
           amenities: string[] | null
           capacity: number | null
           created_at: string
           description: string | null
+          equipment_costumes: string | null
+          equipment_placement: string | null
+          garbage_disposal: string | null
           id: string
           is_active: boolean
           name: string
+          room_photos: string[] | null
           updated_at: string
         }
         Insert: {
+          address?: string | null
           amenities?: string[] | null
           capacity?: number | null
           created_at?: string
           description?: string | null
+          equipment_costumes?: string | null
+          equipment_placement?: string | null
+          garbage_disposal?: string | null
           id?: string
           is_active?: boolean
           name: string
+          room_photos?: string[] | null
           updated_at?: string
         }
         Update: {
+          address?: string | null
           amenities?: string[] | null
           capacity?: number | null
           created_at?: string
           description?: string | null
+          equipment_costumes?: string | null
+          equipment_placement?: string | null
+          garbage_disposal?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          room_photos?: string[] | null
           updated_at?: string
         }
         Relationships: []
