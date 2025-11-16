@@ -36,6 +36,11 @@ interface Room {
   capacity: number;
   amenities: string[] | null;
   is_active: boolean;
+  address: string | null;
+  equipment_costumes: string | null;
+  garbage_disposal: string | null;
+  equipment_placement: string | null;
+  room_photos: string[] | null;
 }
 
 const RoomSettings = () => {
@@ -49,6 +54,11 @@ const RoomSettings = () => {
     capacity: 1,
     amenities: "",
     is_active: true,
+    address: "",
+    equipment_costumes: "",
+    garbage_disposal: "",
+    equipment_placement: "",
+    room_photos: "",
   });
   const { toast } = useToast();
 
@@ -83,6 +93,11 @@ const RoomSettings = () => {
         capacity: room.capacity,
         amenities: room.amenities?.join(", ") || "",
         is_active: room.is_active,
+        address: room.address || "",
+        equipment_costumes: room.equipment_costumes || "",
+        garbage_disposal: room.garbage_disposal || "",
+        equipment_placement: room.equipment_placement || "",
+        room_photos: room.room_photos?.join(", ") || "",
       });
     } else {
       setEditingRoom(null);
@@ -92,6 +107,11 @@ const RoomSettings = () => {
         capacity: 1,
         amenities: "",
         is_active: true,
+        address: "",
+        equipment_costumes: "",
+        garbage_disposal: "",
+        equipment_placement: "",
+        room_photos: "",
       });
     }
     setIsDialogOpen(true);
@@ -112,12 +132,22 @@ const RoomSettings = () => {
       .map((a) => a.trim())
       .filter((a) => a);
 
+    const photosArray = formData.room_photos
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p);
+
     const roomData = {
       name: formData.name,
       description: formData.description || null,
       capacity: formData.capacity,
       amenities: amenitiesArray.length > 0 ? amenitiesArray : null,
       is_active: formData.is_active,
+      address: formData.address || null,
+      equipment_costumes: formData.equipment_costumes || null,
+      garbage_disposal: formData.garbage_disposal || null,
+      equipment_placement: formData.equipment_placement || null,
+      room_photos: photosArray.length > 0 ? photosArray : null,
     };
 
     if (editingRoom) {
@@ -261,6 +291,87 @@ const RoomSettings = () => {
                           })
                         }
                         placeholder="例: シャワー, タオル, ドライヤー"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="address">ルーム住所</Label>
+                      <Input
+                        id="address"
+                        value={formData.address}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            address: e.target.value,
+                          })
+                        }
+                        placeholder="例: 東京都渋谷区..."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="equipment_costumes">
+                        ルーム設備/衣装
+                      </Label>
+                      <Textarea
+                        id="equipment_costumes"
+                        value={formData.equipment_costumes}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            equipment_costumes: e.target.value,
+                          })
+                        }
+                        placeholder="設備や衣装の詳細を入力"
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="garbage_disposal">
+                        ゴミ出しの方法
+                      </Label>
+                      <Textarea
+                        id="garbage_disposal"
+                        value={formData.garbage_disposal}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            garbage_disposal: e.target.value,
+                          })
+                        }
+                        placeholder="ゴミ出しの方法を入力"
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="equipment_placement">
+                        備品の配置
+                      </Label>
+                      <Textarea
+                        id="equipment_placement"
+                        value={formData.equipment_placement}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            equipment_placement: e.target.value,
+                          })
+                        }
+                        placeholder="備品の配置を入力"
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="room_photos">
+                        ルーム写真（URLをカンマ区切り）
+                      </Label>
+                      <Input
+                        id="room_photos"
+                        value={formData.room_photos}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            room_photos: e.target.value,
+                          })
+                        }
+                        placeholder="例: https://..., https://..."
                       />
                     </div>
                     <div className="flex items-center space-x-2">
