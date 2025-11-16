@@ -23,6 +23,7 @@ import PublicCastDetail from "./pages/public/CastDetail";
 import PublicSchedule from "./pages/public/Schedule";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
+import PublicAccess from "./pages/public/Access";
 import NotionPageView from "./pages/NotionPageView";
 import BookingReservation from "./pages/public/BookingReservation";
 import TextGeneration from "./pages/TextGeneration";
@@ -47,6 +48,7 @@ const App = () => (
           <Route path="/schedule" element={<PublicSchedule />} />
           <Route path="/pricing" element={<PublicPricing />} />
           <Route path="/system" element={<PublicSystem />} />
+          <Route path="/access" element={<PublicAccess />} />
           <Route path="/booking" element={<BookingReservation />} />
           <Route path="/page/:slug" element={<NotionPageView />} />
           

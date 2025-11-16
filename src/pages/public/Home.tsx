@@ -71,6 +71,10 @@ const Home = () => {
               <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
               <div className="text-xs text-[#a89586]">システム</div>
             </Link>
+            <Link to="/access" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
+              <div className="text-[#8b7355] font-semibold text-sm">ACCESS</div>
+              <div className="text-xs text-[#a89586]">アクセス</div>
+            </Link>
             <Link to="/booking" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
               <div className="text-[#8b7355] font-semibold text-sm">BOOKING</div>
               <div className="text-xs text-[#a89586]">WEB予約</div>

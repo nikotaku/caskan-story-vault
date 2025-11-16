@@ -207,6 +207,9 @@ const Schedule = () => {
             <Link to="/schedule" className="px-6 py-3 text-[#8b7355] bg-[#f5e8e4] transition-colors text-sm border-b-2 border-[#d4a574]">
               出勤表
             </Link>
+            <Link to="/access" className="px-6 py-3 text-[#8b7355] hover:bg-[#f5e8e4] transition-colors text-sm">
+              アクセス
+            </Link>
             <Link to="/booking" className="px-6 py-3 text-[#8b7355] hover:bg-[#f5e8e4] transition-colors text-sm">
               WEB予約
             </Link>
