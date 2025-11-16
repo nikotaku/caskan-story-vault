@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +48,20 @@ const RoomSettings = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
-  const [formData, setFormData] = useState({
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    capacity: number;
+    amenities: string;
+    is_active: boolean;
+    address: string;
+    equipment_costumes: string;
+    garbage_disposal: string;
+    equipment_placement: string;
+    room_photos: string[];
+  }>({
     name: "",
     description: "",
     capacity: 1,
@@ -58,7 +71,7 @@ const RoomSettings = () => {
     equipment_costumes: "",
     garbage_disposal: "",
     equipment_placement: "",
-    room_photos: "",
+    room_photos: [],
   });
   const { toast } = useToast();
 
@@ -97,7 +110,7 @@ const RoomSettings = () => {
         equipment_costumes: room.equipment_costumes || "",
         garbage_disposal: room.garbage_disposal || "",
         equipment_placement: room.equipment_placement || "",
-        room_photos: room.room_photos?.join(", ") || "",
+        room_photos: room.room_photos || [],
       });
     } else {
       setEditingRoom(null);
@@ -111,7 +124,7 @@ const RoomSettings = () => {
         equipment_costumes: "",
         garbage_disposal: "",
         equipment_placement: "",
-        room_photos: "",
+        room_photos: [],
       });
     }
     setIsDialogOpen(true);
@@ -132,11 +145,6 @@ const RoomSettings = () => {
       .map((a) => a.trim())
       .filter((a) => a);
 
-    const photosArray = formData.room_photos
-      .split(",")
-      .map((p) => p.trim())
-      .filter((p) => p);
-
     const roomData = {
       name: formData.name,
       description: formData.description || null,
@@ -147,7 +155,7 @@ const RoomSettings = () => {
       equipment_costumes: formData.equipment_costumes || null,
       garbage_disposal: formData.garbage_disposal || null,
       equipment_placement: formData.equipment_placement || null,
-      room_photos: photosArray.length > 0 ? photosArray : null,
+      room_photos: formData.room_photos.length > 0 ? formData.room_photos : null,
     };
 
     if (editingRoom) {
@@ -209,6 +217,73 @@ const RoomSettings = () => {
     });
 
     fetchRooms();
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingPhotos(true);
+
+    try {
+      const uploadedUrls: string[] = [];
+
+      for (const file of Array.from(files)) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('room-photos')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast({
+            title: "エラー",
+            description: `${file.name}のアップロードに失敗しました`,
+            variant: "destructive",
+          });
+          continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('room-photos')
+          .getPublicUrl(filePath);
+
+        uploadedUrls.push(publicUrl);
+      }
+
+      if (uploadedUrls.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          room_photos: [...prev.room_photos, ...uploadedUrls]
+        }));
+        toast({
+          title: "成功",
+          description: `${uploadedUrls.length}枚の写真をアップロードしました`,
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading photos:', error);
+      toast({
+        title: "エラー",
+        description: "写真のアップロードに失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhotos(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      room_photos: prev.room_photos.filter((_, i) => i !== index)
+    }));
   };
 
   return (
@@ -358,21 +433,56 @@ const RoomSettings = () => {
                         rows={3}
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="room_photos">
-                        ルーム写真（URLをカンマ区切り）
-                      </Label>
-                      <Input
-                        id="room_photos"
-                        value={formData.room_photos}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            room_photos: e.target.value,
-                          })
-                        }
-                        placeholder="例: https://..., https://..."
-                      />
+                    <div className="space-y-2">
+                      <Label>ルーム写真</Label>
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                            id="photo-upload"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingPhotos}
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            {uploadingPhotos ? 'アップロード中...' : '写真を選択'}
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            複数の写真を選択できます
+                          </span>
+                        </div>
+
+                        {formData.room_photos && formData.room_photos.length > 0 && (
+                          <div className="grid grid-cols-3 gap-4">
+                            {formData.room_photos.map((photo, index) => (
+                              <div key={index} className="relative group">
+                                <img
+                                  src={photo}
+                                  alt={`Room photo ${index + 1}`}
+                                  className="w-full h-32 object-cover rounded-lg"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="icon"
+                                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                                  onClick={() => handleRemovePhoto(index)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Switch
