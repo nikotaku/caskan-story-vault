@@ -63,6 +63,7 @@ interface ReservationFormProps {
   formData: FormData;
   setFormData: (data: FormData) => void;
   casts: Cast[];
+  rooms: { id: string; name: string; address: string | null }[];
   backRates: BackRate[];
   optionRates: OptionRate[];
   nominationRates: NominationRate[];
@@ -73,6 +74,7 @@ export function ReservationForm({
   formData,
   setFormData,
   casts,
+  rooms,
   backRates,
   optionRates,
   nominationRates,
@@ -259,6 +261,25 @@ export function ReservationForm({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="room">ルーム</Label>
+          <Select
+            value={formData.room}
+            onValueChange={(value) => setFormData({ ...formData, room: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="ルームを選択" />
+            </SelectTrigger>
+            <SelectContent>
+              {rooms.map((room) => (
+                <SelectItem key={room.id} value={room.name}>
+                  {room.name}
+                  {room.address && ` - ${room.address}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div>
           <Label>コースタイプ</Label>
           <Select
