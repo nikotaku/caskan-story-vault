@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { SalesReport } from "@/components/SalesReport";
+import { DailyReservationTimeline } from "@/components/DailyReservationTimeline";
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -17,7 +18,8 @@ const Index = () => {
       
       <main className="pt-[60px] md:ml-[180px] transition-all duration-300">
         <div className="p-4">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <DailyReservationTimeline />
             <SalesReport />
           </div>
         </div>
