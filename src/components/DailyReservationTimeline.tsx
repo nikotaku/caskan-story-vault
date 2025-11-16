@@ -141,21 +141,26 @@ export const DailyReservationTimeline = () => {
                       (r) => r.cast_id === shift.cast_id
                     );
 
+                    const shiftStartPos = getTimePosition(shift.start_time);
+                    const shiftEndPos = getTimePosition(shift.end_time);
+                    const shiftHeight = shiftEndPos - shiftStartPos;
+
                     return (
                       <div
                         key={shift.id}
-                        className="absolute left-0 right-0 px-1"
+                        className="absolute left-0 right-0 px-1 border-l-2 border-primary/30"
                         style={{
-                          top: `${getTimePosition(shift.start_time)}%`,
+                          top: `${shiftStartPos}%`,
+                          height: `${shiftHeight}%`,
                         }}
                       >
-                        {/* Cast info */}
-                        <div className="flex items-center gap-1 mb-1">
+                        {/* Cast info at the top of shift */}
+                        <div className="flex items-center gap-1 mb-1 bg-background/80 p-1 rounded sticky top-0">
                           {shift.cast.photo && (
                             <img
                               src={shift.cast.photo}
                               alt={shift.cast.name}
-                              className="w-8 h-8 rounded-full object-cover"
+                              className="w-10 h-10 rounded-full object-cover"
                             />
                           )}
                           <div className="text-xs">
@@ -163,40 +168,52 @@ export const DailyReservationTimeline = () => {
                             <div className="text-muted-foreground">
                               {shift.start_time.slice(0, 5)}~{shift.end_time.slice(0, 5)}
                             </div>
+                            <div className="text-xs text-muted-foreground">
+                              ⏰ 20min
+                            </div>
                           </div>
                         </div>
 
-                        {/* Reservations */}
-                        {shiftReservations.map((reservation) => (
-                          <Card
-                            key={reservation.id}
-                            className="p-2 mb-1 text-xs"
-                            style={{
-                              backgroundColor:
-                                reservation.payment_status === "paid"
-                                  ? "hsl(var(--primary) / 0.2)"
-                                  : "hsl(var(--secondary) / 0.2)",
-                              minHeight: `${Math.max(getReservationHeight(reservation.duration), 60)}px`,
-                            }}
-                          >
-                            <div className="font-semibold">
-                              {reservation.start_time.slice(0, 5)}~
-                              {format(
-                                addDays(
-                                  parse(reservation.start_time, "HH:mm:ss", new Date()),
-                                  0
-                                ).getTime() + reservation.duration * 60000,
-                                "HH:mm"
-                              )}
-                            </div>
-                            <div>{reservation.customer_name}</div>
-                            <div>{reservation.duration}分</div>
-                            <div className="font-semibold">
-                              ¥{reservation.price.toLocaleString()}{" "}
-                              {reservation.payment_status === "paid" ? "現" : "未"}
-                            </div>
-                          </Card>
-                        ))}
+                        {/* Reservations positioned within shift time */}
+                        <div className="relative" style={{ height: `calc(${shiftHeight}% - 60px)` }}>
+                          {shiftReservations.map((reservation) => {
+                            const reservationStartPos = getTimePosition(reservation.start_time);
+                            const relativePos = ((reservationStartPos - shiftStartPos) / shiftHeight) * 100;
+                            
+                            return (
+                              <Card
+                                key={reservation.id}
+                                className="absolute left-0 right-0 p-2 mb-1 text-xs"
+                                style={{
+                                  top: `${relativePos}%`,
+                                  backgroundColor:
+                                    reservation.payment_status === "paid"
+                                      ? "hsl(217 91% 60% / 0.3)"
+                                      : "hsl(142 76% 36% / 0.3)",
+                                  minHeight: `${Math.max(getReservationHeight(reservation.duration), 60)}px`,
+                                  border: "2px solid hsl(var(--border))",
+                                }}
+                              >
+                                <div className="font-semibold">
+                                  {reservation.start_time.slice(0, 5)}~
+                                  {format(
+                                    addDays(
+                                      parse(reservation.start_time, "HH:mm:ss", new Date()),
+                                      0
+                                    ).getTime() + reservation.duration * 60000,
+                                    "HH:mm"
+                                  )}
+                                </div>
+                                <div className="font-medium">{reservation.customer_name}</div>
+                                <div>{reservation.duration}分</div>
+                                <div className="font-semibold">
+                                  ¥{reservation.price.toLocaleString()}{" "}
+                                  {reservation.payment_status === "paid" ? "現" : "未"}
+                                </div>
+                              </Card>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}
