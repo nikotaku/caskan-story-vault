@@ -163,8 +163,13 @@ export const DailyReservationTimeline = () => {
                               className="w-10 h-10 rounded-full object-cover"
                             />
                           )}
-                          <div className="text-xs">
-                            <div className="font-semibold">{shift.cast.name}</div>
+                          <div className="text-xs flex-1">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <div className="font-semibold">{shift.cast.name}</div>
+                              <span className="px-1.5 py-0.5 bg-primary/20 text-primary rounded text-[10px] font-medium">
+                                {shift.room || shift.cast.room}
+                              </span>
+                            </div>
                             <div className="text-muted-foreground">
                               {shift.start_time.slice(0, 5)}~{shift.end_time.slice(0, 5)}
                             </div>
