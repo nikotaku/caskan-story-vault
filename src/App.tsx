@@ -29,6 +29,7 @@ import TextGeneration from "./pages/TextGeneration";
 import EstamaIntegration from "./pages/EstamaIntegration";
 import Agreement from "./pages/Agreement";
 import SyncDashboard from "./pages/SyncDashboard";
+import RoomSettings from "./pages/RoomSettings";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,7 @@ const App = () => (
           <Route path="/reservations" element={<Reservations />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/agreement" element={<Agreement />} />
+          <Route path="/rooms" element={<RoomSettings />} />
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
           <Route path="/salary" element={<Salary />} />
