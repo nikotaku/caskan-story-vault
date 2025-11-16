@@ -22,6 +22,12 @@ interface Cast {
   name: string;
 }
 
+interface Room {
+  id: string;
+  name: string;
+  address: string | null;
+}
+
 interface Reservation {
   id: string;
   cast_id: string;
@@ -68,6 +74,7 @@ export default function Reservations() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [casts, setCasts] = useState<Cast[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [backRates, setBackRates] = useState<BackRate[]>([]);
   const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
   const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
@@ -109,6 +116,7 @@ export default function Reservations() {
   useEffect(() => {
     if (user) {
       fetchCasts();
+      fetchRooms();
       fetchReservations();
       fetchRates();
       
@@ -168,6 +176,21 @@ export default function Reservations() {
       setCasts(data || []);
     } catch (error) {
       console.error('Error fetching casts:', error);
+    }
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('id, name, address')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setRooms(data || []);
+    } catch (error) {
+      console.error('Error fetching rooms:', error);
     }
   };
 
@@ -240,6 +263,7 @@ export default function Reservations() {
           nomination_type: formData.nomination_type === 'none' ? null : formData.nomination_type,
           price: formData.price,
           notes: formData.notes || null,
+          room: formData.room || null,
           created_by: user!.id,
         }]);
 
@@ -409,15 +433,16 @@ export default function Reservations() {
                           <SheetTitle>新しい予約を追加</SheetTitle>
                         </SheetHeader>
                         <div className="mt-6">
-                          <ReservationForm
-                            formData={formData}
-                            setFormData={setFormData}
-                            casts={casts}
-                            backRates={backRates}
-                            optionRates={optionRates}
-                            nominationRates={nominationRates}
-                            onSubmit={handleAddReservation}
-                          />
+              <ReservationForm
+                formData={formData}
+                setFormData={setFormData}
+                casts={casts}
+                rooms={rooms}
+                backRates={backRates}
+                optionRates={optionRates}
+                nominationRates={nominationRates}
+                onSubmit={handleAddReservation}
+              />
                         </div>
                       </SheetContent>
                     </Sheet>

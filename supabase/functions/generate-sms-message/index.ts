@@ -18,7 +18,8 @@ serve(async (req) => {
       courseName, 
       duration, 
       castName,
-      shopName 
+      shopName,
+      roomAddress
     } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -26,12 +27,15 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const addressInfo = roomAddress ? `\n住所: ${roomAddress}` : "";
+
     const systemPrompt = `あなたはメンズエステサロンのスタッフです。予約確認のSMSメッセージを作成してください。
 以下の条件を守ってください：
 - 丁寧で親しみやすい文体
 - 160文字以内で簡潔に
 - 予約日時、コース、セラピスト名を含める
 - 店舗名を含める
+- 住所が提供されている場合は必ず含める
 - 変更やキャンセルの連絡先を案内`;
 
     const userPrompt = `以下の予約情報でSMSメッセージを作成してください：
@@ -40,7 +44,7 @@ serve(async (req) => {
 時間: ${startTime}
 コース: ${courseName} (${duration}分)
 担当セラピスト: ${castName}
-店舗名: ${shopName || "当店"}
+店舗名: ${shopName || "当店"}${addressInfo}
 
 SMSメッセージのみを出力してください。`;
 

@@ -380,6 +380,7 @@ export type Database = {
           payment_status: string
           price: number
           reservation_date: string
+          room: string | null
           start_time: string
           status: string
           updated_at: string
@@ -401,6 +402,7 @@ export type Database = {
           payment_status?: string
           price: number
           reservation_date: string
+          room?: string | null
           start_time: string
           status?: string
           updated_at?: string
@@ -422,6 +424,7 @@ export type Database = {
           payment_status?: string
           price?: number
           reservation_date?: string
+          room?: string | null
           start_time?: string
           status?: string
           updated_at?: string
