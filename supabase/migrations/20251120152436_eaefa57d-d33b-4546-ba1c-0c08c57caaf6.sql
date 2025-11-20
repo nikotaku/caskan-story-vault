@@ -1,0 +1,16 @@
+-- セラピスト管理情報の追加列
+ALTER TABLE public.casts 
+ADD COLUMN IF NOT EXISTS therapist_years INTEGER,
+ADD COLUMN IF NOT EXISTS favorite_techniques TEXT,
+ADD COLUMN IF NOT EXISTS favorite_food TEXT,
+ADD COLUMN IF NOT EXISTS ideal_partner TEXT,
+ADD COLUMN IF NOT EXISTS follow_list TEXT,
+ADD COLUMN IF NOT EXISTS media_registration TEXT[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS marks TEXT[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS files TEXT[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS registration_sheet TEXT,
+ADD COLUMN IF NOT EXISTS format_type TEXT,
+ADD COLUMN IF NOT EXISTS recent_dispatch_details TEXT,
+ADD COLUMN IF NOT EXISTS memo TEXT,
+ADD COLUMN IF NOT EXISTS dispatch_status TEXT DEFAULT 'none',
+ADD COLUMN IF NOT EXISTS repeat_scheduled BOOLEAN DEFAULT false;
