@@ -58,26 +58,39 @@ export type Database = {
           created_at: string
           cup_size: string | null
           day_off_activities: string | null
+          dispatch_status: string | null
           execution_date_end: string | null
           execution_date_start: string | null
           experience_years: number | null
           favorite_food: string | null
+          favorite_techniques: string | null
+          files: string[] | null
+          follow_list: string | null
+          format_type: string | null
           height: number | null
           hip: number | null
           hobbies: string | null
           hp_notice: string | null
           id: string
+          ideal_partner: string | null
           ideal_type: string | null
           join_date: string
+          marks: string[] | null
+          media_registration: string[] | null
+          memo: string | null
           message: string | null
           name: string
           photo: string | null
           photos: string[] | null
           profile: string | null
+          recent_dispatch_details: string | null
+          registration_sheet: string | null
+          repeat_scheduled: boolean | null
           room: string | null
           specialties: string | null
           status: string
           tags: string[] | null
+          therapist_years: number | null
           type: string
           updated_at: string
           upload_check: string | null
@@ -94,26 +107,39 @@ export type Database = {
           created_at?: string
           cup_size?: string | null
           day_off_activities?: string | null
+          dispatch_status?: string | null
           execution_date_end?: string | null
           execution_date_start?: string | null
           experience_years?: number | null
           favorite_food?: string | null
+          favorite_techniques?: string | null
+          files?: string[] | null
+          follow_list?: string | null
+          format_type?: string | null
           height?: number | null
           hip?: number | null
           hobbies?: string | null
           hp_notice?: string | null
           id?: string
+          ideal_partner?: string | null
           ideal_type?: string | null
           join_date?: string
+          marks?: string[] | null
+          media_registration?: string[] | null
+          memo?: string | null
           message?: string | null
           name: string
           photo?: string | null
           photos?: string[] | null
           profile?: string | null
+          recent_dispatch_details?: string | null
+          registration_sheet?: string | null
+          repeat_scheduled?: boolean | null
           room?: string | null
           specialties?: string | null
           status?: string
           tags?: string[] | null
+          therapist_years?: number | null
           type: string
           updated_at?: string
           upload_check?: string | null
@@ -130,26 +156,39 @@ export type Database = {
           created_at?: string
           cup_size?: string | null
           day_off_activities?: string | null
+          dispatch_status?: string | null
           execution_date_end?: string | null
           execution_date_start?: string | null
           experience_years?: number | null
           favorite_food?: string | null
+          favorite_techniques?: string | null
+          files?: string[] | null
+          follow_list?: string | null
+          format_type?: string | null
           height?: number | null
           hip?: number | null
           hobbies?: string | null
           hp_notice?: string | null
           id?: string
+          ideal_partner?: string | null
           ideal_type?: string | null
           join_date?: string
+          marks?: string[] | null
+          media_registration?: string[] | null
+          memo?: string | null
           message?: string | null
           name?: string
           photo?: string | null
           photos?: string[] | null
           profile?: string | null
+          recent_dispatch_details?: string | null
+          registration_sheet?: string | null
+          repeat_scheduled?: boolean | null
           room?: string | null
           specialties?: string | null
           status?: string
           tags?: string[] | null
+          therapist_years?: number | null
           type?: string
           updated_at?: string
           upload_check?: string | null
