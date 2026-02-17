@@ -1,23 +1,60 @@
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Phone, MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { FaXTwitter, FaLine } from "react-icons/fa6";
-import { Card, CardContent } from "@/components/ui/card";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { ChatBot } from "@/components/ChatBot";
-import caskanLogo from "@/assets/caskan-logo.png";
+import { PublicNavigation } from "@/components/public/PublicNavigation";
+import { PublicFooter } from "@/components/public/PublicFooter";
+import { FixedBottomBar } from "@/components/public/FixedBottomBar";
+import { SectionHeading } from "@/components/public/SectionHeading";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+import { ja } from "date-fns/locale";
+
+interface Cast {
+  id: string;
+  name: string;
+  age: number | null;
+  height: number | null;
+  cup_size: string | null;
+  photo: string | null;
+  profile: string | null;
+  join_date: string;
+  x_account: string | null;
+  status: string;
+}
+
+interface Shift {
+  id: string;
+  cast_id: string;
+  start_time: string;
+  end_time: string;
+  room: string | null;
+  casts: {
+    id: string;
+    name: string;
+    photo: string | null;
+    age: number | null;
+    height: number | null;
+    cup_size: string | null;
+    profile: string | null;
+    x_account: string | null;
+  };
+}
 
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
-  
+  const [newFaceCasts, setNewFaceCasts] = useState<Cast[]>([]);
+  const [todayShifts, setTodayShifts] = useState<Shift[]>([]);
+  const [allCasts, setAllCasts] = useState<Cast[]>([]);
+
   const slides = [
     "https://cdn2-caskan.com/caskan/img/shop_top_banner/1401_banner_1750253573.png",
-    "https://cdn2-caskan.com/caskan/img/shop_top_banner/1401_banner_1750762260.png"
+    "https://cdn2-caskan.com/caskan/img/shop_top_banner/1401_banner_1750762260.png",
   ];
 
   useEffect(() => {
-    document.title = "全力エステ - ホーム";
+    document.title = "全力エステ 仙台 | メンズエステ";
   }, []);
 
   useEffect(() => {
@@ -27,271 +64,438 @@ const Home = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % slides.length);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = format(thirtyDaysAgo, "yyyy-MM-dd");
+
+    const [castsRes, shiftsRes] = await Promise.all([
+      supabase
+        .from("casts")
+        .select("id, name, age, height, cup_size, photo, profile, join_date, x_account, status")
+        .order("join_date", { ascending: false }),
+      supabase
+        .from("shifts")
+        .select(`
+          id, cast_id, start_time, end_time, room,
+          casts (id, name, photo, age, height, cup_size, profile, x_account)
+        `)
+        .eq("shift_date", today)
+        .order("start_time", { ascending: true }),
+    ]);
+
+    if (castsRes.data) {
+      setAllCasts(castsRes.data);
+      setNewFaceCasts(
+        castsRes.data.filter((c) => c.join_date >= thirtyDaysAgoStr)
+      );
+    }
+    if (shiftsRes.data) {
+      // Deduplicate by cast_id
+      const seen = new Set<string>();
+      const unique = shiftsRes.data.filter((s) => {
+        if (seen.has(s.cast_id)) return false;
+        seen.add(s.cast_id);
+        return true;
+      });
+      setTodayShifts(unique as Shift[]);
+    }
+  };
+
+  const nextSlide = () =>
+    setCurrentSlide((prev) => (prev + 1) % slides.length);
+  const prevSlide = () =>
+    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
-      {/* Top Contact Bar */}
-      <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
-        <div className="container mx-auto flex justify-center items-center">
-          <span>12:00〜26:00(24:40最終受付)</span>
-        </div>
-      </div>
+    <div className="min-h-screen pb-14 md:pb-0" style={{ backgroundColor: "#f5e8e4" }}>
+      <PublicNavigation />
 
-      {/* Hero Section with Logo */}
-      <div className="relative py-12 text-center" style={{ background: "linear-gradient(180deg, #f5e8e4 0%, #edddd6 100%)" }}>
-        <div className="container mx-auto">
-          <img 
-            src={caskanLogo} 
-            alt="全力エステ" 
-            className="h-32 md:h-48 mx-auto object-contain"
-            style={{ mixBlendMode: 'multiply' }}
-          />
-        </div>
-      </div>
-
-      {/* Navigation Menu */}
-      <nav className="bg-white border-y border-[#e5d5cc] sticky top-0 z-50 shadow-sm">
-        <div className="container mx-auto">
-          <div className="flex justify-center items-center flex-wrap">
-            <Link to="/" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">TOP</div>
-              <div className="text-xs text-[#a89586]">トップ</div>
-            </Link>
-            <Link to="/schedule" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">SCHEDULE</div>
-              <div className="text-xs text-[#a89586]">出勤情報</div>
-            </Link>
-            <Link to="/casts" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">THERAPIST</div>
-              <div className="text-xs text-[#a89586]">セラピスト</div>
-            </Link>
-            <Link to="/system" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">SYSTEM</div>
-              <div className="text-xs text-[#a89586]">システム</div>
-            </Link>
-            <Link to="/access" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">ACCESS</div>
-              <div className="text-xs text-[#a89586]">アクセス</div>
-            </Link>
-            <Link to="/booking" className="px-8 py-4 hover:bg-[#f5e8e4] transition-colors border-b-2 border-transparent hover:border-[#d4a574]">
-              <div className="text-[#8b7355] font-semibold text-sm">BOOKING</div>
-              <div className="text-xs text-[#a89586]">WEB予約</div>
-            </Link>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Banner Slider */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="relative overflow-hidden rounded-lg shadow-2xl">
+      {/* Banner Slider */}
+      <div className="relative">
+        <div className="relative overflow-hidden">
           <AspectRatio ratio={16 / 9}>
             <img
               src={slides[currentSlide]}
-              alt="Banner"
-              className="w-full h-full object-contain transition-opacity duration-500"
+              alt="トップバナー | 全力エステ 仙台"
+              className="w-full h-full object-cover transition-opacity duration-500"
             />
           </AspectRatio>
-
-          {/* Slider Controls */}
           <button
             onClick={prevSlide}
-            className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-3 rounded-full transition-all shadow-lg"
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 p-2 rounded-full text-white"
           >
-            <ChevronLeft className="w-6 h-6 text-[#8b7355]" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={nextSlide}
-            className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-3 rounded-full transition-all shadow-lg"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 p-2 rounded-full text-white"
           >
-            <ChevronRight className="w-6 h-6 text-[#8b7355]" />
+            <ChevronRight className="w-5 h-5" />
           </button>
-
-          {/* Slider Indicators */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
-            {slides.map((_, index) => (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+            {slides.map((_, i) => (
               <button
-                key={index}
-                onClick={() => setCurrentSlide(index)}
-                className={`transition-all ${
-                  currentSlide === index 
-                    ? "bg-[#d4a574] w-10 h-3" 
-                    : "bg-white/70 hover:bg-white w-3 h-3"
-                } rounded-full`}
+                key={i}
+                onClick={() => setCurrentSlide(i)}
+                className={`w-3 h-3 rounded-full transition-all ${
+                  currentSlide === i ? "bg-white" : "bg-white/50"
+                }`}
               />
             ))}
           </div>
         </div>
       </div>
 
-      {/* Concept Section */}
-      <section className="py-20 px-4 bg-white">
-        <div className="container max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 
-              className="text-4xl font-bold mb-3"
-              style={{ 
-                color: "#8b7355",
-                fontFamily: "'Noto Serif JP', serif",
-                letterSpacing: "0.15em"
-              }}
-            >
-              CONCEPT
-            </h2>
-            <p className="text-lg text-[#a89586]" style={{ letterSpacing: "0.2em" }}>コンセプト</p>
+      {/* NEW FACE Section */}
+      {newFaceCasts.length > 0 && (
+        <section className="py-12 px-4">
+          <div className="container mx-auto max-w-5xl">
+            <SectionHeading english="NEW FACE" japanese="新人情報" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+              {newFaceCasts.slice(0, 5).map((cast) => (
+                <TherapistCard key={cast.id} cast={cast} />
+              ))}
+            </div>
           </div>
-          
-          <Card className="bg-gradient-to-br from-[#f5e8e4] to-white border-[#e5d5cc] shadow-xl">
-            <CardContent className="p-12">
-              <div className="space-y-6 text-center">
-                <p 
-                  className="text-2xl leading-relaxed"
-                  style={{ 
-                    color: "#6b5d4f",
-                    fontFamily: "'Noto Serif JP', serif",
-                    letterSpacing: "0.05em"
-                  }}
-                >
-                  素直で愛嬌があり不器用でも全力心でサービス
+        </section>
+      )}
+
+      {/* NEWS Section */}
+      <section className="py-12 px-4 bg-white">
+        <div className="container mx-auto max-w-3xl">
+          <SectionHeading english="NEWS" japanese="お知らせ" />
+          <div className="text-center text-[#a89586] text-sm">
+            <p>最新のお知らせは X (Twitter) にてご確認ください</p>
+            <a
+              href="https://twitter.com/zr_sendai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 mt-4 px-6 py-2 bg-black text-white rounded-full text-sm hover:bg-gray-800 transition-colors"
+            >
+              <img
+                src="https://cdn2-caskan.com/caskan/asset/sns/x.png"
+                alt="X"
+                className="w-4 h-4 invert"
+              />
+              @zr_sendai をフォロー
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* CONCEPT Section */}
+      <section className="py-12 px-4">
+        <div className="container mx-auto max-w-3xl">
+          <SectionHeading english="CONCEPT" japanese="コンセプト" />
+          <div className="bg-white rounded-lg shadow-md p-8 md:p-12">
+            <div className="space-y-4 text-center text-sm md:text-base" style={{ color: "#6b5d4f" }}>
+              <p className="text-lg md:text-xl font-semibold" style={{ color: "#8b7355" }}>
+                素直で愛嬌があり不器用でも全力心でサービス
+              </p>
+              <div className="pt-4 space-y-2">
+                <p>選び抜かれたビジュアル</p>
+                <p>洗練された施術</p>
+                <p>妥協のない接客</p>
+              </div>
+              <div className="pt-6 space-y-2">
+                <p className="font-semibold" style={{ color: "#d4a574" }}>
+                  "全力エステ"は
                 </p>
-                
-                <div className="pt-8 space-y-4 text-lg" style={{ color: "#8b7355" }}>
-                  <p>選び抜かれたビジュアル</p>
-                  <p>洗練された施術</p>
-                  <p>妥協のない接客</p>
-                </div>
-                
-                <div className="pt-8 space-y-4 text-base leading-relaxed" style={{ color: "#6b5d4f" }}>
-                  <p className="font-semibold text-xl" style={{ color: "#d4a574" }}>"全力エステ"は</p>
-                  <p>仙台のメンズエステ界における</p>
-                  <p className="font-bold text-xl">「頂点」を本気で狙う</p>
-                  <p>ハイレベルサロンです。</p>
-                  
-                  <div className="pt-6">
-                    <p>ただ癒すだけじゃない。</p>
-                    <p className="pt-2">あなたの五感すべてを圧倒する</p>
-                    <p className="font-bold text-2xl pt-2" style={{ color: "#d4a574" }}>「全力の一撃」</p>
-                    <p className="pt-2">をご堪能ください。</p>
-                  </div>
-                </div>
+                <p>仙台のメンズエステ界における</p>
+                <p className="font-bold text-lg">「頂点」を本気で狙う</p>
+                <p>ハイレベルサロンです。</p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* Quick Links Section */}
-      <section className="py-16 px-4" style={{ backgroundColor: "#f5e8e4" }}>
-        <div className="container max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Link to="/schedule">
-              <Card className="hover:shadow-2xl transition-all cursor-pointer h-full bg-white border-[#e5d5cc] hover:scale-105 transform">
-                <CardContent className="p-10 text-center">
-                  <div 
-                    className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl shadow-lg"
-                    style={{ background: "linear-gradient(135deg, #d4a574 0%, #c5956f 100%)" }}
-                  >
-                    📅
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2" style={{ color: "#8b7355" }}>SCHEDULE</h3>
-                  <p className="text-sm" style={{ color: "#a89586" }}>出勤情報</p>
-                  <p className="text-xs mt-3 text-muted-foreground">本日の出勤スケジュール</p>
-                </CardContent>
-              </Card>
-            </Link>
-
-            <Link to="/casts">
-              <Card className="hover:shadow-2xl transition-all cursor-pointer h-full bg-white border-[#e5d5cc] hover:scale-105 transform">
-                <CardContent className="p-10 text-center">
-                  <div 
-                    className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl shadow-lg"
-                    style={{ background: "linear-gradient(135deg, #d4a574 0%, #c5956f 100%)" }}
-                  >
-                    👥
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2" style={{ color: "#8b7355" }}>THERAPIST</h3>
-                  <p className="text-sm" style={{ color: "#a89586" }}>セラピスト</p>
-                  <p className="text-xs mt-3 text-muted-foreground">在籍セラピスト紹介</p>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Call to Action */}
-      <section className="py-20 px-4 bg-white">
-        <div className="container max-w-4xl mx-auto text-center">
-          <h2 
-            className="text-4xl font-bold mb-8"
-            style={{ 
-              color: "#8b7355",
-              fontFamily: "'Noto Serif JP', serif",
-              letterSpacing: "0.1em"
-            }}
-          >
-            ご予約・お問い合わせ
-          </h2>
-          <p className="text-lg mb-8" style={{ color: "#a89586" }}>営業時間: 12:00〜26:00（24:40最終受付）</p>
-          
-          {/* Social Media Buttons */}
-          <div className="flex justify-center gap-4 flex-wrap">
-            <Button 
-              size="lg" 
-              className="gap-2 min-w-[200px]"
-              style={{ backgroundColor: "#06C755", color: "white" }}
-              onClick={() => window.open('https://line.me/R/', '_blank')}
-            >
-              <FaLine size={24} />
-              LINE で予約
-            </Button>
-            <Button 
-              size="lg" 
-              className="gap-2 min-w-[200px]"
-              style={{ backgroundColor: "#000000", color: "white" }}
-              onClick={() => window.open('https://twitter.com/', '_blank')}
-            >
-              <FaXTwitter size={20} />
-              Twitter をフォロー
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="py-16 px-4 text-white" style={{ background: "linear-gradient(180deg, #d4b5a8 0%, #c5a89b 100%)" }}>
-        <div className="container max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-10">
-            <div>
-              <h4 className="font-bold mb-4 text-lg">営業時間</h4>
-              <p className="text-white/95">12:00〜26:00</p>
-              <p className="text-sm text-white/80">(24:40最終受付)</p>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-lg">メニュー</h4>
-              <div className="flex flex-col gap-3 text-sm">
-                <Link to="/casts" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  セラピスト
-                </Link>
-                <Link to="/schedule" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  出勤情報
-                </Link>
-                <Link to="/system" className="text-white/85 hover:text-[#d4a574] transition-colors">
-                  システム
-                </Link>
+              <div className="pt-6 space-y-2">
+                <p>ただ癒すだけじゃない。</p>
+                <p>あなたの五感すべてを圧倒する</p>
+                <p className="font-bold text-xl" style={{ color: "#d4a574" }}>
+                  「全力の一撃」
+                </p>
+                <p>をご堪能ください。</p>
               </div>
             </div>
           </div>
-          <div className="text-center text-sm text-white/70 pt-10 border-t border-white/20">
-            © 2025 全力エステ ZR. All rights reserved.
+        </div>
+      </section>
+
+      {/* PICK UP Section */}
+      {allCasts.length > 0 && (
+        <section className="py-12 px-4 bg-white">
+          <div className="container mx-auto max-w-5xl">
+            <SectionHeading english="PICK UP" japanese="ピックアップ" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+              {allCasts.slice(0, 5).map((cast) => (
+                <TherapistCard key={cast.id} cast={cast} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* TODAY'S SCHEDULE Section */}
+      <section className="py-12 px-4">
+        <div className="container mx-auto max-w-5xl">
+          <SectionHeading english="TODAY'S SCHEDULE" japanese="本日の出勤" />
+          {todayShifts.length === 0 ? (
+            <div className="text-center text-[#a89586] py-8">
+              <p>本日の出勤予定はありません</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {todayShifts.map((shift) => (
+                <Link
+                  key={shift.id}
+                  to={`/casts/${shift.casts.id}`}
+                  className="block group"
+                >
+                  <div className="bg-white rounded overflow-hidden shadow hover:shadow-lg transition-shadow">
+                    <div className="relative">
+                      {shift.casts.photo ? (
+                        <img
+                          src={shift.casts.photo}
+                          alt={shift.casts.name}
+                          className="w-full aspect-[3/4] object-cover"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[3/4] bg-gradient-to-br from-[#d4b5a8] to-[#c5a89b] flex items-center justify-center">
+                          <span className="text-4xl text-white">
+                            {shift.casts.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                      {shift.casts.x_account && (
+                        <div className="absolute bottom-2 right-2">
+                          <a
+                            href={`https://twitter.com/${shift.casts.x_account}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <img
+                              src="https://cdn2-caskan.com/caskan/asset/sns/x.png"
+                              alt="X"
+                              className="w-6 h-6"
+                            />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <h4 className="font-bold text-[#8b7355] text-sm">
+                        {shift.casts.name}
+                      </h4>
+                      {shift.casts.profile && (
+                        <p className="text-[10px] text-[#a89586] truncate">
+                          {shift.casts.profile}
+                        </p>
+                      )}
+                      <div className="text-[10px] text-[#a89586] mt-1">
+                        {shift.casts.age && <span>{shift.casts.age}歳</span>}
+                        {shift.casts.height && (
+                          <span className="ml-1">{shift.casts.height}㎝</span>
+                        )}
+                        {shift.casts.cup_size && (
+                          <span className="ml-1">({shift.casts.cup_size})</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-[#8b7355] mt-1">
+                        🕐 {shift.start_time.substring(0, 5)}〜
+                        {shift.end_time.substring(0, 5)}
+                      </div>
+                      {shift.room && (
+                        <div className="text-[10px] text-[#a89586]">
+                          ■{shift.room}■
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+          <div className="text-center mt-6">
+            <Link
+              to="/schedule"
+              className="text-[#8b7355] text-sm hover:underline"
+            >
+              今週の出勤情報 →
+            </Link>
           </div>
         </div>
-      </footer>
+      </section>
 
-      {/* Chat Bot */}
+      {/* Custom Banner */}
+      <div className="container mx-auto px-4 max-w-3xl py-4">
+        <img
+          src="https://cdn2-caskan.com/caskan/img/shop_custom_banner/1401_banner_1750164303.jpeg"
+          alt="バナー | 全力エステ 仙台"
+          className="w-full rounded"
+        />
+      </div>
+
+      {/* NOTICE Section */}
+      <section className="py-12 px-4 bg-white">
+        <div className="container mx-auto max-w-3xl">
+          <SectionHeading english="NOTICE" japanese="注意事項" />
+          <div className="text-xs text-gray-600 leading-relaxed space-y-2">
+            <p className="font-bold">【ご利用規則】</p>
+            <p>
+              仙台リラクゼーションサロン【全力エステ】（以下「当店」といいます。）を、ご利用いただく際には、本利用規約に同意されたものとみなします。
+            </p>
+            <p>※コース内にシャワーのお時間は含まれますのでご了承ください。</p>
+            <p>
+              ※18歳未満の方、スカウト目的の方、同業者、暴力団関係者、泥酔者、薬物使用者、その他当店が相応しくないと判断した方の、お問い合わせ及びご利用は固くお断り致します。
+            </p>
+            <p>※当店は、番号非通知及び公衆電話からの受付は致しかねます。</p>
+            <p>
+              ※当店は、リラクゼーションを目的とした施術を提供するプライベートサロンであり、医療行為、治療行為、風俗的なサービス等は一切行なっておりません。
+            </p>
+            <p>
+              ※セラピストの引き抜き行為やスカウト行為が発覚した場合は、例外なく損害賠償請求、法的措置等も視野にいれた然るべき対応をとらせていただきます。
+            </p>
+            <p>※セラピストとの個人的な連絡先交換や店外へのお誘いは堅くお断り致します。</p>
+            <p>
+              ※盗撮や盗聴等の行為があった際は、所轄警察署に被害届を提出し、法的手続きをとらせていただきます。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* SHOP Section */}
+      <section className="py-12 px-4">
+        <div className="container mx-auto max-w-3xl">
+          <SectionHeading english="SHOP" japanese="店舗情報" />
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 font-bold text-[#8b7355] w-1/3 bg-[#faf5f2]">
+                    店舗名
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">全力エステ 仙台</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 font-bold text-[#8b7355] bg-[#faf5f2]">
+                    URL
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    <a
+                      href="https://zenryoku-esthe.com"
+                      className="text-blue-600 hover:underline"
+                    >
+                      https://zenryoku-esthe.com
+                    </a>
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 font-bold text-[#8b7355] bg-[#faf5f2]">
+                    営業時間
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    12:00〜26:00(24:40最終受付)
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 font-bold text-[#8b7355] bg-[#faf5f2]">
+                    TEL
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    <a href="tel:07090941854" className="hover:underline">
+                      07090941854
+                    </a>
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-4 font-bold text-[#8b7355] bg-[#faf5f2]">
+                    最寄り駅
+                  </td>
+                  <td className="py-3 px-4 text-gray-700">
+                    北四番丁駅｜勾当台公園駅｜仙台駅
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* External Link Banner */}
+      <div className="container mx-auto px-4 max-w-3xl pb-8 text-center">
+        <a
+          href="https://eslove.jp/hokkaido-tohoku/miyagi/shoplist"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            src="https://eslove.jp/eslove_front_theme/banner/banner_200x40.gif"
+            alt="宮城のメンズエステ情報ならエステラブ"
+            className="inline-block"
+          />
+        </a>
+      </div>
+
+      <PublicFooter />
+      <FixedBottomBar />
       <ChatBot />
     </div>
+  );
+};
+
+/* Therapist Card Component */
+const TherapistCard = ({ cast }: { cast: Cast }) => {
+  return (
+    <Link to={`/casts/${cast.id}`} className="block group">
+      <div className="bg-white rounded overflow-hidden shadow hover:shadow-lg transition-shadow">
+        <div className="relative">
+          {cast.photo ? (
+            <img
+              src={cast.photo}
+              alt={cast.name}
+              className="w-full aspect-[3/4] object-cover"
+            />
+          ) : (
+            <div className="w-full aspect-[3/4] bg-gradient-to-br from-[#d4b5a8] to-[#c5a89b] flex items-center justify-center">
+              <span className="text-4xl text-white">
+                {cast.name.charAt(0)}
+              </span>
+            </div>
+          )}
+          {cast.x_account && (
+            <div className="absolute bottom-2 right-2">
+              <a
+                href={`https://twitter.com/${cast.x_account}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <img
+                  src="https://cdn2-caskan.com/caskan/asset/sns/x.png"
+                  alt="X"
+                  className="w-6 h-6"
+                />
+              </a>
+            </div>
+          )}
+        </div>
+        <div className="p-2">
+          <h4 className="font-bold text-[#8b7355] text-sm">{cast.name}</h4>
+          {cast.profile && (
+            <p className="text-[10px] text-[#a89586] truncate">{cast.profile}</p>
+          )}
+          <div className="text-[10px] text-[#a89586] mt-1">
+            {cast.age && <span>{cast.age}歳</span>}
+            {cast.height && <span className="ml-1">{cast.height}㎝</span>}
+            {cast.cup_size && <span className="ml-1">({cast.cup_size})</span>}
+          </div>
+        </div>
+      </div>
+    </Link>
   );
 };
 
