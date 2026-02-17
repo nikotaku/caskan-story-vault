@@ -409,7 +409,7 @@ export default function Reservations() {
       <div className="flex pt-[60px]">
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         
-        <main className="flex-1 p-8 md:ml-[240px]">
+        <main className="flex-1 p-4 md:ml-[180px]">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <Card className="border-none shadow-md">

@@ -227,6 +227,53 @@ export type Database = {
         }
         Relationships: []
       }
+      expenses: {
+        Row: {
+          amount: number
+          cast_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expense_date: string
+          expense_type: string
+          id: string
+          payment_method: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          cast_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_date?: string
+          expense_type?: string
+          id?: string
+          payment_method?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          cast_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_date?: string
+          expense_type?: string
+          id?: string
+          payment_method?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nomination_rates: {
         Row: {
           created_at: string
