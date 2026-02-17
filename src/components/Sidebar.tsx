@@ -35,7 +35,7 @@ interface SidebarProps {
 
 const menuItems = [
   { href: "/dashboard", label: "ホーム", icon: Home },
-  { href: "/schedule", label: "スケジュール", icon: Calendar },
+  { href: "/admin-schedule", label: "スケジュール", icon: Calendar },
   { href: "/staff", label: "キャスト管理", icon: User },
   { href: "/shift", label: "シフト", icon: Clock },
   { href: "/reservations", label: "予約管理", icon: BookOpen },
@@ -44,6 +44,7 @@ const menuItems = [
   { href: "/rooms", label: "ルーム設定", icon: RoomIcon },
   { href: "/pricing-management", label: "料金設定", icon: DollarSign },
   { href: "/salary", label: "給与", icon: Wallet },
+  { href: "/expenses", label: "経費", icon: Receipt },
   { href: "/report", label: "レポート", icon: BarChart3 },
   { href: "/text-generation", label: "文章生成", icon: Sparkles },
   { href: "/estama", label: "Estama連携", icon: ExternalLink },

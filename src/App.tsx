@@ -32,6 +32,7 @@ import Agreement from "./pages/Agreement";
 import SyncDashboard from "./pages/SyncDashboard";
 import RoomSettings from "./pages/RoomSettings";
 import SchedulePage from "./pages/Schedule";
+import Expenses from "./pages/Expenses";
 
 const queryClient = new QueryClient();
 
@@ -56,7 +57,7 @@ const App = () => (
           {/* Admin/Staff Pages */}
           <Route path="/login" element={<Auth />} />
           <Route path="/dashboard" element={<Index />} />
-          <Route path="/schedule" element={<SchedulePage />} />
+          <Route path="/admin-schedule" element={<SchedulePage />} />
           <Route path="/staff" element={<Staff />} />
           <Route path="/shift" element={<Shift />} />
           <Route path="/shift/submission" element={<ShiftSubmission />} />
@@ -72,6 +73,7 @@ const App = () => (
           <Route path="/estama" element={<EstamaIntegration />} />
           <Route path="/sync" element={<SyncDashboard />} />
           <Route path="/shop" element={<Settings />} />
+          <Route path="/expenses" element={<Expenses />} />
           
           {/* Therapist Portal - Token-based access */}
           <Route path="/therapist/:token" element={<TherapistPortal />} />
