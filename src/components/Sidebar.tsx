@@ -35,6 +35,7 @@ interface SidebarProps {
 
 const menuItems = [
   { href: "/dashboard", label: "ホーム", icon: Home },
+  { href: "/schedule", label: "スケジュール", icon: Calendar },
   { href: "/staff", label: "キャスト管理", icon: User },
   { href: "/shift", label: "シフト", icon: Clock },
   { href: "/reservations", label: "予約管理", icon: BookOpen },
