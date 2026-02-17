@@ -31,6 +31,7 @@ import EstamaIntegration from "./pages/EstamaIntegration";
 import Agreement from "./pages/Agreement";
 import SyncDashboard from "./pages/SyncDashboard";
 import RoomSettings from "./pages/RoomSettings";
+import SchedulePage from "./pages/Schedule";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
           {/* Admin/Staff Pages */}
           <Route path="/login" element={<Auth />} />
           <Route path="/dashboard" element={<Index />} />
+          <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/staff" element={<Staff />} />
           <Route path="/shift" element={<Shift />} />
           <Route path="/shift/submission" element={<ShiftSubmission />} />
