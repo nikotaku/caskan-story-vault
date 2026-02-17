@@ -125,87 +125,128 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mb-4 flex justify-center">
-            <img 
-              src={caskanLogo} 
-              alt="全力エステ" 
-              className="h-12"
-            />
-          </div>
-          <CardTitle className="text-2xl">
-            {isLogin ? "ログイン" : "新規登録"}
-          </CardTitle>
-          <CardDescription>
-            {isLogin 
-              ? "管理画面にアクセスするにはログインしてください" 
-              : "新しいアカウントを作成してください"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ backgroundColor: '#f5f5f5' }}>
+      {/* Caskan Logo */}
+      <div className="mb-6">
+        <img 
+          src={caskanLogo} 
+          alt="Caskan" 
+          className="h-16"
+        />
+      </div>
+
+      {/* Login Card */}
+      <div className="w-full max-w-[500px] bg-white rounded shadow-sm border border-gray-200">
+        {/* Header */}
+        <div className="px-6 py-3 border-b border-gray-200" style={{ backgroundColor: '#fafafa' }}>
+          <h2 className="text-base font-normal text-foreground">
+            {isLogin ? "スタッフログイン" : "新規登録"}
+          </h2>
+        </div>
+
+        {/* Form */}
+        <div className="px-6 py-5">
           <form onSubmit={handleAuth} className="space-y-4">
             {!isLogin && (
               <div>
-                <Label htmlFor="displayName">表示名</Label>
-                <Input
-                  id="displayName"
+                <label className="block text-sm text-muted-foreground mb-1">表示名</label>
+                <input
                   type="text"
                   placeholder="山田太郎"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   disabled={loading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
                 />
               </div>
             )}
-            
+
             <div>
-              <Label htmlFor="email">メールアドレス</Label>
-              <Input
-                id="email"
+              <label className="block text-sm text-muted-foreground mb-1">店舗ID</label>
+              <input
+                type="text"
+                value="zenryoku1209"
+                readOnly
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-muted-foreground mb-1">ログインIDまたはメールアドレス</label>
+              <input
                 type="email"
-                placeholder="example@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
               />
             </div>
-            
-            <div>
-              <Label htmlFor="password">パスワード</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+
+            {isLogin && (
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">パスワード</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  minLength={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
+                />
+              </div>
+            )}
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1">パスワード</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  minLength={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
+                />
+              </div>
+            )}
+
+            <div className="flex justify-center pt-2">
+              <button
+                type="submit"
                 disabled={loading}
-                minLength={6}
-              />
+                className="px-12 py-2 rounded text-white text-sm font-normal disabled:opacity-50"
+                style={{ backgroundColor: '#6aab35' }}
+              >
+                {loading ? "処理中..." : isLogin ? "次へ" : "アカウント作成"}
+              </button>
             </div>
-            
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "処理中..." : isLogin ? "ログイン" : "アカウント作成"}
-            </Button>
           </form>
-          
-          <div className="mt-4 text-center text-sm">
+
+          <div className="mt-4 text-center">
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
+              className="text-sm hover:underline"
+              style={{ color: '#6aab35' }}
               disabled={loading}
             >
               {isLogin 
-                ? "アカウントをお持ちでない方はこちら" 
+                ? "キャストのログインはこちら" 
                 : "既にアカウントをお持ちの方はこちら"}
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-auto py-6 text-center text-xs text-gray-400">
+        © 2026 caskan.jp All rights reserved
+      </div>
     </div>
   );
 }
