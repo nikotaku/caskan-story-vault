@@ -86,7 +86,7 @@ export function ReservationForm({
     relaxation: "リラクゼーション",
   };
 
-  const calculatePrice = useCallback(() => {
+  useEffect(() => {
     let totalPrice = 0;
 
     const backRate = backRates.find(
@@ -115,12 +115,10 @@ export function ReservationForm({
       }
     }
 
-    setFormData({ ...formData, price: totalPrice });
-  }, [formData, backRates, optionRates, nominationRates, courseTypeMapping, setFormData]);
-
-  useEffect(() => {
-    calculatePrice();
-  }, [formData.course_type, formData.duration, formData.selectedOptions, formData.nomination_type]);
+    if (totalPrice !== formData.price) {
+      setFormData({ ...formData, price: totalPrice });
+    }
+  }, [formData.course_type, formData.duration, formData.selectedOptions, formData.nomination_type, backRates, optionRates, nominationRates]);
 
   const handleOptionToggle = useCallback((optionName: string) => {
     const newOptions = formData.selectedOptions.includes(optionName)
