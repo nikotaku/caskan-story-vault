@@ -80,18 +80,17 @@ export function ReservationForm({
   nominationRates,
   onSubmit,
 }: ReservationFormProps) {
-  const courseTypeMapping: { [key: string]: string } = {
-    aroma: "アロマオイル",
-    mens: "メンズエステ",
-    relaxation: "リラクゼーション",
-  };
+  const courseTypes = useMemo(() => {
+    const types = [...new Set(backRates.map(r => r.course_type))];
+    return types;
+  }, [backRates]);
 
   useEffect(() => {
     let totalPrice = 0;
 
     const backRate = backRates.find(
       (rate) =>
-        rate.course_type === (courseTypeMapping[formData.course_type] || formData.course_type) &&
+        rate.course_type === formData.course_type &&
         rate.duration === formData.duration
     );
 
@@ -288,9 +287,9 @@ export function ReservationForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="aroma">アロマオイル</SelectItem>
-              <SelectItem value="mens">メンズエステ</SelectItem>
-              <SelectItem value="relaxation">リラクゼーション</SelectItem>
+              {courseTypes.map((type) => (
+                <SelectItem key={type} value={type}>{type}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -302,7 +301,7 @@ export function ReservationForm({
               setFormData({
                 ...formData,
                 duration: parseInt(value),
-                course_name: `${value}分 ${courseTypeMapping[formData.course_type] || formData.course_type}コース`,
+                course_name: `${formData.course_type} ${value}分`,
               })
             }
           >
@@ -311,7 +310,7 @@ export function ReservationForm({
             </SelectTrigger>
             <SelectContent>
               {backRates
-                .filter((rate) => rate.course_type === (courseTypeMapping[formData.course_type] || formData.course_type))
+                .filter((rate) => rate.course_type === formData.course_type)
                 .map((rate) => (
                   <SelectItem key={rate.id} value={rate.duration.toString()}>
                     {rate.duration}分 (¥{rate.customer_price.toLocaleString()})
