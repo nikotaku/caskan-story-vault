@@ -454,7 +454,7 @@ export type Database = {
           course_name: string
           course_type: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           customer_email: string | null
           customer_name: string
           customer_phone: string
@@ -476,7 +476,7 @@ export type Database = {
           course_name: string
           course_type?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           customer_email?: string | null
           customer_name: string
           customer_phone: string
@@ -498,7 +498,7 @@ export type Database = {
           course_name?: string
           course_type?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           customer_email?: string | null
           customer_name?: string
           customer_phone?: string

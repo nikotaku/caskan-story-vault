@@ -381,7 +381,7 @@ const BookingReservation = () => {
           notes: notes.trim() || null,
           status: "pending",
           payment_status: "unpaid",
-          created_by: "00000000-0000-0000-0000-000000000000",
+          created_by: null,
         }]);
 
       if (error) throw error;
