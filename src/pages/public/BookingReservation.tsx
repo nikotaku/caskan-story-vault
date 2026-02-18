@@ -89,7 +89,7 @@ const BookingReservation = () => {
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedCastId, setSelectedCastId] = useState<string>("");
-  const [courseType, setCourseType] = useState<string>("aroma");
+  const [courseType, setCourseType] = useState<string>("アロマオイル");
   const [startTime, setStartTime] = useState<string>("");
   const [duration, setDuration] = useState<number>(80);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -361,9 +361,7 @@ const BookingReservation = () => {
     setSubmitting(true);
 
     try {
-      const courseName = courseType === "aroma" 
-        ? `${duration}分 アロマオイルコース` 
-        : `${duration}分 全力コース`;
+      const courseName = `${courseType} ${duration}分`;
       
       const { error } = await supabase
         .from("reservations")
@@ -725,9 +723,9 @@ const BookingReservation = () => {
                     <div
                       className={cn(
                         "border-2 rounded-lg p-4 cursor-pointer transition-all",
-                        courseType === "aroma" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
+                        courseType === "アロマオイル" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
                       )}
-                      onClick={() => setCourseType("aroma")}
+                      onClick={() => setCourseType("アロマオイル")}
                     >
                       <h3 className="text-lg font-bold mb-2">アロマオイルコース</h3>
                       <p className="text-sm text-muted-foreground mb-3">
@@ -735,30 +733,30 @@ const BookingReservation = () => {
                       </p>
                       <div className="grid grid-cols-3 gap-2">
                         <Button
-                          variant={courseType === "aroma" && duration === 80 ? "default" : "outline"}
+                          variant={courseType === "アロマオイル" && duration === 80 ? "default" : "outline"}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCourseType("aroma");
+                            setCourseType("アロマオイル");
                             setDuration(80);
                           }}
                         >
                           80分<br/>¥12,000
                         </Button>
                         <Button
-                          variant={courseType === "aroma" && duration === 100 ? "default" : "outline"}
+                          variant={courseType === "アロマオイル" && duration === 100 ? "default" : "outline"}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCourseType("aroma");
+                            setCourseType("アロマオイル");
                             setDuration(100);
                           }}
                         >
                           100分<br/>¥15,000
                         </Button>
                         <Button
-                          variant={courseType === "aroma" && duration === 120 ? "default" : "outline"}
+                          variant={courseType === "アロマオイル" && duration === 120 ? "default" : "outline"}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCourseType("aroma");
+                            setCourseType("アロマオイル");
                             setDuration(120);
                           }}
                         >
@@ -771,27 +769,27 @@ const BookingReservation = () => {
                     <div
                       className={cn(
                         "border-2 rounded-lg p-4 cursor-pointer transition-all",
-                        courseType === "zenryoku" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
+                        courseType === "全力コース" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
                       )}
-                      onClick={() => setCourseType("zenryoku")}
+                      onClick={() => setCourseType("全力コース")}
                     >
                       <h3 className="text-lg font-bold mb-2">疲れも悩みも全てを出し切るSPコース</h3>
                       <div className="grid grid-cols-2 gap-2">
                         <Button
-                          variant={courseType === "zenryoku" && duration === 60 ? "default" : "outline"}
+                          variant={courseType === "全力コース" && duration === 60 ? "default" : "outline"}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCourseType("zenryoku");
+                            setCourseType("全力コース");
                             setDuration(60);
                           }}
                         >
                           60分<br/>¥15,000
                         </Button>
                         <Button
-                          variant={courseType === "zenryoku" && duration === 80 ? "default" : "outline"}
+                          variant={courseType === "全力コース" && duration === 80 ? "default" : "outline"}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCourseType("zenryoku");
+                            setCourseType("全力コース");
                             setDuration(80);
                           }}
                         >
