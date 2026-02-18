@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Plus, Edit, Trash2, Search, Calendar as CalendarIcon, User, Phone, Clock, CreditCard } from "lucide-react";
@@ -219,13 +219,13 @@ export default function Reservations() {
     }
   };
 
-  const filteredReservations = reservations.filter(reservation => {
+  const filteredReservations = useMemo(() => reservations.filter(reservation => {
     const matchesSearch = 
       reservation.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       reservation.customer_phone.includes(searchTerm);
     const matchesStatus = filterStatus === "all" || reservation.status === filterStatus;
     return matchesSearch && matchesStatus;
-  });
+  }), [reservations, searchTerm, filterStatus]);
 
   const handleAddReservation = async () => {
     if (!isAdmin) {
