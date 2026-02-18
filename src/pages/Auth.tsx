@@ -17,7 +17,7 @@ const authSchema = z.object({
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState("zr.sendai@gmail.com");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -144,76 +144,21 @@ export default function Auth() {
           </h2>
         </div>
 
-        {/* Form */}
+      {/* Form */}
         <div className="px-6 py-5">
           <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">表示名</label>
-                <input
-                  type="text"
-                  placeholder="山田太郎"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  disabled={loading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
-                />
-              </div>
-            )}
-
             <div>
-              <label className="block text-sm text-muted-foreground mb-1">店舗ID</label>
+              <label className="block text-sm text-muted-foreground mb-1">パスコード</label>
               <input
-                type="text"
-                value="zenryoku1209"
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-50 text-gray-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-muted-foreground mb-1">ログインIDまたはメールアドレス</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="password"
+                placeholder="パスコードを入力"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400 text-center tracking-widest"
               />
             </div>
-
-            {isLogin && (
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">パスワード</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                  minLength={6}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
-                />
-              </div>
-            )}
-
-            {!isLogin && (
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1">パスワード</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                  minLength={6}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-gray-400"
-                />
-              </div>
-            )}
 
             <div className="flex justify-center pt-2">
               <button
@@ -222,24 +167,10 @@ export default function Auth() {
                 className="px-12 py-2 rounded text-white text-sm font-normal disabled:opacity-50"
                 style={{ backgroundColor: '#6aab35' }}
               >
-                {loading ? "処理中..." : isLogin ? "次へ" : "アカウント作成"}
+                {loading ? "処理中..." : "ログイン"}
               </button>
             </div>
           </form>
-
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm hover:underline"
-              style={{ color: '#6aab35' }}
-              disabled={loading}
-            >
-              {isLogin 
-                ? "キャストのログインはこちら" 
-                : "既にアカウントをお持ちの方はこちら"}
-            </button>
-          </div>
         </div>
       </div>
 
