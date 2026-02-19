@@ -95,6 +95,11 @@ All colors MUST be HSL.
 }
 
 @layer base {
+  html, body, #root {
+    height: auto;
+    overflow: visible;
+  }
+
   * {
     @apply border-border;
   }
