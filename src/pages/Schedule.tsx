@@ -49,6 +49,7 @@ interface Reservation {
 const TIME_START = 10;
 const TIME_END = 26; // 翌2:00
 const HOUR_WIDTH = 120; // px per hour
+const TICK_WIDTH = HOUR_WIDTH / 6; // 10min = 20px
 const ROW_HEIGHT = 80;
 
 const STATUS_COLORS: Record<string, string> = {
@@ -177,6 +178,23 @@ export default function Schedule() {
   };
 
   const hours = Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i);
+  const ticks = Array.from({ length: (TIME_END - TIME_START) * 6 }, (_, i) => TIME_START * 60 + i * 10);
+
+  const handleTimelineClick = (castId: string, minutesFromStart: number) => {
+    const totalMin = TIME_START * 60 + minutesFromStart;
+    const snapped = Math.floor(totalMin / 10) * 10;
+    const h = Math.floor(snapped / 60);
+    const m = snapped % 60;
+    const timeStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
+    setFormData((prev) => ({
+      ...prev,
+      cast_id: castId,
+      reservation_date: selectedDate,
+      start_time: timeStr,
+    }));
+    setIsAddOpen(true);
+  };
 
   const handleAddReservation = async () => {
     if (!isAdmin || !user) return;
@@ -281,10 +299,20 @@ export default function Schedule() {
                     {hours.map((h) => (
                       <div
                         key={h}
-                        className="border-r border-border/40 text-xs text-center py-2 font-medium text-muted-foreground"
+                        className="border-r border-border/40 text-xs text-center font-medium text-muted-foreground relative"
                         style={{ width: HOUR_WIDTH }}
                       >
-                        {h >= 24 ? h - 24 : h}:00
+                        <div className="py-2">{h >= 24 ? h - 24 : h}:00</div>
+                        {/* 10-min tick marks */}
+                        <div className="absolute bottom-0 left-0 right-0 flex">
+                          {[0, 1, 2, 3, 4, 5].map((t) => (
+                            <div
+                              key={t}
+                              className="border-r border-border/20 flex-1"
+                              style={{ height: t === 3 ? 6 : 3 }}
+                            />
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -327,15 +355,31 @@ export default function Schedule() {
                         </div>
 
                         {/* Timeline area */}
-                        <div className="flex-1 relative">
-                          {/* Hour grid lines */}
-                          {hours.map((h) => (
-                            <div
-                              key={h}
-                              className="absolute top-0 bottom-0 border-r border-border/20"
-                              style={{ left: minutesToPx(h * 60) }}
-                            />
-                          ))}
+                        <div
+                          className="flex-1 relative cursor-crosshair"
+                          onClick={(e) => {
+                            if (!isAdmin) return;
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const minutesFromStart = (x / HOUR_WIDTH) * 60;
+                            handleTimelineClick(cast.id, minutesFromStart);
+                          }}
+                        >
+                          {/* 10-min grid lines */}
+                          {ticks.map((tickMin) => {
+                            const isHour = tickMin % 60 === 0;
+                            const is30 = tickMin % 30 === 0;
+                            return (
+                              <div
+                                key={tickMin}
+                                className={cn(
+                                  "absolute top-0 bottom-0 border-r",
+                                  isHour ? "border-border/40" : is30 ? "border-border/25" : "border-border/10"
+                                )}
+                                style={{ left: minutesToPx(tickMin) }}
+                              />
+                            );
+                          })}
 
                           {/* Shift background bar */}
                           <div
