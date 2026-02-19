@@ -74,6 +74,7 @@ export type Database = {
           id: string
           ideal_partner: string | null
           ideal_type: string | null
+          is_visible: boolean
           join_date: string
           marks: string[] | null
           media_registration: string[] | null
@@ -123,6 +124,7 @@ export type Database = {
           id?: string
           ideal_partner?: string | null
           ideal_type?: string | null
+          is_visible?: boolean
           join_date?: string
           marks?: string[] | null
           media_registration?: string[] | null
@@ -172,6 +174,7 @@ export type Database = {
           id?: string
           ideal_partner?: string | null
           ideal_type?: string | null
+          is_visible?: boolean
           join_date?: string
           marks?: string[] | null
           media_registration?: string[] | null
