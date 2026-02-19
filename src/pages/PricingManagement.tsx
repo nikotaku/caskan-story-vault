@@ -75,6 +75,8 @@ export default function PricingManagement() {
   const [editingCourse, setEditingCourse] = useState<PricingCourse | null>(null);
   const [editingBackRate, setEditingBackRate] = useState<BackRate | null>(null);
   const [editingExpenseRate, setEditingExpenseRate] = useState<ExpenseRate | null>(null);
+  const [editingOption, setEditingOption] = useState<{ id: string; price: number; therapist_back: number; shop_back: number } | null>(null);
+  const [editingNomination, setEditingNomination] = useState<NominationRate | null>(null);
   const [isAddOptionOpen, setIsAddOptionOpen] = useState(false);
   const [isAddNominationOpen, setIsAddNominationOpen] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
@@ -311,6 +313,39 @@ export default function PricingManagement() {
     }
   };
 
+  const handleUpdateOption = async (option: PricingOption, editData: { price: number; therapist_back: number; shop_back: number }) => {
+    if (!isAdmin) return;
+    try {
+      const { error: optErr } = await supabase.from('pricing_options').update({ price: editData.price }).eq('id', option.id);
+      if (optErr) throw optErr;
+      const { error: rateErr } = await supabase.from('option_rates').update({ customer_price: editData.price, therapist_back: editData.therapist_back, shop_back: editData.shop_back }).eq('option_name', option.name);
+      if (rateErr) throw rateErr;
+      toast({ title: "更新完了", description: "オプションを更新しました" });
+      setEditingOption(null);
+      fetchOptions();
+      fetchOptionRates();
+    } catch (error) {
+      toast({ title: "エラー", description: "オプションの更新に失敗しました", variant: "destructive" });
+    }
+  };
+
+  const handleUpdateNomination = async (nom: NominationRate) => {
+    if (!isAdmin) return;
+    try {
+      const { error } = await supabase.from('nomination_rates').update({
+        customer_price: nom.customer_price,
+        therapist_back: nom.therapist_back,
+        shop_back: nom.shop_back,
+      }).eq('id', nom.id);
+      if (error) throw error;
+      toast({ title: "更新完了", description: "指名料を更新しました" });
+      setEditingNomination(null);
+      fetchNominationRates();
+    } catch (error) {
+      toast({ title: "エラー", description: "指名料の更新に失敗しました", variant: "destructive" });
+    }
+  };
+
   const handleDeleteOption = async (id: string) => {
     if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみオプションを削除できます", variant: "destructive" }); return; }
     try {
@@ -530,22 +565,36 @@ export default function PricingManagement() {
                       <tbody>
                         {options.map((option) => {
                           const optionRate = optionRates.find(r => r.option_name === option.name);
+                          const isEditing = editingOption?.id === option.id;
                           return (
                             <tr key={option.id} className="border-b">
                               <td className="py-3 px-2 font-medium">{option.name}</td>
-                              <td className="text-right py-3 px-2">¥{option.price.toLocaleString()}</td>
-                              <td className="text-right py-3 px-2">¥{optionRate?.therapist_back?.toLocaleString() || 0}</td>
-                              <td className="text-right py-3 px-2">¥{optionRate?.shop_back?.toLocaleString() || 0}</td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? <Input type="number" value={editingOption.price} onChange={(e) => setEditingOption({...editingOption, price: parseInt(e.target.value) || 0})} className="w-20 text-right" /> : `¥${option.price.toLocaleString()}`}
+                              </td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? <Input type="number" value={editingOption.therapist_back} onChange={(e) => setEditingOption({...editingOption, therapist_back: parseInt(e.target.value) || 0})} className="w-20 text-right" /> : `¥${optionRate?.therapist_back?.toLocaleString() || 0}`}
+                              </td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? <Input type="number" value={editingOption.shop_back} onChange={(e) => setEditingOption({...editingOption, shop_back: parseInt(e.target.value) || 0})} className="w-20 text-right" /> : `¥${optionRate?.shop_back?.toLocaleString() || 0}`}
+                              </td>
                               {isAdmin && (
                                 <td className="text-center py-3 px-2">
-                                  {deleteConfirmId === option.id ? (
-                                    <div className="flex gap-1 justify-center">
-                                      <Button size="sm" variant="destructive" onClick={() => handleDeleteOption(option.id)}>確認</Button>
-                                      <Button size="sm" variant="outline" onClick={() => setDeleteConfirmId(null)}>×</Button>
-                                    </div>
-                                  ) : (
-                                    <Button size="sm" variant="destructive" onClick={() => setDeleteConfirmId(option.id)}><Trash2 size={14} /></Button>
-                                  )}
+                                  <div className="flex gap-1 justify-center">
+                                    {isEditing ? (
+                                      <Button onClick={() => handleUpdateOption(option, editingOption)} size="sm"><Save className="h-3 w-3" /></Button>
+                                    ) : (
+                                      <Button onClick={() => setEditingOption({ id: option.id, price: option.price, therapist_back: optionRate?.therapist_back || 0, shop_back: optionRate?.shop_back || 0 })} variant="outline" size="sm"><Edit className="h-3 w-3" /></Button>
+                                    )}
+                                    {deleteConfirmId === option.id ? (
+                                      <>
+                                        <Button size="sm" variant="destructive" onClick={() => handleDeleteOption(option.id)}>確認</Button>
+                                        <Button size="sm" variant="outline" onClick={() => setDeleteConfirmId(null)}>×</Button>
+                                      </>
+                                    ) : (
+                                      <Button size="sm" variant="destructive" onClick={() => setDeleteConfirmId(option.id)}><Trash2 size={14} /></Button>
+                                    )}
+                                  </div>
                                 </td>
                               )}
                             </tr>
@@ -611,19 +660,35 @@ export default function PricingManagement() {
                           </tr>
                         </thead>
                         <tbody>
-                          {nominationRates.map((nomination) => (
+                          {nominationRates.map((nomination) => {
+                            const isEditing = editingNomination?.id === nomination.id;
+                            return (
                             <tr key={nomination.id} className="border-b">
                               <td className="py-3 px-2 font-medium">{nomination.nomination_type}</td>
-                              <td className="text-right py-3 px-2">¥{nomination.customer_price.toLocaleString()}</td>
-                              <td className="text-right py-3 px-2">¥{nomination.therapist_back?.toLocaleString() || 0}</td>
-                              <td className="text-right py-3 px-2">¥{nomination.shop_back?.toLocaleString() || 0}</td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? <Input type="number" value={editingNomination.customer_price} onChange={(e) => setEditingNomination({...editingNomination, customer_price: parseInt(e.target.value) || 0})} className="w-20 text-right" /> : `¥${nomination.customer_price.toLocaleString()}`}
+                              </td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? <Input type="number" value={editingNomination.therapist_back} onChange={(e) => setEditingNomination({...editingNomination, therapist_back: parseInt(e.target.value) || 0})} className="w-20 text-right" /> : `¥${nomination.therapist_back?.toLocaleString() || 0}`}
+                              </td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? <Input type="number" value={editingNomination.shop_back} onChange={(e) => setEditingNomination({...editingNomination, shop_back: parseInt(e.target.value) || 0})} className="w-20 text-right" /> : `¥${nomination.shop_back?.toLocaleString() || 0}`}
+                              </td>
                               {isAdmin && (
                                 <td className="text-center py-3 px-2">
-                                  <Button onClick={() => handleDeleteNomination(nomination.id)} variant="destructive" size="sm"><Trash2 className="h-3 w-3" /></Button>
+                                  <div className="flex gap-1 justify-center">
+                                    {isEditing ? (
+                                      <Button onClick={() => handleUpdateNomination(editingNomination)} size="sm"><Save className="h-3 w-3" /></Button>
+                                    ) : (
+                                      <Button onClick={() => setEditingNomination(nomination)} variant="outline" size="sm"><Edit className="h-3 w-3" /></Button>
+                                    )}
+                                    <Button onClick={() => handleDeleteNomination(nomination.id)} variant="destructive" size="sm"><Trash2 className="h-3 w-3" /></Button>
+                                  </div>
                                 </td>
                               )}
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
