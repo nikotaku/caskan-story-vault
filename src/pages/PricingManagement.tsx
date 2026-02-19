@@ -559,7 +559,7 @@ export default function PricingManagement() {
       <div className="flex pt-[60px]">
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         
-        <main className="flex-1 p-6 md:ml-[240px]">
+        <main className="flex-1 p-6 md:ml-[240px] overflow-y-auto">
           <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
               <div>
