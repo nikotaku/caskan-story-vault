@@ -6,7 +6,7 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, MessageSquare } from "lucide-react";
+import { Trash2, MessageSquare, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -24,6 +24,7 @@ const MAX_CHARS = 140;
 const Board = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [content, setContent] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const { isAdmin, displayName } = useAuth();
   const queryClient = useQueryClient();
 
@@ -72,6 +73,21 @@ const Board = () => {
     });
   };
 
+  const handleAutoIntro = async () => {
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("auto-therapist-intro");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`${data.therapist}の紹介を投稿しました！`);
+      queryClient.invalidateQueries({ queryKey: ["board-posts"] });
+    } catch (e: any) {
+      toast.error(e.message || "自動紹介の生成に失敗しました");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const remaining = MAX_CHARS - content.length;
 
   return (
@@ -83,8 +99,20 @@ const Board = () => {
         {/* Post composer */}
         {isAdmin && (
           <div className="border-b border-border pb-4 mb-4">
-            <div className="text-sm font-medium text-muted-foreground mb-2">
-              投稿者: {displayName || "管理者"}
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium text-muted-foreground">
+                投稿者: {displayName || "管理者"}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1 text-xs"
+                onClick={handleAutoIntro}
+                disabled={isGenerating}
+              >
+                {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                AI紹介投稿
+              </Button>
             </div>
             <Textarea
               placeholder="いまどうしてる？"
