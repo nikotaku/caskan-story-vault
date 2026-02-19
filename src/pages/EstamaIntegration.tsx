@@ -3,7 +3,7 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, RefreshCw, Calendar, Users, Loader2, Upload, Image } from "lucide-react";
+import { ExternalLink, RefreshCw, Calendar, Users, Loader2, Upload, Image, Download } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +27,26 @@ export default function EstamaIntegration() {
 
   const handleOpenInNewTab = () => {
     window.open('https://estama.jp/login?utm_source=chatgpt.com', '_blank');
+  };
+
+  // Webサイトからシフト情報を取得
+  const handleSyncFromWebsite = async () => {
+    setSyncing('sync-website');
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-website-schedule', {
+        body: { days: 7 }
+      });
+      if (error) throw error;
+      toast({
+        title: "取得完了",
+        description: `シフト: ${data.shiftsProcessed}件を同期しました`,
+      });
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast({ title: "取得エラー", description: "シフト情報の取得に失敗しました", variant: "destructive" });
+    } finally {
+      setSyncing(null);
+    }
   };
 
   // こちらのデータをエスたまに反映（マスタデータはこちら）
@@ -81,6 +101,27 @@ export default function EstamaIntegration() {
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         
         <main className="flex-1 p-6 md:ml-[240px]">
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Download className="w-4 h-4" />
+                Webサイトからシフト取得
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">zenryoku-esthe.com から現在の出勤情報を取得してDBに反映</p>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={handleSyncFromWebsite}
+                disabled={!!syncing}
+                size="sm"
+              >
+                <LoadingIcon loading={isLoading('sync-website')} />
+                {!isLoading('sync-website') && <Calendar className="w-4 h-4 mr-2" />}
+                シフト情報を取得（7日分）
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card className="mb-4">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
