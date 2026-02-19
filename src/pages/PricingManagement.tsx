@@ -54,6 +54,14 @@ interface NominationRate {
   shop_back: number;
 }
 
+interface ExpenseRate {
+  id: string;
+  expense_type: string;
+  therapist_deduction: number;
+  shop_income: number;
+  min_days: number | null;
+}
+
 export default function PricingManagement() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [courses, setCourses] = useState<PricingCourse[]>([]);
@@ -61,11 +69,14 @@ export default function PricingManagement() {
   const [options, setOptions] = useState<PricingOption[]>([]);
   const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
   const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
+  const [expenseRates, setExpenseRates] = useState<ExpenseRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCourse, setEditingCourse] = useState<PricingCourse | null>(null);
   const [editingBackRate, setEditingBackRate] = useState<BackRate | null>(null);
+  const [editingExpenseRate, setEditingExpenseRate] = useState<ExpenseRate | null>(null);
   const [isAddOptionOpen, setIsAddOptionOpen] = useState(false);
   const [isAddNominationOpen, setIsAddNominationOpen] = useState(false);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   
   const [optionForm, setOptionForm] = useState({
@@ -81,6 +92,13 @@ export default function PricingManagement() {
     customer_price: 0,
     therapist_back: 0,
     shop_back: 0,
+  });
+
+  const [expenseForm, setExpenseForm] = useState({
+    expense_type: "",
+    therapist_deduction: 0,
+    shop_income: 0,
+    min_days: 1,
   });
 
   const { toast } = useToast();
@@ -100,6 +118,7 @@ export default function PricingManagement() {
       fetchOptions();
       fetchOptionRates();
       fetchNominationRates();
+      fetchExpenseRates();
     }
   }, [user]);
 
@@ -177,6 +196,76 @@ export default function PricingManagement() {
       setNominationRates(data || []);
     } catch (error) {
       console.error('Error fetching nomination rates:', error);
+    }
+  };
+
+  const fetchExpenseRates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('expense_rates')
+        .select('*')
+        .order('expense_type', { ascending: true });
+
+      if (error) throw error;
+      setExpenseRates(data || []);
+    } catch (error) {
+      console.error('Error fetching expense rates:', error);
+    }
+  };
+
+  const handleAddExpenseRate = async () => {
+    if (!isAdmin) {
+      toast({ title: "権限エラー", description: "管理者のみ追加できます", variant: "destructive" });
+      return;
+    }
+    if (!expenseForm.expense_type) {
+      toast({ title: "入力エラー", description: "経費タイプを入力してください", variant: "destructive" });
+      return;
+    }
+    try {
+      const { error } = await supabase.from('expense_rates').insert({
+        expense_type: expenseForm.expense_type,
+        therapist_deduction: expenseForm.therapist_deduction,
+        shop_income: expenseForm.shop_income,
+        min_days: expenseForm.min_days,
+      });
+      if (error) throw error;
+      toast({ title: "追加完了", description: "経費率を追加しました" });
+      setIsAddExpenseOpen(false);
+      setExpenseForm({ expense_type: "", therapist_deduction: 0, shop_income: 0, min_days: 1 });
+      fetchExpenseRates();
+    } catch (error) {
+      console.error('Error adding expense rate:', error);
+      toast({ title: "エラー", description: "経費率の追加に失敗しました", variant: "destructive" });
+    }
+  };
+
+  const handleUpdateExpenseRate = async (rate: ExpenseRate) => {
+    if (!isAdmin) return;
+    try {
+      const { error } = await supabase.from('expense_rates').update({
+        therapist_deduction: rate.therapist_deduction,
+        shop_income: rate.shop_income,
+        min_days: rate.min_days,
+      }).eq('id', rate.id);
+      if (error) throw error;
+      toast({ title: "更新完了", description: "経費率を更新しました" });
+      setEditingExpenseRate(null);
+      fetchExpenseRates();
+    } catch (error) {
+      toast({ title: "エラー", description: "経費率の更新に失敗しました", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteExpenseRate = async (id: string) => {
+    if (!isAdmin) return;
+    try {
+      const { error } = await supabase.from('expense_rates').delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: "削除完了", description: "経費率を削除しました" });
+      fetchExpenseRates();
+    } catch (error) {
+      toast({ title: "エラー", description: "経費率の削除に失敗しました", variant: "destructive" });
     }
   };
 
@@ -915,6 +1004,152 @@ export default function PricingManagement() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 経費率管理（雑費・宿泊費・交通費） */}
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-6 w-6" />
+                    経費率管理（雑費・宿泊費・交通費）
+                  </CardTitle>
+                  {isAdmin && (
+                    <Dialog open={isAddExpenseOpen} onOpenChange={setIsAddExpenseOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" className="gap-1">
+                          <Plus className="h-4 w-4" />
+                          追加
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>経費率を追加</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label>経費タイプ</Label>
+                            <Input
+                              value={expenseForm.expense_type}
+                              onChange={(e) => setExpenseForm({...expenseForm, expense_type: e.target.value})}
+                              placeholder="例: 雑費、宿泊費、交通費3日〜"
+                            />
+                          </div>
+                          <div>
+                            <Label>セラピスト控除/支給（円）</Label>
+                            <Input
+                              type="number"
+                              value={expenseForm.therapist_deduction}
+                              onChange={(e) => setExpenseForm({...expenseForm, therapist_deduction: parseInt(e.target.value) || 0})}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">正の値=支給、負の値=控除</p>
+                          </div>
+                          <div>
+                            <Label>店舗収入（円）</Label>
+                            <Input
+                              type="number"
+                              value={expenseForm.shop_income}
+                              onChange={(e) => setExpenseForm({...expenseForm, shop_income: parseInt(e.target.value) || 0})}
+                            />
+                          </div>
+                          <div>
+                            <Label>最低日数</Label>
+                            <Input
+                              type="number"
+                              value={expenseForm.min_days}
+                              onChange={(e) => setExpenseForm({...expenseForm, min_days: parseInt(e.target.value) || 1})}
+                            />
+                          </div>
+                          <Button onClick={handleAddExpenseRate} className="w-full">追加</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {expenseRates.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">登録されている経費率はありません</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-3 px-2">経費タイプ</th>
+                          <th className="text-right py-3 px-2">セラピスト控除/支給</th>
+                          <th className="text-right py-3 px-2">店舗収入</th>
+                          <th className="text-right py-3 px-2">最低日数</th>
+                          {isAdmin && <th className="text-center py-3 px-2">操作</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expenseRates.map((rate) => {
+                          const isEditing = editingExpenseRate?.id === rate.id;
+                          return (
+                            <tr key={rate.id} className="border-b">
+                              <td className="py-3 px-2 font-medium">{rate.expense_type}</td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    value={editingExpenseRate.therapist_deduction}
+                                    onChange={(e) => setEditingExpenseRate({...editingExpenseRate, therapist_deduction: parseInt(e.target.value) || 0})}
+                                    className="w-24 text-right"
+                                  />
+                                ) : (
+                                  `¥${rate.therapist_deduction.toLocaleString()}`
+                                )}
+                              </td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    value={editingExpenseRate.shop_income}
+                                    onChange={(e) => setEditingExpenseRate({...editingExpenseRate, shop_income: parseInt(e.target.value) || 0})}
+                                    className="w-24 text-right"
+                                  />
+                                ) : (
+                                  `¥${rate.shop_income.toLocaleString()}`
+                                )}
+                              </td>
+                              <td className="text-right py-3 px-2">
+                                {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    value={editingExpenseRate.min_days ?? 1}
+                                    onChange={(e) => setEditingExpenseRate({...editingExpenseRate, min_days: parseInt(e.target.value) || 1})}
+                                    className="w-16 text-right"
+                                  />
+                                ) : (
+                                  rate.min_days ? `${rate.min_days}日〜` : '-'
+                                )}
+                              </td>
+                              {isAdmin && (
+                                <td className="text-center py-3 px-2">
+                                  <div className="flex gap-1 justify-center">
+                                    {isEditing ? (
+                                      <Button onClick={() => handleUpdateExpenseRate(editingExpenseRate)} size="sm">
+                                        <Save className="h-3 w-3" />
+                                      </Button>
+                                    ) : (
+                                      <Button onClick={() => setEditingExpenseRate(rate)} variant="outline" size="sm">
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    <Button onClick={() => handleDeleteExpenseRate(rate.id)} variant="destructive" size="sm">
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>
