@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Plus, Edit, Trash2, Save } from "lucide-react";
+import { DollarSign, Plus, Edit, Trash2, Save, Receipt, Star, Wallet } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -124,20 +125,12 @@ export default function PricingManagement() {
 
   const fetchPricing = async () => {
     try {
-      const { data, error } = await supabase
-        .from('pricing')
-        .select('*')
-        .order('duration', { ascending: true });
-
+      const { data, error } = await supabase.from('pricing').select('*').order('duration', { ascending: true });
       if (error) throw error;
       setCourses(data || []);
     } catch (error) {
       console.error('Error fetching pricing:', error);
-      toast({
-        title: "エラー",
-        description: "料金情報の取得に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "料金情報の取得に失敗しました", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -145,11 +138,7 @@ export default function PricingManagement() {
 
   const fetchBackRates = async () => {
     try {
-      const { data, error } = await supabase
-        .from('back_rates')
-        .select('*')
-        .order('duration', { ascending: true });
-
+      const { data, error } = await supabase.from('back_rates').select('*').order('duration', { ascending: true });
       if (error) throw error;
       setBackRates(data || []);
     } catch (error) {
@@ -159,11 +148,7 @@ export default function PricingManagement() {
 
   const fetchOptions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('pricing_options')
-        .select('*')
-        .order('created_at', { ascending: true });
-
+      const { data, error } = await supabase.from('pricing_options').select('*').order('created_at', { ascending: true });
       if (error) throw error;
       setOptions(data || []);
     } catch (error) {
@@ -173,11 +158,7 @@ export default function PricingManagement() {
 
   const fetchOptionRates = async () => {
     try {
-      const { data, error } = await supabase
-        .from('option_rates')
-        .select('*')
-        .order('created_at', { ascending: true });
-
+      const { data, error } = await supabase.from('option_rates').select('*').order('created_at', { ascending: true });
       if (error) throw error;
       setOptionRates(data || []);
     } catch (error) {
@@ -187,11 +168,7 @@ export default function PricingManagement() {
 
   const fetchNominationRates = async () => {
     try {
-      const { data, error } = await supabase
-        .from('nomination_rates')
-        .select('*')
-        .order('created_at', { ascending: true });
-
+      const { data, error } = await supabase.from('nomination_rates').select('*').order('created_at', { ascending: true });
       if (error) throw error;
       setNominationRates(data || []);
     } catch (error) {
@@ -201,11 +178,7 @@ export default function PricingManagement() {
 
   const fetchExpenseRates = async () => {
     try {
-      const { data, error } = await supabase
-        .from('expense_rates')
-        .select('*')
-        .order('expense_type', { ascending: true });
-
+      const { data, error } = await supabase.from('expense_rates').select('*').order('expense_type', { ascending: true });
       if (error) throw error;
       setExpenseRates(data || []);
     } catch (error) {
@@ -214,14 +187,8 @@ export default function PricingManagement() {
   };
 
   const handleAddExpenseRate = async () => {
-    if (!isAdmin) {
-      toast({ title: "権限エラー", description: "管理者のみ追加できます", variant: "destructive" });
-      return;
-    }
-    if (!expenseForm.expense_type) {
-      toast({ title: "入力エラー", description: "経費タイプを入力してください", variant: "destructive" });
-      return;
-    }
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみ追加できます", variant: "destructive" }); return; }
+    if (!expenseForm.expense_type) { toast({ title: "入力エラー", description: "経費タイプを入力してください", variant: "destructive" }); return; }
     try {
       const { error } = await supabase.from('expense_rates').insert({
         expense_type: expenseForm.expense_type,
@@ -270,273 +237,109 @@ export default function PricingManagement() {
   };
 
   const handleUpdateCourse = async (course: PricingCourse) => {
-    if (!isAdmin) {
-      toast({
-        title: "権限エラー",
-        description: "管理者のみ料金を更新できます",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみ料金を更新できます", variant: "destructive" }); return; }
     try {
-      const { error } = await supabase
-        .from('pricing')
-        .update({
-          standard_price: course.standard_price,
-          premium_price: course.premium_price,
-          vip_price: course.vip_price,
-        })
-        .eq('id', course.id);
-
+      const { error } = await supabase.from('pricing').update({
+        standard_price: course.standard_price,
+        premium_price: course.premium_price,
+        vip_price: course.vip_price,
+      }).eq('id', course.id);
       if (error) throw error;
-
-      toast({
-        title: "更新完了",
-        description: "料金を更新しました",
-      });
-      
+      toast({ title: "更新完了", description: "料金を更新しました" });
       setEditingCourse(null);
       fetchPricing();
     } catch (error) {
       console.error('Error updating course:', error);
-      toast({
-        title: "エラー",
-        description: "料金の更新に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "料金の更新に失敗しました", variant: "destructive" });
     }
   };
 
   const handleUpdateBackRate = async (backRate: BackRate) => {
-    if (!isAdmin) {
-      toast({
-        title: "権限エラー",
-        description: "管理者のみバック率を更新できます",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみバック率を更新できます", variant: "destructive" }); return; }
     try {
-      const { error } = await supabase
-        .from('back_rates')
-        .update({
-          therapist_back: backRate.therapist_back,
-          shop_back: backRate.shop_back,
-        })
-        .eq('id', backRate.id);
-
+      const { error } = await supabase.from('back_rates').update({
+        therapist_back: backRate.therapist_back,
+        shop_back: backRate.shop_back,
+      }).eq('id', backRate.id);
       if (error) throw error;
-
-      toast({
-        title: "更新完了",
-        description: "バック率を更新しました",
-      });
-      
+      toast({ title: "更新完了", description: "バック率を更新しました" });
       setEditingBackRate(null);
       fetchBackRates();
     } catch (error) {
       console.error('Error updating back rate:', error);
-      toast({
-        title: "エラー",
-        description: "バック率の更新に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "バック率の更新に失敗しました", variant: "destructive" });
     }
   };
 
   const handleAddOption = async () => {
-    if (!isAdmin) {
-      toast({
-        title: "権限エラー",
-        description: "管理者のみオプションを追加できます",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!optionForm.name || optionForm.price <= 0) {
-      toast({
-        title: "入力エラー",
-        description: "すべての項目を正しく入力してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみオプションを追加できます", variant: "destructive" }); return; }
+    if (!optionForm.name || optionForm.price <= 0) { toast({ title: "入力エラー", description: "すべての項目を正しく入力してください", variant: "destructive" }); return; }
     try {
-      // Insert into pricing_options
-      const { error: optionError } = await supabase
-        .from('pricing_options')
-        .insert({
-          name: optionForm.name,
-          price: optionForm.price,
-          description: optionForm.description || null,
-        });
-
+      const { error: optionError } = await supabase.from('pricing_options').insert({ name: optionForm.name, price: optionForm.price, description: optionForm.description || null });
       if (optionError) throw optionError;
-
-      // Insert into option_rates
-      const { error: rateError } = await supabase
-        .from('option_rates')
-        .insert({
-          option_name: optionForm.name,
-          customer_price: optionForm.price,
-          therapist_back: optionForm.therapist_back,
-          shop_back: optionForm.shop_back,
-        });
-
+      const { error: rateError } = await supabase.from('option_rates').insert({ option_name: optionForm.name, customer_price: optionForm.price, therapist_back: optionForm.therapist_back, shop_back: optionForm.shop_back });
       if (rateError) throw rateError;
-
-      toast({
-        title: "追加完了",
-        description: "オプションとバック率を追加しました",
-      });
-      
+      toast({ title: "追加完了", description: "オプションとバック率を追加しました" });
       setIsAddOptionOpen(false);
       setOptionForm({ name: "", price: 0, therapist_back: 0, shop_back: 0, description: "" });
       fetchOptions();
       fetchOptionRates();
     } catch (error) {
       console.error('Error adding option:', error);
-      toast({
-        title: "エラー",
-        description: "オプションの追加に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "オプションの追加に失敗しました", variant: "destructive" });
     }
   };
 
   const handleAddNomination = async () => {
-    if (!isAdmin) {
-      toast({
-        title: "権限エラー",
-        description: "管理者のみ指名料を追加できます",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!nominationForm.nomination_type || nominationForm.customer_price <= 0) {
-      toast({
-        title: "入力エラー",
-        description: "すべての項目を正しく入力してください",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみ指名料を追加できます", variant: "destructive" }); return; }
+    if (!nominationForm.nomination_type || nominationForm.customer_price <= 0) { toast({ title: "入力エラー", description: "すべての項目を正しく入力してください", variant: "destructive" }); return; }
     try {
-      const { error } = await supabase
-        .from('nomination_rates')
-        .insert({
-          nomination_type: nominationForm.nomination_type,
-          customer_price: nominationForm.customer_price,
-          therapist_back: nominationForm.therapist_back,
-          shop_back: nominationForm.shop_back,
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "追加完了",
-        description: "指名料を追加しました",
+      const { error } = await supabase.from('nomination_rates').insert({
+        nomination_type: nominationForm.nomination_type,
+        customer_price: nominationForm.customer_price,
+        therapist_back: nominationForm.therapist_back,
+        shop_back: nominationForm.shop_back,
       });
-      
+      if (error) throw error;
+      toast({ title: "追加完了", description: "指名料を追加しました" });
       setIsAddNominationOpen(false);
       setNominationForm({ nomination_type: "", customer_price: 0, therapist_back: 0, shop_back: 0 });
       fetchNominationRates();
     } catch (error) {
       console.error('Error adding nomination:', error);
-      toast({
-        title: "エラー",
-        description: "指名料の追加に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "指名料の追加に失敗しました", variant: "destructive" });
     }
   };
 
   const handleDeleteOption = async (id: string) => {
-    if (!isAdmin) {
-      toast({
-        title: "権限エラー",
-        description: "管理者のみオプションを削除できます",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみオプションを削除できます", variant: "destructive" }); return; }
     try {
-      // Get option name first
       const option = options.find(opt => opt.id === id);
       if (!option) return;
-
-      // Delete from pricing_options
-      const { error: optionError } = await supabase
-        .from('pricing_options')
-        .delete()
-        .eq('id', id);
-
+      const { error: optionError } = await supabase.from('pricing_options').delete().eq('id', id);
       if (optionError) throw optionError;
-
-      // Delete from option_rates
-      const { error: rateError } = await supabase
-        .from('option_rates')
-        .delete()
-        .eq('option_name', option.name);
-
+      const { error: rateError } = await supabase.from('option_rates').delete().eq('option_name', option.name);
       if (rateError) throw rateError;
-
-      toast({
-        title: "削除完了",
-        description: "オプションとバック率を削除しました",
-      });
-      
+      toast({ title: "削除完了", description: "オプションとバック率を削除しました" });
       setDeleteConfirmId(null);
       fetchOptions();
       fetchOptionRates();
     } catch (error) {
       console.error('Error deleting option:', error);
-      toast({
-        title: "エラー",
-        description: "オプションの削除に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "オプションの削除に失敗しました", variant: "destructive" });
     }
   };
 
   const handleDeleteNomination = async (id: string) => {
-    if (!isAdmin) {
-      toast({
-        title: "権限エラー",
-        description: "管理者のみ指名料を削除できます",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!isAdmin) { toast({ title: "権限エラー", description: "管理者のみ指名料を削除できます", variant: "destructive" }); return; }
     try {
-      const { error } = await supabase
-        .from('nomination_rates')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('nomination_rates').delete().eq('id', id);
       if (error) throw error;
-
-      toast({
-        title: "削除完了",
-        description: "指名料を削除しました",
-      });
-      
+      toast({ title: "削除完了", description: "指名料を削除しました" });
       fetchNominationRates();
     } catch (error) {
       console.error('Error deleting nomination:', error);
-      toast({
-        title: "エラー",
-        description: "指名料の削除に失敗しました",
-        variant: "destructive",
-      });
+      toast({ title: "エラー", description: "指名料の削除に失敗しました", variant: "destructive" });
     }
   };
 
@@ -557,27 +360,43 @@ export default function PricingManagement() {
       <DashboardHeader onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       
-      <div className="pt-[60px] p-6 pb-24 md:ml-[180px] bg-background min-h-screen">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h1 className="text-2xl font-bold">料金設定（マスター）</h1>
-                <p className="text-muted-foreground">ここで設定した料金がフロント予約・料金ページ・管理画面すべてに反映されます</p>
-              </div>
-            </div>
+      <div className="pt-[60px] px-4 py-6 md:ml-[180px] bg-background min-h-screen">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold">料金設定（マスター）</h1>
+            <p className="text-sm text-muted-foreground">ここで設定した料金がフロント予約・料金ページ・管理画面すべてに反映されます</p>
+          </div>
 
-            {/* Course Pricing and Back Rates */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-6 w-6" />
-                  コース料金・バック率管理
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <p>読み込み中...</p>
-                ) : (
+          <Tabs defaultValue="courses" className="w-full">
+            <TabsList className="w-full grid grid-cols-4 mb-4">
+              <TabsTrigger value="courses" className="text-xs sm:text-sm gap-1">
+                <DollarSign className="h-3 w-3 hidden sm:inline" />
+                コース
+              </TabsTrigger>
+              <TabsTrigger value="options" className="text-xs sm:text-sm gap-1">
+                <Plus className="h-3 w-3 hidden sm:inline" />
+                オプション
+              </TabsTrigger>
+              <TabsTrigger value="nominations" className="text-xs sm:text-sm gap-1">
+                <Star className="h-3 w-3 hidden sm:inline" />
+                指名料
+              </TabsTrigger>
+              <TabsTrigger value="expenses" className="text-xs sm:text-sm gap-1">
+                <Receipt className="h-3 w-3 hidden sm:inline" />
+                経費率
+              </TabsTrigger>
+            </TabsList>
+
+            {/* コース料金・バック率 */}
+            <TabsContent value="courses">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <DollarSign className="h-5 w-5" />
+                    コース料金・バック率管理
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -595,149 +414,50 @@ export default function PricingManagement() {
                       <tbody>
                         {courses.map((course) => {
                           const isEditing = editingCourse?.id === course.id;
-                          const backRate = backRates.find(
-                            r => r.duration === course.duration && r.course_type === course.course_type
-                          );
+                          const backRate = backRates.find(r => r.duration === course.duration && r.course_type === course.course_type);
                           const isEditingBack = editingBackRate?.id === backRate?.id;
-                          
                           return (
                             <tr key={course.id} className="border-b">
                               <td className="py-3 px-2">{course.duration}分</td>
                               <td className="py-3 px-2">{course.course_type}</td>
                               <td className="text-right py-3 px-2">
                                 {isEditing ? (
-                                  <Input
-                                    type="number"
-                                    value={editingCourse.standard_price}
-                                    onChange={(e) =>
-                                      setEditingCourse({
-                                        ...editingCourse,
-                                        standard_price: parseInt(e.target.value) || 0,
-                                      })
-                                    }
-                                    className="w-20 text-right"
-                                  />
-                                ) : (
-                                  `¥${course.standard_price.toLocaleString()}`
-                                )}
+                                  <Input type="number" value={editingCourse.standard_price} onChange={(e) => setEditingCourse({...editingCourse, standard_price: parseInt(e.target.value) || 0})} className="w-20 text-right" />
+                                ) : `¥${course.standard_price.toLocaleString()}`}
                               </td>
                               <td className="text-right py-3 px-2">
                                 {isEditing ? (
-                                  <Input
-                                    type="number"
-                                    value={editingCourse.premium_price}
-                                    onChange={(e) =>
-                                      setEditingCourse({
-                                        ...editingCourse,
-                                        premium_price: parseInt(e.target.value) || 0,
-                                      })
-                                    }
-                                    className="w-20 text-right"
-                                  />
-                                ) : (
-                                  `¥${course.premium_price.toLocaleString()}`
-                                )}
+                                  <Input type="number" value={editingCourse.premium_price} onChange={(e) => setEditingCourse({...editingCourse, premium_price: parseInt(e.target.value) || 0})} className="w-20 text-right" />
+                                ) : `¥${course.premium_price.toLocaleString()}`}
                               </td>
                               <td className="text-right py-3 px-2">
                                 {isEditing ? (
-                                  <Input
-                                    type="number"
-                                    value={editingCourse.vip_price}
-                                    onChange={(e) =>
-                                      setEditingCourse({
-                                        ...editingCourse,
-                                        vip_price: parseInt(e.target.value) || 0,
-                                      })
-                                    }
-                                    className="w-20 text-right"
-                                  />
-                                ) : (
-                                  `¥${course.vip_price.toLocaleString()}`
-                                )}
+                                  <Input type="number" value={editingCourse.vip_price} onChange={(e) => setEditingCourse({...editingCourse, vip_price: parseInt(e.target.value) || 0})} className="w-20 text-right" />
+                                ) : `¥${course.vip_price.toLocaleString()}`}
                               </td>
                               <td className="text-right py-3 px-2">
-                                {backRate ? (
-                                  isEditingBack ? (
-                                    <Input
-                                      type="number"
-                                      value={editingBackRate.therapist_back}
-                                      onChange={(e) =>
-                                        setEditingBackRate({
-                                          ...editingBackRate,
-                                          therapist_back: parseInt(e.target.value) || 0,
-                                        })
-                                      }
-                                      className="w-20 text-right"
-                                    />
-                                  ) : (
-                                    `¥${backRate.therapist_back.toLocaleString()}`
-                                  )
-                                ) : (
-                                  '-'
-                                )}
+                                {backRate ? (isEditingBack ? (
+                                  <Input type="number" value={editingBackRate.therapist_back} onChange={(e) => setEditingBackRate({...editingBackRate, therapist_back: parseInt(e.target.value) || 0})} className="w-20 text-right" />
+                                ) : `¥${backRate.therapist_back.toLocaleString()}`) : '-'}
                               </td>
                               <td className="text-right py-3 px-2">
-                                {backRate ? (
-                                  isEditingBack ? (
-                                    <Input
-                                      type="number"
-                                      value={editingBackRate.shop_back}
-                                      onChange={(e) =>
-                                        setEditingBackRate({
-                                          ...editingBackRate,
-                                          shop_back: parseInt(e.target.value) || 0,
-                                        })
-                                      }
-                                      className="w-20 text-right"
-                                    />
-                                  ) : (
-                                    `¥${backRate.shop_back.toLocaleString()}`
-                                  )
-                                ) : (
-                                  '-'
-                                )}
+                                {backRate ? (isEditingBack ? (
+                                  <Input type="number" value={editingBackRate.shop_back} onChange={(e) => setEditingBackRate({...editingBackRate, shop_back: parseInt(e.target.value) || 0})} className="w-20 text-right" />
+                                ) : `¥${backRate.shop_back.toLocaleString()}`) : '-'}
                               </td>
                               {isAdmin && (
                                 <td className="text-center py-3 px-2">
                                   <div className="flex gap-1 justify-center">
                                     {isEditing ? (
-                                      <Button
-                                        onClick={() => handleUpdateCourse(editingCourse)}
-                                        size="sm"
-                                        className="gap-1"
-                                      >
-                                        <Save className="h-3 w-3" />
-                                      </Button>
+                                      <Button onClick={() => handleUpdateCourse(editingCourse)} size="sm"><Save className="h-3 w-3" /></Button>
                                     ) : (
-                                      <Button
-                                        onClick={() => setEditingCourse(course)}
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-1"
-                                      >
-                                        <Edit className="h-3 w-3" />
-                                      </Button>
+                                      <Button onClick={() => setEditingCourse(course)} variant="outline" size="sm"><Edit className="h-3 w-3" /></Button>
                                     )}
-                                    {backRate && (
-                                      isEditingBack ? (
-                                        <Button
-                                          onClick={() => handleUpdateBackRate(editingBackRate)}
-                                          size="sm"
-                                          className="gap-1"
-                                        >
-                                          <Save className="h-3 w-3" />
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          onClick={() => setEditingBackRate(backRate)}
-                                          variant="outline"
-                                          size="sm"
-                                          className="gap-1"
-                                        >
-                                          <Edit className="h-3 w-3" />
-                                        </Button>
-                                      )
-                                    )}
+                                    {backRate && (isEditingBack ? (
+                                      <Button onClick={() => handleUpdateBackRate(editingBackRate)} size="sm"><Save className="h-3 w-3" /></Button>
+                                    ) : (
+                                      <Button onClick={() => setEditingBackRate(backRate)} variant="outline" size="sm"><Edit className="h-3 w-3" /></Button>
+                                    ))}
                                   </div>
                                 </td>
                               )}
@@ -747,400 +467,85 @@ export default function PricingManagement() {
                       </tbody>
                     </table>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-            {/* Options */}
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle className="flex items-center gap-2">
-                    <Plus size={20} />
-                    オプション料金
-                  </CardTitle>
-                  {isAdmin && (
-                    <Dialog open={isAddOptionOpen} onOpenChange={setIsAddOptionOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm">
-                          <Plus size={16} />
-                          追加
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>オプション追加</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="option-name">オプション名</Label>
-                            <Input
-                              id="option-name"
-                              value={optionForm.name}
-                              onChange={(e) => setOptionForm({...optionForm, name: e.target.value})}
-                              placeholder="例：指名料"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="option-price">お客様料金（円）</Label>
-                            <Input
-                              id="option-price"
-                              type="number"
-                              value={optionForm.price}
-                              onChange={(e) => setOptionForm({...optionForm, price: parseInt(e.target.value)})}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="therapist-back">セラピストバック（円）</Label>
-                            <Input
-                              id="therapist-back"
-                              type="number"
-                              value={optionForm.therapist_back}
-                              onChange={(e) => setOptionForm({...optionForm, therapist_back: parseInt(e.target.value)})}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="shop-back">店舗バック（円）</Label>
-                            <Input
-                              id="shop-back"
-                              type="number"
-                              value={optionForm.shop_back}
-                              onChange={(e) => setOptionForm({...optionForm, shop_back: parseInt(e.target.value)})}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="option-desc">説明（任意）</Label>
-                            <Textarea
-                              id="option-desc"
-                              value={optionForm.description}
-                              onChange={(e) => setOptionForm({...optionForm, description: e.target.value})}
-                              placeholder="オプションの詳細説明"
-                              rows={3}
-                            />
-                          </div>
-                          <Button onClick={handleAddOption} className="w-full">
-                            追加
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {options.map((option) => {
-                    const optionRate = optionRates.find(r => r.option_name === option.name);
-                    return (
-                      <div key={option.id} className="flex justify-between items-center p-4 border rounded-lg hover:bg-muted/50">
-                        <div className="flex-1">
-                          <div className="font-medium">{option.name}</div>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            <p>お客様料金: ¥{option.price.toLocaleString()}</p>
-                            {optionRate && (
-                              <>
-                                <p>セラピストバック: ¥{optionRate.therapist_back.toLocaleString()}</p>
-                                <p>店舗バック: ¥{optionRate.shop_back.toLocaleString()}</p>
-                              </>
-                            )}
-                          </div>
-                          {option.description && (
-                            <div className="text-sm text-muted-foreground mt-1">{option.description}</div>
-                          )}
-                        </div>
-                        {isAdmin && (
-                          deleteConfirmId === option.id ? (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDeleteOption(option.id)}
-                              >
-                                確認
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setDeleteConfirmId(null)}
-                              >
-                                キャンセル
-                              </Button>
+            {/* オプション料金 */}
+            <TabsContent value="options">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Plus size={20} />
+                      オプション料金
+                    </CardTitle>
+                    {isAdmin && (
+                      <Dialog open={isAddOptionOpen} onOpenChange={setIsAddOptionOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm"><Plus size={16} /> 追加</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>オプション追加</DialogTitle></DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>オプション名</Label>
+                              <Input value={optionForm.name} onChange={(e) => setOptionForm({...optionForm, name: e.target.value})} placeholder="例：指名料" />
                             </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => setDeleteConfirmId(option.id)}
-                            >
-                              <Trash2 size={16} />
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 指名料金管理 */}
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-6 w-6" />
-                    指名料金・バック率管理
-                  </CardTitle>
-                  {isAdmin && (
-                    <Dialog open={isAddNominationOpen} onOpenChange={setIsAddNominationOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="gap-1">
-                          <Plus className="h-4 w-4" />
-                          指名料金追加
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>新しい指名料金を追加</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="nomination-type">指名タイプ</Label>
-                            <Input
-                              id="nomination-type"
-                              value={nominationForm.nomination_type}
-                              onChange={(e) =>
-                                setNominationForm({ ...nominationForm, nomination_type: e.target.value })
-                              }
-                              placeholder="例: 本指名, フリー指名"
-                            />
+                            <div>
+                              <Label>お客様料金（円）</Label>
+                              <Input type="number" value={optionForm.price} onChange={(e) => setOptionForm({...optionForm, price: parseInt(e.target.value)})} />
+                            </div>
+                            <div>
+                              <Label>セラピストバック（円）</Label>
+                              <Input type="number" value={optionForm.therapist_back} onChange={(e) => setOptionForm({...optionForm, therapist_back: parseInt(e.target.value)})} />
+                            </div>
+                            <div>
+                              <Label>店舗バック（円）</Label>
+                              <Input type="number" value={optionForm.shop_back} onChange={(e) => setOptionForm({...optionForm, shop_back: parseInt(e.target.value)})} />
+                            </div>
+                            <div>
+                              <Label>説明（任意）</Label>
+                              <Textarea value={optionForm.description} onChange={(e) => setOptionForm({...optionForm, description: e.target.value})} placeholder="オプションの詳細説明" rows={3} />
+                            </div>
+                            <Button onClick={handleAddOption} className="w-full">追加</Button>
                           </div>
-                          <div>
-                            <Label htmlFor="nomination-price">お客様料金 (円)</Label>
-                            <Input
-                              id="nomination-price"
-                              type="number"
-                              value={nominationForm.customer_price}
-                              onChange={(e) =>
-                                setNominationForm({
-                                  ...nominationForm,
-                                  customer_price: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              placeholder="0"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="nomination-therapist-back">セラピストバック (円)</Label>
-                            <Input
-                              id="nomination-therapist-back"
-                              type="number"
-                              value={nominationForm.therapist_back}
-                              onChange={(e) =>
-                                setNominationForm({
-                                  ...nominationForm,
-                                  therapist_back: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              placeholder="0"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="nomination-shop-back">店舗バック (円)</Label>
-                            <Input
-                              id="nomination-shop-back"
-                              type="number"
-                              value={nominationForm.shop_back}
-                              onChange={(e) =>
-                                setNominationForm({
-                                  ...nominationForm,
-                                  shop_back: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              placeholder="0"
-                            />
-                          </div>
-                          <Button onClick={handleAddNomination} className="w-full">
-                            追加
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {nominationRates.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    登録されている指名料金はありません
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {nominationRates.map((nomination) => (
-                      <div
-                        key={nomination.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <p className="font-medium">{nomination.nomination_type}</p>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            <p>お客様料金: ¥{nomination.customer_price.toLocaleString()}</p>
-                            <p>セラピストバック: ¥{nomination.therapist_back?.toLocaleString() || 0}</p>
-                            <p>店舗バック: ¥{nomination.shop_back?.toLocaleString() || 0}</p>
-                          </div>
-                        </div>
-                        {isAdmin && (
-                          <Button
-                            onClick={() => handleDeleteNomination(nomination.id)}
-                            variant="destructive"
-                            size="sm"
-                            className="gap-1"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            削除
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                        </DialogContent>
+                      </Dialog>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* 経費率管理（雑費・宿泊費・交通費） */}
-            <Card className="mt-6">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-6 w-6" />
-                    経費率管理（雑費・宿泊費・交通費）
-                  </CardTitle>
-                  {isAdmin && (
-                    <Dialog open={isAddExpenseOpen} onOpenChange={setIsAddExpenseOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" className="gap-1">
-                          <Plus className="h-4 w-4" />
-                          追加
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>経費率を追加</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label>経費タイプ</Label>
-                            <Input
-                              value={expenseForm.expense_type}
-                              onChange={(e) => setExpenseForm({...expenseForm, expense_type: e.target.value})}
-                              placeholder="例: 雑費、宿泊費、交通費3日〜"
-                            />
-                          </div>
-                          <div>
-                            <Label>セラピスト控除/支給（円）</Label>
-                            <Input
-                              type="number"
-                              value={expenseForm.therapist_deduction}
-                              onChange={(e) => setExpenseForm({...expenseForm, therapist_deduction: parseInt(e.target.value) || 0})}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">正の値=支給、負の値=控除</p>
-                          </div>
-                          <div>
-                            <Label>店舗収入（円）</Label>
-                            <Input
-                              type="number"
-                              value={expenseForm.shop_income}
-                              onChange={(e) => setExpenseForm({...expenseForm, shop_income: parseInt(e.target.value) || 0})}
-                            />
-                          </div>
-                          <div>
-                            <Label>最低日数</Label>
-                            <Input
-                              type="number"
-                              value={expenseForm.min_days}
-                              onChange={(e) => setExpenseForm({...expenseForm, min_days: parseInt(e.target.value) || 1})}
-                            />
-                          </div>
-                          <Button onClick={handleAddExpenseRate} className="w-full">追加</Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {expenseRates.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">登録されている経費率はありません</p>
-                ) : (
+                </CardHeader>
+                <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-left py-3 px-2">経費タイプ</th>
-                          <th className="text-right py-3 px-2">セラピスト控除/支給</th>
-                          <th className="text-right py-3 px-2">店舗収入</th>
-                          <th className="text-right py-3 px-2">最低日数</th>
+                          <th className="text-left py-3 px-2">オプション名</th>
+                          <th className="text-right py-3 px-2">お客様料金</th>
+                          <th className="text-right py-3 px-2">セラピストバック</th>
+                          <th className="text-right py-3 px-2">店バック</th>
                           {isAdmin && <th className="text-center py-3 px-2">操作</th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {expenseRates.map((rate) => {
-                          const isEditing = editingExpenseRate?.id === rate.id;
+                        {options.map((option) => {
+                          const optionRate = optionRates.find(r => r.option_name === option.name);
                           return (
-                            <tr key={rate.id} className="border-b">
-                              <td className="py-3 px-2 font-medium">{rate.expense_type}</td>
-                              <td className="text-right py-3 px-2">
-                                {isEditing ? (
-                                  <Input
-                                    type="number"
-                                    value={editingExpenseRate.therapist_deduction}
-                                    onChange={(e) => setEditingExpenseRate({...editingExpenseRate, therapist_deduction: parseInt(e.target.value) || 0})}
-                                    className="w-24 text-right"
-                                  />
-                                ) : (
-                                  `¥${rate.therapist_deduction.toLocaleString()}`
-                                )}
-                              </td>
-                              <td className="text-right py-3 px-2">
-                                {isEditing ? (
-                                  <Input
-                                    type="number"
-                                    value={editingExpenseRate.shop_income}
-                                    onChange={(e) => setEditingExpenseRate({...editingExpenseRate, shop_income: parseInt(e.target.value) || 0})}
-                                    className="w-24 text-right"
-                                  />
-                                ) : (
-                                  `¥${rate.shop_income.toLocaleString()}`
-                                )}
-                              </td>
-                              <td className="text-right py-3 px-2">
-                                {isEditing ? (
-                                  <Input
-                                    type="number"
-                                    value={editingExpenseRate.min_days ?? 1}
-                                    onChange={(e) => setEditingExpenseRate({...editingExpenseRate, min_days: parseInt(e.target.value) || 1})}
-                                    className="w-16 text-right"
-                                  />
-                                ) : (
-                                  rate.min_days ? `${rate.min_days}日〜` : '-'
-                                )}
-                              </td>
+                            <tr key={option.id} className="border-b">
+                              <td className="py-3 px-2 font-medium">{option.name}</td>
+                              <td className="text-right py-3 px-2">¥{option.price.toLocaleString()}</td>
+                              <td className="text-right py-3 px-2">¥{optionRate?.therapist_back?.toLocaleString() || 0}</td>
+                              <td className="text-right py-3 px-2">¥{optionRate?.shop_back?.toLocaleString() || 0}</td>
                               {isAdmin && (
                                 <td className="text-center py-3 px-2">
-                                  <div className="flex gap-1 justify-center">
-                                    {isEditing ? (
-                                      <Button onClick={() => handleUpdateExpenseRate(editingExpenseRate)} size="sm">
-                                        <Save className="h-3 w-3" />
-                                      </Button>
-                                    ) : (
-                                      <Button onClick={() => setEditingExpenseRate(rate)} variant="outline" size="sm">
-                                        <Edit className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    <Button onClick={() => handleDeleteExpenseRate(rate.id)} variant="destructive" size="sm">
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
+                                  {deleteConfirmId === option.id ? (
+                                    <div className="flex gap-1 justify-center">
+                                      <Button size="sm" variant="destructive" onClick={() => handleDeleteOption(option.id)}>確認</Button>
+                                      <Button size="sm" variant="outline" onClick={() => setDeleteConfirmId(null)}>×</Button>
+                                    </div>
+                                  ) : (
+                                    <Button size="sm" variant="destructive" onClick={() => setDeleteConfirmId(option.id)}><Trash2 size={14} /></Button>
+                                  )}
                                 </td>
                               )}
                             </tr>
@@ -1149,9 +554,184 @@ export default function PricingManagement() {
                       </tbody>
                     </table>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* 指名料 */}
+            <TabsContent value="nominations">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="flex items-center gap-2 text-lg">指名料</CardTitle>
+                    {isAdmin && (
+                      <Dialog open={isAddNominationOpen} onOpenChange={setIsAddNominationOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> 指名料追加</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>新しい指名料金を追加</DialogTitle></DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>指名タイプ</Label>
+                              <Input value={nominationForm.nomination_type} onChange={(e) => setNominationForm({...nominationForm, nomination_type: e.target.value})} placeholder="例: 本指名, フリー指名" />
+                            </div>
+                            <div>
+                              <Label>お客様料金 (円)</Label>
+                              <Input type="number" value={nominationForm.customer_price} onChange={(e) => setNominationForm({...nominationForm, customer_price: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <div>
+                              <Label>セラピストバック (円)</Label>
+                              <Input type="number" value={nominationForm.therapist_back} onChange={(e) => setNominationForm({...nominationForm, therapist_back: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <div>
+                              <Label>店舗バック (円)</Label>
+                              <Input type="number" value={nominationForm.shop_back} onChange={(e) => setNominationForm({...nominationForm, shop_back: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <Button onClick={handleAddNomination} className="w-full">追加</Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {nominationRates.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">登録されている指名料金はありません</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 px-2">指名タイプ</th>
+                            <th className="text-right py-3 px-2">お客様料金</th>
+                            <th className="text-right py-3 px-2">セラピストバック</th>
+                            <th className="text-right py-3 px-2">店バック</th>
+                            {isAdmin && <th className="text-center py-3 px-2">操作</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {nominationRates.map((nomination) => (
+                            <tr key={nomination.id} className="border-b">
+                              <td className="py-3 px-2 font-medium">{nomination.nomination_type}</td>
+                              <td className="text-right py-3 px-2">¥{nomination.customer_price.toLocaleString()}</td>
+                              <td className="text-right py-3 px-2">¥{nomination.therapist_back?.toLocaleString() || 0}</td>
+                              <td className="text-right py-3 px-2">¥{nomination.shop_back?.toLocaleString() || 0}</td>
+                              {isAdmin && (
+                                <td className="text-center py-3 px-2">
+                                  <Button onClick={() => handleDeleteNomination(nomination.id)} variant="destructive" size="sm"><Trash2 className="h-3 w-3" /></Button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* 経費率管理 */}
+            <TabsContent value="expenses">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Receipt className="h-5 w-5" />
+                      経費率管理（雑費・宿泊費・交通費）
+                    </CardTitle>
+                    {isAdmin && (
+                      <Dialog open={isAddExpenseOpen} onOpenChange={setIsAddExpenseOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> 追加</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>経費率を追加</DialogTitle></DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>経費タイプ</Label>
+                              <Input value={expenseForm.expense_type} onChange={(e) => setExpenseForm({...expenseForm, expense_type: e.target.value})} placeholder="例: 雑費、宿泊費、交通費3日〜" />
+                            </div>
+                            <div>
+                              <Label>セラピスト控除/支給（円）</Label>
+                              <Input type="number" value={expenseForm.therapist_deduction} onChange={(e) => setExpenseForm({...expenseForm, therapist_deduction: parseInt(e.target.value) || 0})} />
+                              <p className="text-xs text-muted-foreground mt-1">正の値=支給、負の値=控除</p>
+                            </div>
+                            <div>
+                              <Label>店舗収入（円）</Label>
+                              <Input type="number" value={expenseForm.shop_income} onChange={(e) => setExpenseForm({...expenseForm, shop_income: parseInt(e.target.value) || 0})} />
+                            </div>
+                            <div>
+                              <Label>最低日数</Label>
+                              <Input type="number" value={expenseForm.min_days} onChange={(e) => setExpenseForm({...expenseForm, min_days: parseInt(e.target.value) || 1})} />
+                            </div>
+                            <Button onClick={handleAddExpenseRate} className="w-full">追加</Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {expenseRates.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">登録されている経費率はありません</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 px-2">経費タイプ</th>
+                            <th className="text-right py-3 px-2">セラピスト控除/支給</th>
+                            <th className="text-right py-3 px-2">店舗収入</th>
+                            <th className="text-right py-3 px-2">最低日数</th>
+                            {isAdmin && <th className="text-center py-3 px-2">操作</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {expenseRates.map((rate) => {
+                            const isEditing = editingExpenseRate?.id === rate.id;
+                            return (
+                              <tr key={rate.id} className="border-b">
+                                <td className="py-3 px-2 font-medium">{rate.expense_type}</td>
+                                <td className="text-right py-3 px-2">
+                                  {isEditing ? (
+                                    <Input type="number" value={editingExpenseRate.therapist_deduction} onChange={(e) => setEditingExpenseRate({...editingExpenseRate, therapist_deduction: parseInt(e.target.value) || 0})} className="w-24 text-right" />
+                                  ) : `¥${rate.therapist_deduction.toLocaleString()}`}
+                                </td>
+                                <td className="text-right py-3 px-2">
+                                  {isEditing ? (
+                                    <Input type="number" value={editingExpenseRate.shop_income} onChange={(e) => setEditingExpenseRate({...editingExpenseRate, shop_income: parseInt(e.target.value) || 0})} className="w-24 text-right" />
+                                  ) : `¥${rate.shop_income.toLocaleString()}`}
+                                </td>
+                                <td className="text-right py-3 px-2">
+                                  {isEditing ? (
+                                    <Input type="number" value={editingExpenseRate.min_days ?? 1} onChange={(e) => setEditingExpenseRate({...editingExpenseRate, min_days: parseInt(e.target.value) || 1})} className="w-16 text-right" />
+                                  ) : rate.min_days ? `${rate.min_days}日〜` : '-'}
+                                </td>
+                                {isAdmin && (
+                                  <td className="text-center py-3 px-2">
+                                    <div className="flex gap-1 justify-center">
+                                      {isEditing ? (
+                                        <Button onClick={() => handleUpdateExpenseRate(editingExpenseRate)} size="sm"><Save className="h-3 w-3" /></Button>
+                                      ) : (
+                                        <Button onClick={() => setEditingExpenseRate(rate)} variant="outline" size="sm"><Edit className="h-3 w-3" /></Button>
+                                      )}
+                                      <Button onClick={() => handleDeleteExpenseRate(rate.id)} variant="destructive" size="sm"><Trash2 className="h-3 w-3" /></Button>
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </>
