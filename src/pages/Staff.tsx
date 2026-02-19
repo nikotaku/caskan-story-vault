@@ -1318,220 +1318,83 @@ export default function Staff() {
             </Card>
 
             {/* Cast List */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-1">
               {filteredCasts.map((cast) => (
-                <Card 
-                  key={cast.id} 
-                  className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                <div
+                  key={cast.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
                   onClick={() => handleEditCast(cast)}
                 >
-                  <div className="aspect-[4/3] relative overflow-hidden bg-muted">
-                    {cast.photos && cast.photos.length > 0 ? (
-                      <div className="relative w-full h-full">
-                        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide w-full h-full">
-                          {cast.photos.map((photo, index) => (
-                            <div key={index} className="flex-shrink-0 w-full h-full snap-center">
-                              <img 
-                                src={photo} 
-                                alt={`${cast.name} - ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        {cast.photos.length > 1 && (
-                          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex gap-1">
-                            {cast.photos.map((_, index) => (
-                              <div 
-                                key={index} 
-                                className="w-1.5 h-1.5 rounded-full bg-white/60 backdrop-blur-sm"
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : cast.photo ? (
-                      <img 
-                        src={cast.photo} 
-                        alt={cast.name}
-                        className="w-full h-full object-cover"
-                      />
+                  {/* Photo */}
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
+                    {cast.photo ? (
+                      <img src={cast.photo} alt={cast.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Camera size={48} className="text-muted-foreground" />
+                        <Camera size={16} className="text-muted-foreground" />
                       </div>
                     )}
                   </div>
-                  
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">
-                          {cast.name}
-                        </CardTitle>
-                        {cast.room && <p className="text-sm text-muted-foreground">{cast.room}</p>}
-                      </div>
+
+                  {/* Name & Room */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm truncate">{cast.name}</span>
                       {!cast.is_visible && (
-                        <Badge variant="secondary" className="text-xs">
-                          <EyeOff size={10} className="mr-1" />
-                          非表示
+                        <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                          <EyeOff size={10} className="mr-0.5" />非表示
                         </Badge>
                       )}
                     </div>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {cast.profile}
-                      </p>
-                      
-                      {(cast.execution_date_start || cast.execution_date_end) && (
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          {cast.execution_date_start && (
-                            <div className="flex items-center gap-1">
-                              <Clock size={12} />
-                              <span>開始: {new Date(cast.execution_date_start).toLocaleDateString('ja-JP')}</span>
-                            </div>
-                          )}
-                          {cast.execution_date_end && (
-                            <div className="flex items-center gap-1">
-                              <Clock size={12} />
-                              <span>終了: {new Date(cast.execution_date_end).toLocaleDateString('ja-JP')}</span>
-                            </div>
-                          )}
-                        </div>
+                    {cast.room && <p className="text-xs text-muted-foreground truncate">{cast.room}</p>}
+                  </div>
+
+                  {/* Status buttons */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {['waiting', 'busy', 'offline'].map((s) => (
+                        <Button
+                          key={s}
+                          variant={cast.status === s ? "default" : "outline"}
+                          size="sm"
+                          className="text-[11px] h-7 px-2"
+                          disabled={cast.status === s}
+                          onClick={(e) => { e.stopPropagation(); handleStatusChange(cast.id, s); }}
+                        >
+                          {s === 'waiting' ? '待機' : s === 'busy' ? '接客' : '退勤'}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {cast.access_token ? (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); copyPortalLink(cast.access_token!); }}>
+                          <Copy size={14} />
+                        </Button>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); generateAccessToken(cast.id); }}>
+                          <LinkIcon size={14} />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); handleEditCast(cast); }}>
+                        <Edit size={14} />
+                      </Button>
+                      {deleteConfirmId === cast.id ? (
+                        <>
+                          <Button variant="destructive" size="sm" className="h-7 text-xs px-2" onClick={(e) => { e.stopPropagation(); handleDeleteCast(cast.id); }}>確認</Button>
+                          <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}>×</Button>
+                        </>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-destructive hover:text-destructive-foreground" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(cast.id); }}>
+                          <Trash2 size={14} />
+                        </Button>
                       )}
                     </div>
-                    
-                    {/* Status Change Buttons */}
-                    {isAdmin && (
-                      <>
-                        <div className="flex gap-1 mt-4">
-                          <Button 
-                            variant={cast.status === "waiting" ? "default" : "outline"}
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(cast.id, "waiting");
-                            }}
-                            className="flex-1 text-xs"
-                            disabled={cast.status === "waiting"}
-                          >
-                            待機
-                          </Button>
-                          <Button 
-                            variant={cast.status === "busy" ? "default" : "outline"}
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(cast.id, "busy");
-                            }}
-                            className="flex-1 text-xs"
-                            disabled={cast.status === "busy"}
-                          >
-                            接客
-                          </Button>
-                          <Button 
-                            variant={cast.status === "offline" ? "default" : "outline"}
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStatusChange(cast.id, "offline");
-                            }}
-                            className="flex-1 text-xs"
-                            disabled={cast.status === "offline"}
-                          >
-                            退勤
-                          </Button>
-                        </div>
-                        
-                        {/* Therapist Portal Link */}
-                        {cast.access_token ? (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyPortalLink(cast.access_token!);
-                            }}
-                            className="w-full mt-3"
-                          >
-                            <Copy size={14} className="mr-1" />
-                            専用ページリンクをコピー
-                          </Button>
-                        ) : (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              generateAccessToken(cast.id);
-                            }}
-                            className="w-full mt-3"
-                          >
-                            <LinkIcon size={14} className="mr-1" />
-                            専用ページを作成
-                          </Button>
-                        )}
-                        
-                        <div className="flex gap-2 mt-3">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditCast(cast);
-                            }}
-                            className="flex-1"
-                          >
-                            <Edit size={14} />
-                            編集
-                          </Button>
-                          
-                          {deleteConfirmId === cast.id ? (
-                            <div className="flex gap-1">
-                              <Button 
-                                variant="destructive" 
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteCast(cast.id);
-                                }}
-                                className="text-xs"
-                              >
-                                確認
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteConfirmId(null);
-                                }}
-                                className="text-xs"
-                              >
-                                キャンセル
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteConfirmId(cast.id);
-                              }}
-                              className="hover:bg-destructive hover:text-destructive-foreground"
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
               ))}
             </div>
 
