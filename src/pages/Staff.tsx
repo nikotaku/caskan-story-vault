@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload, Eye, EyeOff } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { WebsitePhotoSync } from "@/components/WebsitePhotoSync";
@@ -47,6 +47,7 @@ interface Cast {
   memo: string | null;
   dispatch_status: string | null;
   repeat_scheduled: boolean | null;
+  is_visible: boolean;
 }
 
 export default function Staff() {
@@ -296,6 +297,7 @@ export default function Staff() {
           memo: editingCast.memo || null,
           dispatch_status: editingCast.dispatch_status || 'none',
           repeat_scheduled: editingCast.repeat_scheduled || false,
+          is_visible: editingCast.is_visible,
         })
         .eq('id', editingCast.id);
 
@@ -1092,6 +1094,21 @@ export default function Staff() {
                     </TabsContent>
                     
                     <TabsContent value="details" className="space-y-4 mt-4">
+                      <div className="flex items-center justify-between p-3 rounded-lg border">
+                        <div className="flex items-center gap-2">
+                          {editingCast.is_visible ? <Eye className="h-4 w-4 text-green-600" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
+                          <Label>HP表示</Label>
+                        </div>
+                        <Button
+                          type="button"
+                          variant={editingCast.is_visible ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setEditingCast({...editingCast, is_visible: !editingCast.is_visible})}
+                        >
+                          {editingCast.is_visible ? "ON" : "OFF"}
+                        </Button>
+                      </div>
+
                       <div>
                         <Label htmlFor="edit-dispatch-status">派遣ステータス</Label>
                         <Select 
@@ -1354,6 +1371,12 @@ export default function Staff() {
                         </CardTitle>
                         {cast.room && <p className="text-sm text-muted-foreground">{cast.room}</p>}
                       </div>
+                      {!cast.is_visible && (
+                        <Badge variant="secondary" className="text-xs">
+                          <EyeOff size={10} className="mr-1" />
+                          非表示
+                        </Badge>
+                      )}
                     </div>
                   </CardHeader>
                   
