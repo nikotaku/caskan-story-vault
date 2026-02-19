@@ -553,11 +553,11 @@ export default function PricingManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
       <DashboardHeader onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       
-      <main className="pt-[60px] p-6 pb-24 md:ml-[180px]">
+      <div className="pt-[60px] p-6 pb-24 md:ml-[180px] bg-background min-h-screen">
           <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -1153,7 +1153,7 @@ export default function PricingManagement() {
               </CardContent>
             </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
