@@ -5,29 +5,24 @@ import { useAuth } from "@/hooks/useAuth";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Pin, Plus, Trash2, Edit2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Trash2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 
 interface BoardPost {
   id: string;
   author_name: string;
-  title: string;
   content: string;
-  is_pinned: boolean;
   created_at: string;
 }
 
+const MAX_CHARS = 140;
+
 const Board = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPost, setEditingPost] = useState<BoardPost | null>(null);
-  const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [authorName, setAuthorName] = useState("");
   const { isAdmin } = useAuth();
@@ -39,7 +34,6 @@ const Board = () => {
       const { data, error } = await supabase
         .from("board_posts")
         .select("*")
-        .order("is_pinned", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data as BoardPost[];
@@ -47,29 +41,16 @@ const Board = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (post: { title: string; content: string; author_name: string }) => {
+    mutationFn: async (post: { content: string; author_name: string; title: string }) => {
       const { error } = await supabase.from("board_posts").insert(post);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["board-posts"] });
+      setContent("");
       toast.success("投稿しました");
-      resetForm();
     },
     onError: () => toast.error("投稿に失敗しました"),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_pinned?: boolean }) => {
-      const { error } = await supabase.from("board_posts").update(updates).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["board-posts"] });
-      toast.success("更新しました");
-      resetForm();
-    },
-    onError: () => toast.error("更新に失敗しました"),
   });
 
   const deleteMutation = useMutation({
@@ -81,112 +62,93 @@ const Board = () => {
       queryClient.invalidateQueries({ queryKey: ["board-posts"] });
       toast.success("削除しました");
     },
-    onError: () => toast.error("削除に失敗しました"),
   });
 
-  const resetForm = () => {
-    setTitle("");
-    setContent("");
-    setAuthorName("");
-    setEditingPost(null);
-    setDialogOpen(false);
+  const handlePost = () => {
+    if (!content.trim() || content.length > MAX_CHARS) return;
+    createMutation.mutate({
+      content: content.trim(),
+      author_name: authorName.trim() || "管理者",
+      title: "-",
+    });
   };
 
-  const handleSubmit = () => {
-    if (!title.trim() || !content.trim()) return;
-    if (editingPost) {
-      updateMutation.mutate({ id: editingPost.id, title, content });
-    } else {
-      createMutation.mutate({ title, content, author_name: authorName || "管理者" });
-    }
-  };
-
-  const openEdit = (post: BoardPost) => {
-    setEditingPost(post);
-    setTitle(post.title);
-    setContent(post.content);
-    setAuthorName(post.author_name);
-    setDialogOpen(true);
-  };
+  const remaining = MAX_CHARS - content.length;
 
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="md:ml-[180px] pt-[60px] p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-bold">掲示板</h1>
-          {isAdmin && (
-            <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button size="sm"><Plus size={14} className="mr-1" />投稿</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingPost ? "投稿を編集" : "新規投稿"}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  {!editingPost && (
-                    <Input placeholder="投稿者名" value={authorName} onChange={(e) => setAuthorName(e.target.value)} />
-                  )}
-                  <Input placeholder="タイトル" value={title} onChange={(e) => setTitle(e.target.value)} />
-                  <Textarea placeholder="内容" rows={6} value={content} onChange={(e) => setContent(e.target.value)} />
-                  <Button onClick={handleSubmit} className="w-full" disabled={!title.trim() || !content.trim()}>
-                    {editingPost ? "更新" : "投稿"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
+      <main className="md:ml-[180px] pt-[60px] p-4 max-w-xl mx-auto">
+        {/* Post composer */}
+        {isAdmin && (
+          <div className="border-b border-border pb-4 mb-4">
+            <Input
+              placeholder="表示名"
+              value={authorName}
+              onChange={(e) => setAuthorName(e.target.value)}
+              className="mb-2 text-sm h-8"
+            />
+            <Textarea
+              placeholder="いまどうしてる？"
+              value={content}
+              onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
+              rows={3}
+              className="resize-none text-sm border-none shadow-none focus-visible:ring-0 p-0"
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className={`text-xs ${remaining < 20 ? "text-destructive" : "text-muted-foreground"}`}>
+                {remaining}
+              </span>
+              <Button
+                size="sm"
+                className="rounded-full px-5"
+                onClick={handlePost}
+                disabled={!content.trim() || remaining < 0}
+              >
+                投稿する
+              </Button>
+            </div>
+          </div>
+        )}
 
+        {/* Feed */}
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">読み込み中...</p>
+          <p className="text-sm text-muted-foreground text-center py-8">読み込み中...</p>
         ) : posts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">投稿がありません</p>
+          <div className="text-center py-12 text-muted-foreground">
+            <MessageSquare size={32} className="mx-auto mb-2 opacity-40" />
+            <p className="text-sm">まだ投稿がありません</p>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-border">
             {posts.map((post) => (
-              <Card key={post.id} className={post.is_pinned ? "border-primary/40" : ""}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        {post.is_pinned && <Pin size={12} className="text-primary shrink-0" />}
-                        <h3 className="font-semibold text-sm truncate">{post.title}</h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {post.author_name} · {format(new Date(post.created_at), "M/d HH:mm", { locale: ja })}
-                      </p>
-                      <p className="text-sm whitespace-pre-wrap">{post.content}</p>
-                    </div>
-                    {isAdmin && (
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => updateMutation.mutate({ id: post.id, is_pinned: !post.is_pinned })}
-                        >
-                          <Pin size={12} className={post.is_pinned ? "text-primary" : ""} />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(post)}>
-                          <Edit2 size={12} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => { if (confirm("削除しますか？")) deleteMutation.mutate(post.id); }}
-                        >
-                          <Trash2 size={12} />
-                        </Button>
-                      </div>
-                    )}
+              <div key={post.id} className="py-3 flex gap-3">
+                {/* Avatar */}
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-xs font-bold text-primary">
+                  {post.author_name.charAt(0)}
+                </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm truncate">{post.author_name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: ja })}
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
+                  <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{post.content}</p>
+                </div>
+                {/* Delete */}
+                {isAdmin && (
+                  <button
+                    onClick={() => { if (confirm("削除しますか？")) deleteMutation.mutate(post.id); }}
+                    className="text-muted-foreground hover:text-destructive transition-colors shrink-0 self-start mt-1"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}
