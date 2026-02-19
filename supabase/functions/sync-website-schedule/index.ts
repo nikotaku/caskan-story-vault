@@ -124,17 +124,23 @@ function parseSchedulePage(
     notes: string | null;
   }> = [];
 
-  // Each therapist is in a <li> with class "is-shift-show"
-  const liRegex = /<li[^>]*class="[^"]*is-shift-show[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
-  let liMatch;
+  // Simple approach: find all therapist-datas-each sections by splitting HTML
+  const sections = html.split(/class="therapist-datas-each\b/);
+  console.log(`Found ${sections.length - 1} therapist sections`);
 
-  while ((liMatch = liRegex.exec(html)) !== null) {
-    const block = liMatch[1];
+  for (let i = 1; i < sections.length; i++) {
+    const block = sections[i];
 
-    // Extract name from therapist-datas-name
+    // Extract name
     const nameMatch = block.match(/class="therapist-datas-name"[^>]*>([^<]+)</);
-    if (!nameMatch) continue;
-    const name = nameMatch[1].trim();
+    if (!nameMatch) {
+      // Try alt attribute from image
+      const altMatch = block.match(/alt="([^"]+)"[^>]*class="therapist-data-each-tmb/);
+      if (!altMatch) { console.log(`No name in section ${i}`); continue; }
+      var name = altMatch[1].trim();
+    } else {
+      var name = nameMatch[1].trim();
+    }
 
     const castId = castMap.get(name);
     if (!castId) {
@@ -142,12 +148,12 @@ function parseSchedulePage(
       continue;
     }
 
-    // Extract shift time like "13:00〜1:00" or "12:00〜26:00"
+    // Extract shift time
     const shiftMatch = block.match(/class="therapist-datas-shift"[^>]*>([\s\S]*?)<\/div>/);
-    if (!shiftMatch) continue;
+    if (!shiftMatch) { console.log(`No shift time for ${name}`); continue; }
     const shiftText = shiftMatch[1].replace(/<[^>]*>/g, '').trim();
-    const timeMatch = shiftText.match(/(\d{1,2}:\d{2})\s*[〜~-]\s*(\d{1,2}:\d{2})/);
-    if (!timeMatch) continue;
+    const timeMatch = shiftText.match(/(\d{1,2}:\d{2})\s*[〜~\-－]\s*(\d{1,2}:\d{2})/);
+    if (!timeMatch) { console.log(`Cannot parse time for ${name}: ${shiftText}`); continue; }
 
     const startTime = normalizeTime(timeMatch[1]);
     const endTime = normalizeTime(timeMatch[2]);
@@ -158,12 +164,11 @@ function parseSchedulePage(
       ? roomMatch[1].replace(/<[^>]*>/g, '').trim().replace(/^■|■$/g, '')
       : null;
 
-    // Check status (予約満了, 受付中, etc.)
+    // Status
     const statusMatch = block.match(/class="btn-reserve-full[^"]*"[^>]*>([^<]+)</);
     const areaInfoMatch = block.match(/class="therapist-datas-area-info"[^>]*>([^<]+)</);
-    let status = 'scheduled';
+    const status = 'scheduled'; // DB constraint only allows: scheduled, completed, cancelled
     const statusText = statusMatch?.[1]?.trim() || areaInfoMatch?.[1]?.trim() || '';
-    if (statusText === '予約満了') status = 'full';
 
     results.push({
       cast_id: castId,
@@ -174,6 +179,8 @@ function parseSchedulePage(
       room: room || null,
       notes: statusText || null,
     });
+
+    console.log(`Parsed shift: ${name} ${startTime}-${endTime} ${room || ''}`);
   }
 
   return results;
@@ -183,7 +190,6 @@ function normalizeTime(t: string): string {
   const m = t.match(/(\d{1,2}):(\d{2})/);
   if (!m) return '12:00:00';
   let h = parseInt(m[1], 10);
-  // 24時以上は翌日扱いだが、時刻としては mod 24
   if (h >= 24) h -= 24;
   return `${String(h).padStart(2, '0')}:${m[2]}:00`;
 }
