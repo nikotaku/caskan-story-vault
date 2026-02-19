@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -25,6 +25,12 @@ interface ReservationDetail {
   total_shop: number;
 }
 
+interface ExpenseDetail {
+  expense_type: string;
+  therapist_amount: number;
+  shop_amount: number;
+}
+
 interface CastSalary {
   cast_id: string;
   cast_name: string;
@@ -36,6 +42,9 @@ interface CastSalary {
     nomination_back: number;
   };
   reservations: ReservationDetail[];
+  expenses: ExpenseDetail[];
+  total_expense_therapist: number;
+  total_expense_shop: number;
 }
 
 export default function Salary() {
@@ -93,18 +102,14 @@ export default function Salary() {
 
       if (reservationsError) throw reservationsError;
 
-      // Fetch rate tables
-      const { data: backRates } = await supabase
-        .from('back_rates')
-        .select('*');
-      
-      const { data: optionRates } = await supabase
-        .from('option_rates')
-        .select('*');
-      
-      const { data: nominationRates } = await supabase
-        .from('nomination_rates')
-        .select('*');
+      // Fetch rate tables and expenses
+      const [{ data: backRates }, { data: optionRates }, { data: nominationRates }, { data: expenses }, { data: expenseRates }] = await Promise.all([
+        supabase.from('back_rates').select('*'),
+        supabase.from('option_rates').select('*'),
+        supabase.from('nomination_rates').select('*'),
+        supabase.from('expenses').select('*').eq('expense_date', dateStr),
+        supabase.from('expense_rates').select('*'),
+      ]);
 
       // Calculate salary per cast based on back rates
       const salaryMap = new Map<string, CastSalary>();
@@ -191,6 +196,9 @@ export default function Salary() {
                 nomination_back: nominationBack,
               },
               reservations: [resDetail],
+              expenses: [],
+              total_expense_therapist: 0,
+              total_expense_shop: 0,
             });
           }
         }
@@ -212,8 +220,32 @@ export default function Salary() {
               nomination_back: 0,
             },
             reservations: [],
+            expenses: [],
+            total_expense_therapist: 0,
+            total_expense_shop: 0,
           });
         }
+      });
+
+      // Apply expenses per cast
+      expenses?.forEach(expense => {
+        if (!expense.cast_id) return;
+        const castEntry = salaryMap.get(expense.cast_id);
+        if (!castEntry) return;
+        
+        // Find matching expense rate
+        const matchingRate = expenseRates?.find(r => r.expense_type === expense.expense_type);
+        const therapistAmount = matchingRate ? matchingRate.therapist_deduction : 0;
+        const shopAmount = matchingRate ? matchingRate.shop_income : 0;
+
+        castEntry.expenses.push({
+          expense_type: expense.expense_type,
+          therapist_amount: therapistAmount,
+          shop_amount: shopAmount,
+        });
+        castEntry.total_expense_therapist += therapistAmount;
+        castEntry.total_expense_shop += shopAmount;
+        castEntry.total_salary += therapistAmount; // deductions are negative values
       });
 
       setSalaries(Array.from(salaryMap.values()).sort((a, b) => 
@@ -304,7 +336,7 @@ export default function Salary() {
                         </div>
                       </div>
                       
-                      {expandedCastId === salary.cast_id && salary.reservation_count > 0 && (
+                      {expandedCastId === salary.cast_id && (
                         <div className="mt-3 pt-3 border-t text-sm space-y-3">
                           {salary.reservations.map((res, idx) => (
                             <div key={idx} className="p-3 bg-muted/50 rounded space-y-2">
@@ -347,6 +379,38 @@ export default function Salary() {
                               </div>
                             </div>
                           ))}
+
+                          {/* 経費控除 */}
+                          {salary.expenses.length > 0 && (
+                            <div className="p-3 bg-destructive/5 border border-destructive/20 rounded space-y-2">
+                              <div className="font-medium text-destructive">経費控除</div>
+                              <div className="grid grid-cols-3 gap-1 text-xs">
+                                <div className="font-medium text-muted-foreground"></div>
+                                <div className="text-center font-medium text-muted-foreground">セラピスト</div>
+                                <div className="text-center font-medium text-muted-foreground">店舗</div>
+                                {salary.expenses.map((exp, idx) => (
+                                  <React.Fragment key={idx}>
+                                    <div className="text-muted-foreground">{exp.expense_type}</div>
+                                    <div className="text-center">¥{exp.therapist_amount.toLocaleString()}</div>
+                                    <div className="text-center">¥{exp.shop_amount.toLocaleString()}</div>
+                                  </React.Fragment>
+                                ))}
+                                <div className="font-medium border-t pt-1">経費合計</div>
+                                <div className="text-center font-medium border-t pt-1">¥{salary.total_expense_therapist.toLocaleString()}</div>
+                                <div className="text-center font-medium border-t pt-1">¥{salary.total_expense_shop.toLocaleString()}</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 最終合計 */}
+                          {(salary.reservation_count > 0 || salary.expenses.length > 0) && (
+                            <div className="p-3 bg-primary/5 border border-primary/20 rounded">
+                              <div className="flex justify-between items-center text-sm font-bold">
+                                <span>最終支給額</span>
+                                <span className="text-lg">¥{salary.total_salary.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
