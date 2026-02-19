@@ -27,6 +27,7 @@ export default function Salary() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [salaries, setSalaries] = useState<CastSalary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedCastId, setExpandedCastId] = useState<string | null>(null);
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -241,23 +242,25 @@ export default function Salary() {
                   {salaries.map((salary) => (
                     <div 
                       key={salary.cast_id}
-                      className="p-4 border rounded-lg hover:bg-accent transition-colors"
+                      className="p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer"
+                      onClick={() => setExpandedCastId(expandedCastId === salary.cast_id ? null : salary.cast_id)}
                     >
-                      <div className="flex justify-between items-center mb-2">
+                      <div className="flex justify-between items-center">
                         <div>
                           <div className="font-medium text-lg">{salary.cast_name}</div>
                           <div className="text-sm text-muted-foreground">
                             予約: {salary.reservation_count}件
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex items-center gap-2">
                           <div className="text-2xl font-bold">
                             ¥{salary.total_salary.toLocaleString()}
                           </div>
+                          <ChevronRight className={`h-5 w-5 text-muted-foreground transition-transform ${expandedCastId === salary.cast_id ? 'rotate-90' : ''}`} />
                         </div>
                       </div>
                       
-                      {salary.reservation_count > 0 && (
+                      {expandedCastId === salary.cast_id && salary.reservation_count > 0 && (
                         <div className="mt-3 pt-3 border-t text-sm space-y-1">
                           <div className="flex justify-between text-muted-foreground">
                             <span>コースバック:</span>
