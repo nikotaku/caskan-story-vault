@@ -13,7 +13,7 @@ import Design from "./pages/Design";
 import Report from "./pages/Report";
 import Salary from "./pages/Salary";
 import Settings from "./pages/Settings";
-import Pricing from "./pages/Pricing";
+import Pricing from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import TherapistPortal from "./pages/TherapistPortal";
