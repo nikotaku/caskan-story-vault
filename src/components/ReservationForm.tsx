@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 
 interface Cast {
@@ -126,9 +127,30 @@ export function ReservationForm({
     setFormData({ ...formData, selectedOptions: newOptions });
   }, [formData, setFormData]);
 
-  const availableOptions = useMemo(() => 
-    optionRates.map(rate => rate.option_name),
+  const drOptions = useMemo(() =>
+    optionRates.filter(r => r.option_name.startsWith("DR")),
     [optionRates]
+  );
+
+  const regularOptions = useMemo(() =>
+    optionRates.filter(r => !r.option_name.startsWith("DR")),
+    [optionRates]
+  );
+
+  const selectedDR = useMemo(() =>
+    formData.selectedOptions.find(o => o.startsWith("DR")) || "none",
+    [formData.selectedOptions]
+  );
+
+  const handleDRChange = useCallback((value: string) => {
+    const withoutDR = formData.selectedOptions.filter(o => !o.startsWith("DR"));
+    const newOptions = value === "none" ? withoutDR : [...withoutDR, value];
+    setFormData({ ...formData, selectedOptions: newOptions });
+  }, [formData, setFormData]);
+
+  const availableOptions = useMemo(() => 
+    regularOptions.map(rate => rate.option_name),
+    [regularOptions]
   );
 
   return (
@@ -321,6 +343,28 @@ export function ReservationForm({
         </div>
       </div>
 
+      {/* DR Option - Radio */}
+      {drOptions.length > 0 && (
+        <div>
+          <Label>DR（ドリンク）</Label>
+          <RadioGroup value={selectedDR} onValueChange={handleDRChange} className="grid grid-cols-3 gap-2 mt-2">
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="none" id="dr-none" />
+              <label htmlFor="dr-none" className="text-sm">なし</label>
+            </div>
+            {drOptions.map((rate) => (
+              <div key={rate.id} className="flex items-center space-x-2">
+                <RadioGroupItem value={rate.option_name} id={`dr-${rate.id}`} />
+                <label htmlFor={`dr-${rate.id}`} className="text-sm">
+                  {rate.option_name} (+¥{rate.customer_price.toLocaleString()})
+                </label>
+              </div>
+            ))}
+          </RadioGroup>
+        </div>
+      )}
+
+      {/* Other Options - Checkbox */}
       <div>
         <Label>オプション</Label>
         <div className="grid grid-cols-2 gap-2 mt-2">
