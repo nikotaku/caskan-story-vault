@@ -92,9 +92,9 @@ export default function Salary() {
       const salaryMap = new Map<string, CastSalary>();
 
       reservations?.forEach(reservation => {
-        if (reservation.casts && Array.isArray(reservation.casts) && reservation.casts[0]) {
-          const castName = reservation.casts[0].name;
-          
+        const castData = reservation.casts as any;
+        const castName = Array.isArray(castData) ? castData[0]?.name : castData?.name;
+        if (castName) {
           // Calculate base course back
           let courseBack = 0;
           const matchingRate = backRates?.find(
@@ -154,21 +154,20 @@ export default function Salary() {
 
       // Add casts with shifts but no reservations
       shifts?.forEach(shift => {
-        if (shift.casts && Array.isArray(shift.casts) && shift.casts[0]) {
-          const castName = shift.casts[0].name;
-          if (!salaryMap.has(shift.cast_id)) {
-            salaryMap.set(shift.cast_id, {
-              cast_id: shift.cast_id,
-              cast_name: castName,
-              total_salary: 0,
-              reservation_count: 0,
-              details: {
-                course_back: 0,
-                option_back: 0,
-                nomination_back: 0,
-              },
-            });
-          }
+        const castData = shift.casts as any;
+        const castName = Array.isArray(castData) ? castData[0]?.name : castData?.name;
+        if (castName && !salaryMap.has(shift.cast_id)) {
+          salaryMap.set(shift.cast_id, {
+            cast_id: shift.cast_id,
+            cast_name: castName,
+            total_salary: 0,
+            reservation_count: 0,
+            details: {
+              course_back: 0,
+              option_back: 0,
+              nomination_back: 0,
+            },
+          });
         }
       });
 
