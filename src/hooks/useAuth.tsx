@@ -8,6 +8,7 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,17 +20,25 @@ export function useAuth() {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // 管理者権限をチェック
+          // 管理者権限をチェック & プロフィール取得
           setTimeout(async () => {
-            const { data, error } = await supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id)
-              .eq("role", "admin")
-              .maybeSingle();
+            const [{ data: roleData }, { data: profileData }] = await Promise.all([
+              supabase
+                .from("user_roles")
+                .select("role")
+                .eq("user_id", session.user.id)
+                .eq("role", "admin")
+                .maybeSingle(),
+              supabase
+                .from("profiles")
+                .select("display_name")
+                .eq("user_id", session.user.id)
+                .maybeSingle(),
+            ]);
             
-            console.log('Admin check result:', { userId: session.user.id, data, error, isAdmin: !!data });
-            setIsAdmin(!!data);
+            console.log('Admin check result:', { userId: session.user.id, data: roleData, isAdmin: !!roleData });
+            setIsAdmin(!!roleData);
+            setDisplayName(profileData?.display_name || session.user.email || null);
           }, 0);
         } else {
           setIsAdmin(false);
@@ -45,16 +54,23 @@ export function useAuth() {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        // 管理者権限をチェック
         setTimeout(async () => {
-          const { data } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", session.user.id)
-            .eq("role", "admin")
-            .maybeSingle();
+          const [{ data: roleData }, { data: profileData }] = await Promise.all([
+            supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", session.user.id)
+              .eq("role", "admin")
+              .maybeSingle(),
+            supabase
+              .from("profiles")
+              .select("display_name")
+              .eq("user_id", session.user.id)
+              .maybeSingle(),
+          ]);
           
-          setIsAdmin(!!data);
+          setIsAdmin(!!roleData);
+          setDisplayName(profileData?.display_name || session.user.email || null);
         }, 0);
       }
       
@@ -67,6 +83,7 @@ export function useAuth() {
   const signOut = async () => {
     await supabase.auth.signOut();
     setIsAdmin(false);
+    setDisplayName(null);
     navigate("/auth");
   };
 
@@ -75,6 +92,7 @@ export function useAuth() {
     session,
     loading,
     isAdmin,
+    displayName,
     signOut,
   };
 }
