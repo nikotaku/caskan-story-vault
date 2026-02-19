@@ -14,10 +14,15 @@ interface ReservationDetail {
   course_type: string | null;
   duration: number;
   payment_method: string;
+  customer_price: number;
   course_back: number;
+  course_shop: number;
   option_back: number;
+  option_shop: number;
   nomination_back: number;
-  total: number;
+  nomination_shop: number;
+  total_therapist: number;
+  total_shop: number;
 }
 
 interface CastSalary {
@@ -110,51 +115,65 @@ export default function Salary() {
         if (castName) {
           // Calculate base course back
           let courseBack = 0;
+          let courseShop = 0;
+          let customerPrice = 0;
           const matchingRate = backRates?.find(
             rate => rate.course_type === reservation.course_type && 
                     rate.duration === reservation.duration
           );
           if (matchingRate) {
             courseBack = matchingRate.therapist_back;
+            courseShop = matchingRate.shop_back;
+            customerPrice = matchingRate.customer_price;
           }
 
           // Calculate options back
           let optionBack = 0;
+          let optionShop = 0;
           if (reservation.options && Array.isArray(reservation.options)) {
             reservation.options.forEach(optionName => {
               const matchingOption = optionRates?.find(opt => opt.option_name === optionName);
               if (matchingOption) {
                 optionBack += matchingOption.therapist_back;
+                optionShop += matchingOption.shop_back || 0;
               }
             });
           }
 
           // Calculate nomination back
           let nominationBack = 0;
+          let nominationShop = 0;
           if (reservation.nomination_type) {
             const matchingNomination = nominationRates?.find(
               nom => nom.nomination_type === reservation.nomination_type
             );
-            if (matchingNomination && matchingNomination.therapist_back) {
-              nominationBack = matchingNomination.therapist_back;
+            if (matchingNomination) {
+              nominationBack = matchingNomination.therapist_back || 0;
+              nominationShop = matchingNomination.shop_back || 0;
             }
           }
 
-          const totalSalary = courseBack + optionBack + nominationBack;
+          const totalTherapist = courseBack + optionBack + nominationBack;
+          const totalShop = courseShop + optionShop + nominationShop;
 
           const resDetail: ReservationDetail = {
             course_type: reservation.course_type,
             duration: reservation.duration,
             payment_method: (reservation as any).payment_method || '現金',
+            customer_price: customerPrice,
             course_back: courseBack,
+            course_shop: courseShop,
             option_back: optionBack,
+            option_shop: optionShop,
             nomination_back: nominationBack,
-            total: totalSalary,
+            nomination_shop: nominationShop,
+            total_therapist: totalTherapist,
+            total_shop: totalShop,
           };
           
           const existing = salaryMap.get(reservation.cast_id);
           if (existing) {
-            existing.total_salary += totalSalary;
+            existing.total_salary += totalTherapist;
             existing.reservation_count += 1;
             existing.details.course_back += courseBack;
             existing.details.option_back += optionBack;
@@ -164,7 +183,7 @@ export default function Salary() {
             salaryMap.set(reservation.cast_id, {
               cast_id: reservation.cast_id,
               cast_name: castName,
-              total_salary: totalSalary,
+              total_salary: totalTherapist,
               reservation_count: 1,
               details: {
                 course_back: courseBack,
@@ -288,21 +307,44 @@ export default function Salary() {
                       {expandedCastId === salary.cast_id && salary.reservation_count > 0 && (
                         <div className="mt-3 pt-3 border-t text-sm space-y-3">
                           {salary.reservations.map((res, idx) => (
-                            <div key={idx} className="p-2 bg-muted/50 rounded space-y-1">
-                              <div className="flex justify-between font-medium">
+                            <div key={idx} className="p-3 bg-muted/50 rounded space-y-2">
+                              <div className="flex justify-between items-center font-medium">
                                 <span>{res.course_type || '不明'} {res.duration}分</span>
-                                <span>¥{res.total.toLocaleString()}</span>
-                              </div>
-                              <div className="flex justify-between text-muted-foreground text-xs">
-                                <span>コースバック: ¥{res.course_back.toLocaleString()}</span>
                                 <span className="px-2 py-0.5 rounded bg-muted text-xs">{res.payment_method}</span>
                               </div>
-                              {res.option_back > 0 && (
-                                <div className="text-muted-foreground text-xs">オプション: ¥{res.option_back.toLocaleString()}</div>
+                              {res.customer_price > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  お客様料金: ¥{res.customer_price.toLocaleString()}
+                                </div>
                               )}
-                              {res.nomination_back > 0 && (
-                                <div className="text-muted-foreground text-xs">指名: ¥{res.nomination_back.toLocaleString()}</div>
-                              )}
+                              <div className="grid grid-cols-3 gap-1 text-xs">
+                                <div className="font-medium text-muted-foreground"></div>
+                                <div className="text-center font-medium text-muted-foreground">セラピスト</div>
+                                <div className="text-center font-medium text-muted-foreground">店舗</div>
+                                
+                                <div className="text-muted-foreground">コース</div>
+                                <div className="text-center">¥{res.course_back.toLocaleString()}</div>
+                                <div className="text-center">¥{res.course_shop.toLocaleString()}</div>
+                                
+                                {(res.option_back > 0 || res.option_shop > 0) && (
+                                  <>
+                                    <div className="text-muted-foreground">オプション</div>
+                                    <div className="text-center">¥{res.option_back.toLocaleString()}</div>
+                                    <div className="text-center">¥{res.option_shop.toLocaleString()}</div>
+                                  </>
+                                )}
+                                {(res.nomination_back > 0 || res.nomination_shop > 0) && (
+                                  <>
+                                    <div className="text-muted-foreground">指名</div>
+                                    <div className="text-center">¥{res.nomination_back.toLocaleString()}</div>
+                                    <div className="text-center">¥{res.nomination_shop.toLocaleString()}</div>
+                                  </>
+                                )}
+                                
+                                <div className="font-medium border-t pt-1">合計</div>
+                                <div className="text-center font-medium border-t pt-1">¥{res.total_therapist.toLocaleString()}</div>
+                                <div className="text-center font-medium border-t pt-1">¥{res.total_shop.toLocaleString()}</div>
+                              </div>
                             </div>
                           ))}
                         </div>
