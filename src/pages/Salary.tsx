@@ -10,6 +10,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+interface ReservationDetail {
+  course_type: string | null;
+  duration: number;
+  payment_method: string;
+  course_back: number;
+  option_back: number;
+  nomination_back: number;
+  total: number;
+}
+
 interface CastSalary {
   cast_id: string;
   cast_name: string;
@@ -20,6 +30,7 @@ interface CastSalary {
     option_back: number;
     nomination_back: number;
   };
+  reservations: ReservationDetail[];
 }
 
 export default function Salary() {
@@ -69,6 +80,7 @@ export default function Salary() {
           course_type,
           options,
           nomination_type,
+          payment_method,
           casts (name)
         `)
         .eq('reservation_date', dateStr)
@@ -129,6 +141,16 @@ export default function Salary() {
           }
 
           const totalSalary = courseBack + optionBack + nominationBack;
+
+          const resDetail: ReservationDetail = {
+            course_type: reservation.course_type,
+            duration: reservation.duration,
+            payment_method: (reservation as any).payment_method || '現金',
+            course_back: courseBack,
+            option_back: optionBack,
+            nomination_back: nominationBack,
+            total: totalSalary,
+          };
           
           const existing = salaryMap.get(reservation.cast_id);
           if (existing) {
@@ -137,6 +159,7 @@ export default function Salary() {
             existing.details.course_back += courseBack;
             existing.details.option_back += optionBack;
             existing.details.nomination_back += nominationBack;
+            existing.reservations.push(resDetail);
           } else {
             salaryMap.set(reservation.cast_id, {
               cast_id: reservation.cast_id,
@@ -148,6 +171,7 @@ export default function Salary() {
                 option_back: optionBack,
                 nomination_back: nominationBack,
               },
+              reservations: [resDetail],
             });
           }
         }
@@ -168,6 +192,7 @@ export default function Salary() {
               option_back: 0,
               nomination_back: 0,
             },
+            reservations: [],
           });
         }
       });
@@ -261,23 +286,25 @@ export default function Salary() {
                       </div>
                       
                       {expandedCastId === salary.cast_id && salary.reservation_count > 0 && (
-                        <div className="mt-3 pt-3 border-t text-sm space-y-1">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>コースバック:</span>
-                            <span>¥{salary.details.course_back.toLocaleString()}</span>
-                          </div>
-                          {salary.details.option_back > 0 && (
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>オプションバック:</span>
-                              <span>¥{salary.details.option_back.toLocaleString()}</span>
+                        <div className="mt-3 pt-3 border-t text-sm space-y-3">
+                          {salary.reservations.map((res, idx) => (
+                            <div key={idx} className="p-2 bg-muted/50 rounded space-y-1">
+                              <div className="flex justify-between font-medium">
+                                <span>{res.course_type || '不明'} {res.duration}分</span>
+                                <span>¥{res.total.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between text-muted-foreground text-xs">
+                                <span>コースバック: ¥{res.course_back.toLocaleString()}</span>
+                                <span className="px-2 py-0.5 rounded bg-muted text-xs">{res.payment_method}</span>
+                              </div>
+                              {res.option_back > 0 && (
+                                <div className="text-muted-foreground text-xs">オプション: ¥{res.option_back.toLocaleString()}</div>
+                              )}
+                              {res.nomination_back > 0 && (
+                                <div className="text-muted-foreground text-xs">指名: ¥{res.nomination_back.toLocaleString()}</div>
+                              )}
                             </div>
-                          )}
-                          {salary.details.nomination_back > 0 && (
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>指名バック:</span>
-                              <span>¥{salary.details.nomination_back.toLocaleString()}</span>
-                            </div>
-                          )}
+                          ))}
                         </div>
                       )}
                     </div>
