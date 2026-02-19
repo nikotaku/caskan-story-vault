@@ -409,10 +409,18 @@ const BookingReservation = () => {
     try {
       const courseName = `${courseType} ${duration}分`;
       
+      // 指名なしの場合、最初の出勤キャストを割り当て
+      const actualCastId = selectedCastId === "none" ? (casts[0]?.id || "") : selectedCastId;
+      if (!actualCastId) {
+        toast({ title: "エラー", description: "割り当て可能なセラピストがいません", variant: "destructive" });
+        setSubmitting(false);
+        return;
+      }
+
       const { error } = await supabase
         .from("reservations")
         .insert([{
-          cast_id: selectedCastId,
+          cast_id: actualCastId,
           customer_name: customerName.trim(),
           customer_phone: customerPhone.trim(),
           customer_email: customerEmail.trim(),
@@ -619,6 +627,36 @@ const BookingReservation = () => {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* 指名なしカード */}
+                        <Card
+                          className={cn(
+                            "cursor-pointer transition-all hover:shadow-lg",
+                            selectedCastId === "none"
+                              ? "ring-2 ring-[#d4a574] shadow-lg"
+                              : "hover:ring-1 hover:ring-[#d4b5a8]"
+                          )}
+                          onClick={() => setSelectedCastId("none")}
+                        >
+                          <CardContent className="p-0">
+                            <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted flex items-center justify-center">
+                              <User className="h-16 w-16 text-muted-foreground" />
+                            </div>
+                            <div className="p-4">
+                              <h3 className="text-xl font-bold mb-1" style={{ color: "#8b7355" }}>
+                                指名なし
+                              </h3>
+                              <p className="text-sm text-muted-foreground mb-2">
+                                お店におまかせ
+                              </p>
+                              <Button
+                                className="w-full"
+                                variant={selectedCastId === "none" ? "default" : "outline"}
+                              >
+                                {selectedCastId === "none" ? "選択中" : "予約"}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
                         {casts.map((cast) => (
                           <Card
                             key={cast.id}
