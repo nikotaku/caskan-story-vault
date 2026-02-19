@@ -83,6 +83,8 @@ const BookingReservation = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
+  const [allShifts, setAllShifts] = useState<Shift[]>([]);
+  const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -181,13 +183,24 @@ const BookingReservation = () => {
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       
-      // Get shifts for the selected date
+      // Get all shifts for the selected date (full data)
       const { data: shiftsData, error: shiftsError } = await supabase
         .from("shifts")
-        .select("cast_id")
+        .select("*")
         .eq("shift_date", dateStr);
 
       if (shiftsError) throw shiftsError;
+
+      // Get all reservations for the selected date
+      const { data: reservationsData, error: reservationsError } = await supabase
+        .from("reservations")
+        .select("*")
+        .eq("reservation_date", dateStr);
+
+      if (reservationsError) throw reservationsError;
+
+      setAllShifts(shiftsData || []);
+      setAllReservations(reservationsData || []);
 
       // Get unique cast IDs from shifts
       const castIds = [...new Set(shiftsData?.map(s => s.cast_id) || [])];
@@ -217,6 +230,39 @@ const BookingReservation = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get availability slots for a specific cast (for the card display)
+  const getCastTimeSlots = (castId: string) => {
+    const castShifts = allShifts.filter(s => s.cast_id === castId);
+    const castReservations = allReservations.filter(r => r.cast_id === castId);
+    if (castShifts.length === 0) return [];
+
+    const shift = castShifts[0];
+    const [shiftStartHour, shiftStartMinute] = shift.start_time.split(':').map(Number);
+    const [shiftEndHour, shiftEndMinute] = shift.end_time.split(':').map(Number);
+    const shiftStart = shiftStartHour * 60 + shiftStartMinute;
+    const shiftEnd = shiftEndHour * 60 + shiftEndMinute;
+    const intervalMinutes = 30;
+    const checkDuration = 60; // Use 60min as default check duration for overview
+
+    const slots: { time: string; available: boolean }[] = [];
+    for (let time = shiftStart; time + checkDuration <= shiftEnd; time += 30) {
+      const hour = Math.floor(time / 60);
+      const minute = time % 60;
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+      const isBooked = castReservations.some(reservation => {
+        const [resHour, resMinute] = reservation.start_time.split(':').map(Number);
+        const resStart = resHour * 60 + resMinute;
+        const resEnd = resStart + reservation.duration + intervalMinutes;
+        const newEnd = time + checkDuration;
+        return (time < resEnd && newEnd > resStart);
+      });
+
+      slots.push({ time: timeStr, available: !isBooked });
+    }
+    return slots;
   };
 
   const fetchRates = async () => {
@@ -621,6 +667,30 @@ const BookingReservation = () => {
                                     ■{cast.room}■
                                   </p>
                                 )}
+                                {/* 予約可能時間テーブル */}
+                                {(() => {
+                                  const slots = getCastTimeSlots(cast.id);
+                                  if (slots.length === 0) return null;
+                                  return (
+                                    <div className="mb-3 overflow-x-auto">
+                                      <div className="flex gap-1 min-w-max">
+                                        {slots.map((slot) => (
+                                          <div key={slot.time} className="flex flex-col items-center">
+                                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                              {slot.time.slice(0, 5)}
+                                            </span>
+                                            <span className={cn(
+                                              "text-xs font-bold",
+                                              slot.available ? "text-green-600" : "text-red-400"
+                                            )}>
+                                              {slot.available ? "○" : "×"}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                                 <Button
                                   className="w-full"
                                   variant={selectedCastId === cast.id ? "default" : "outline"}
