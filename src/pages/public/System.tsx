@@ -7,23 +7,29 @@ import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
 
-interface PricingCourse {
-  duration: number;
-  standard_price: number;
-  premium_price: number;
-  vip_price: number;
+interface BackRate {
+  id: string;
   course_type: string;
+  duration: number;
+  customer_price: number;
 }
 
-interface PricingOption {
-  name: string;
-  price: number;
-  description: string | null;
+interface OptionRate {
+  id: string;
+  option_name: string;
+  customer_price: number;
+}
+
+interface NominationRate {
+  id: string;
+  nomination_type: string;
+  customer_price: number;
 }
 
 const System = () => {
-  const [courses, setCourses] = useState<PricingCourse[]>([]);
-  const [options, setOptions] = useState<PricingOption[]>([]);
+  const [backRates, setBackRates] = useState<BackRate[]>([]);
+  const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
+  const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { document.title = "全力エステ - システム"; }, []);
@@ -32,20 +38,25 @@ const System = () => {
 
   const fetchPricing = async () => {
     try {
-      const [coursesRes, optionsRes] = await Promise.all([
-        supabase.from('pricing').select('*').order('duration', { ascending: true }),
-        supabase.from('pricing_options').select('*').order('created_at', { ascending: true }),
+      const [backRes, optionRes, nominationRes] = await Promise.all([
+        supabase.from('back_rates').select('*').order('duration', { ascending: true }),
+        supabase.from('option_rates').select('*').order('created_at', { ascending: true }),
+        supabase.from('nomination_rates').select('*').order('created_at', { ascending: true }),
       ]);
-      if (coursesRes.error) throw coursesRes.error;
-      if (optionsRes.error) throw optionsRes.error;
-      setCourses(coursesRes.data || []);
-      setOptions(optionsRes.data || []);
+      if (backRes.error) throw backRes.error;
+      if (optionRes.error) throw optionRes.error;
+      if (nominationRes.error) throw nominationRes.error;
+      setBackRates(backRes.data || []);
+      setOptionRates(optionRes.data || []);
+      setNominationRates(nominationRes.data || []);
     } catch (error) {
       console.error('Error fetching pricing:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const courseTypes = [...new Set(backRates.filter(r => r.course_type !== 'DR').map(r => r.course_type))];
 
   if (loading) {
     return (
@@ -70,53 +81,74 @@ const System = () => {
             <h2 className="text-5xl font-bold mb-2" style={{ color: "#c9a876", fontFamily: "'Noto Serif JP', serif", letterSpacing: "0.1em" }}>全力エステ</h2>
           </div>
 
-          {/* Aroma Oil Course */}
-          <div className="mb-10">
-            <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
-              <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>アロマオイルコース</h3>
-            </div>
-            <div className="space-y-2">
-              {courses.filter(c => c.course_type === 'アロマオイル').map((course, i) => (
-                <div key={i} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
-                  <span className="text-gray-700 text-sm">{course.duration}min</span>
-                  <span className="text-gray-700 font-bold text-sm">¥{course.standard_price.toLocaleString()}</span>
+          {/* コース別料金（back_ratesマスター） */}
+          {courseTypes.map((type) => {
+            const rates = backRates.filter(r => r.course_type === type).sort((a, b) => a.duration - b.duration);
+            return (
+              <div key={type} className="mb-10">
+                <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+                  <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>{type}コース</h3>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Zenryoku Course */}
-          <div className="mb-10">
-            <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
-              <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>全力コース</h3>
-            </div>
-            <div className="space-y-2">
-              {courses.filter(c => c.course_type === '全力').map((course, i) => (
-                <div key={i} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
-                  <span className="text-gray-700 text-sm">{course.duration}min</span>
-                  <span className="text-gray-700 font-bold text-sm">¥{course.standard_price.toLocaleString()}</span>
+                <div className="space-y-2">
+                  {rates.map((rate) => (
+                    <div key={rate.id} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                      <span className="text-gray-700 text-sm">{rate.duration}min</span>
+                      <span className="text-gray-700 font-bold text-sm">¥{rate.customer_price.toLocaleString()}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            );
+          })}
 
-          {/* Options */}
+          {/* DRコース */}
+          {backRates.filter(r => r.course_type === 'DR').length > 0 && (
+            <div className="mb-10">
+              <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+                <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>DRコース</h3>
+              </div>
+              <div className="space-y-2">
+                {backRates.filter(r => r.course_type === 'DR').sort((a, b) => a.duration - b.duration).map((rate) => (
+                  <div key={rate.id} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                    <span className="text-gray-700 text-sm">{rate.duration}min</span>
+                    <span className="text-gray-700 font-bold text-sm">¥{rate.customer_price.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* オプション（option_ratesマスター） */}
           <div className="mb-10">
             <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
               <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>オプションメニュー</h3>
             </div>
             <div className="space-y-2">
-              {options.map((opt, i) => (
-                <div key={i} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-700 text-sm">{opt.name}</span>
-                    {opt.description && <span className="text-xs text-gray-500">({opt.description})</span>}
-                  </div>
-                  <span className="text-gray-700 font-bold text-sm">¥{opt.price.toLocaleString()}</span>
+              {optionRates.map((opt) => (
+                <div key={opt.id} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                  <span className="text-gray-700 text-sm">{opt.option_name}</span>
+                  <span className="text-gray-700 font-bold text-sm">¥{opt.customer_price.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* 指名料（nomination_ratesマスター） */}
+          {nominationRates.length > 0 && (
+            <div className="mb-10">
+              <div className="bg-[#c9a876] text-white text-center py-2.5 mb-4 rounded">
+                <h3 className="font-bold text-base" style={{ letterSpacing: "0.1em" }}>指名料</h3>
+              </div>
+              <div className="space-y-2">
+                {nominationRates.map((nom) => (
+                  <div key={nom.id} className="flex justify-between items-center py-2 border-b border-gray-200 last:border-0">
+                    <span className="text-gray-700 text-sm">{nom.nomination_type}</span>
+                    <span className="text-gray-700 font-bold text-sm">¥{nom.customer_price.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Payment */}
           <div className="mb-10">

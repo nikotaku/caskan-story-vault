@@ -719,84 +719,52 @@ const BookingReservation = () => {
                   </h2>
                   
                   <div className="space-y-4">
-                    {/* アロマオイルコース */}
-                    <div
-                      className={cn(
-                        "border-2 rounded-lg p-4 cursor-pointer transition-all",
-                        courseType === "アロマオイル" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
-                      )}
-                      onClick={() => setCourseType("アロマオイル")}
-                    >
-                      <h3 className="text-lg font-bold mb-2">アロマオイルコース</h3>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        クイーンオイルを使用して全身で全身をアロマオイルトリートメントしていきます。
-                      </p>
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button
-                          variant={courseType === "アロマオイル" && duration === 80 ? "default" : "outline"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCourseType("アロマオイル");
-                            setDuration(80);
-                          }}
-                        >
-                          80分<br/>¥12,000
-                        </Button>
-                        <Button
-                          variant={courseType === "アロマオイル" && duration === 100 ? "default" : "outline"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCourseType("アロマオイル");
-                            setDuration(100);
-                          }}
-                        >
-                          100分<br/>¥15,000
-                        </Button>
-                        <Button
-                          variant={courseType === "アロマオイル" && duration === 120 ? "default" : "outline"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCourseType("アロマオイル");
-                            setDuration(120);
-                          }}
-                        >
-                          120分<br/>¥18,000
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* 全力コース */}
-                    <div
-                      className={cn(
-                        "border-2 rounded-lg p-4 cursor-pointer transition-all",
-                        courseType === "全力コース" ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
-                      )}
-                      onClick={() => setCourseType("全力コース")}
-                    >
-                      <h3 className="text-lg font-bold mb-2">疲れも悩みも全てを出し切るSPコース</h3>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          variant={courseType === "全力コース" && duration === 60 ? "default" : "outline"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCourseType("全力コース");
-                            setDuration(60);
-                          }}
-                        >
-                          60分<br/>¥15,000
-                        </Button>
-                        <Button
-                          variant={courseType === "全力コース" && duration === 80 ? "default" : "outline"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCourseType("全力コース");
-                            setDuration(80);
-                          }}
-                        >
-                          80分<br/>¥19,000
-                        </Button>
-                      </div>
-                    </div>
+                    {/* コースタイプごとに動的表示 */}
+                    {(() => {
+                      const courseTypes = [...new Set(backRates.filter(r => r.course_type !== 'DR').map(r => r.course_type))];
+                      const courseDescriptions: Record<string, string> = {
+                        "アロマオイル": "クイーンオイルを使用して全身で全身をアロマオイルトリートメントしていきます。",
+                        "全力コース": "疲れも悩みも全てを出し切るSPコース",
+                      };
+                      return courseTypes.map((type) => {
+                        const rates = backRates.filter(r => r.course_type === type).sort((a, b) => a.duration - b.duration);
+                        return (
+                          <div
+                            key={type}
+                            className={cn(
+                              "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                              courseType === type ? "border-[#d4a574] bg-[#f5e8e4]/50" : "border-gray-200"
+                            )}
+                            onClick={() => {
+                              setCourseType(type);
+                              if (!rates.find(r => r.duration === duration)) {
+                                setDuration(rates[0]?.duration || 60);
+                              }
+                            }}
+                          >
+                            <h3 className="text-lg font-bold mb-2">{type}コース</h3>
+                            {courseDescriptions[type] && (
+                              <p className="text-sm text-muted-foreground mb-3">{courseDescriptions[type]}</p>
+                            )}
+                            <div className={cn("grid gap-2", rates.length <= 2 ? "grid-cols-2" : "grid-cols-3")}>
+                              {rates.map((rate) => (
+                                <Button
+                                  key={rate.id}
+                                  variant={courseType === type && duration === rate.duration ? "default" : "outline"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCourseType(type);
+                                    setDuration(rate.duration);
+                                  }}
+                                >
+                                  {rate.duration}分<br/>¥{rate.customer_price.toLocaleString()}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
 
                     {/* オプション */}
                     <div>
