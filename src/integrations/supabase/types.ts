@@ -499,6 +499,7 @@ export type Database = {
           nomination_type: string | null
           notes: string | null
           options: string[] | null
+          payment_method: string | null
           payment_status: string
           price: number
           reservation_date: string
@@ -521,6 +522,7 @@ export type Database = {
           nomination_type?: string | null
           notes?: string | null
           options?: string[] | null
+          payment_method?: string | null
           payment_status?: string
           price: number
           reservation_date: string
@@ -543,6 +545,7 @@ export type Database = {
           nomination_type?: string | null
           notes?: string | null
           options?: string[] | null
+          payment_method?: string | null
           payment_status?: string
           price?: number
           reservation_date?: string

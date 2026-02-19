@@ -1,0 +1,1 @@
+ALTER TABLE public.reservations ADD COLUMN payment_method text DEFAULT '現金';
