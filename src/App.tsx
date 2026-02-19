@@ -13,7 +13,7 @@ import Design from "./pages/Design";
 import Report from "./pages/Report";
 import Salary from "./pages/Salary";
 import Settings from "./pages/Settings";
-import PricingManagement from "./pages/PricingManagement";
+import Pricing from "./pages/Pricing";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import TherapistPortal from "./pages/TherapistPortal";
@@ -68,7 +68,7 @@ const App = () => (
           <Route path="/design" element={<Design />} />
           <Route path="/report" element={<Report />} />
           <Route path="/salary" element={<Salary />} />
-          <Route path="/pricing-management" element={<PricingManagement />} />
+          <Route path="/pricing-management" element={<Pricing />} />
           <Route path="/text-generation" element={<TextGeneration />} />
           <Route path="/estama" element={<EstamaIntegration />} />
           <Route path="/sync" element={<SyncDashboard />} />
