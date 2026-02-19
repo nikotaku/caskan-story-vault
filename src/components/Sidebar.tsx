@@ -22,7 +22,8 @@ import {
   Sparkles,
   FileText,
   RefreshCw,
-  Home as RoomIcon
+  Home as RoomIcon,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ const menuItems = [
   { href: "/salary", label: "給与", icon: Wallet },
   { href: "/expenses", label: "経費", icon: Receipt },
   { href: "/report", label: "レポート", icon: BarChart3 },
+  { href: "/board", label: "掲示板", icon: MessageSquare },
   { href: "/text-generation", label: "文章生成", icon: Sparkles },
   { href: "/estama", label: "Estama連携", icon: ExternalLink },
   { href: "/sync", label: "同期状況", icon: RefreshCw },
