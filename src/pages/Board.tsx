@@ -6,11 +6,11 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Trash2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
+import { StaffConcierge } from "@/components/StaffConcierge";
 
 interface BoardPost {
   id: string;
@@ -24,8 +24,7 @@ const MAX_CHARS = 140;
 const Board = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [content, setContent] = useState("");
-  const [authorName, setAuthorName] = useState("");
-  const { isAdmin } = useAuth();
+  const { isAdmin, displayName } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: posts = [], isLoading } = useQuery({
@@ -68,7 +67,7 @@ const Board = () => {
     if (!content.trim() || content.length > MAX_CHARS) return;
     createMutation.mutate({
       content: content.trim(),
-      author_name: authorName.trim() || "管理者",
+      author_name: displayName || "管理者",
       title: "-",
     });
   };
@@ -84,12 +83,9 @@ const Board = () => {
         {/* Post composer */}
         {isAdmin && (
           <div className="border-b border-border pb-4 mb-4">
-            <Input
-              placeholder="表示名"
-              value={authorName}
-              onChange={(e) => setAuthorName(e.target.value)}
-              className="mb-2 text-sm h-8"
-            />
+            <div className="text-sm font-medium text-muted-foreground mb-2">
+              投稿者: {displayName || "管理者"}
+            </div>
             <Textarea
               placeholder="いまどうしてる？"
               value={content}
@@ -125,11 +121,9 @@ const Board = () => {
           <div className="divide-y divide-border">
             {posts.map((post) => (
               <div key={post.id} className="py-3 flex gap-3">
-                {/* Avatar */}
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-xs font-bold text-primary">
                   {post.author_name.charAt(0)}
                 </div>
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm truncate">{post.author_name}</span>
@@ -139,7 +133,6 @@ const Board = () => {
                   </div>
                   <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{post.content}</p>
                 </div>
-                {/* Delete */}
                 {isAdmin && (
                   <button
                     onClick={() => { if (confirm("削除しますか？")) deleteMutation.mutate(post.id); }}
@@ -153,6 +146,8 @@ const Board = () => {
           </div>
         )}
       </main>
+
+      <StaffConcierge />
     </div>
   );
 };
