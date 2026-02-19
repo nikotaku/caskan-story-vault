@@ -3,7 +3,7 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, RefreshCw, Calendar, Users, Loader2, Upload, Image, ArrowUpFromLine, ArrowDownToLine } from "lucide-react";
+import { ExternalLink, RefreshCw, Calendar, Users, Loader2, Upload, Image } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,30 +29,7 @@ export default function EstamaIntegration() {
     window.open('https://estama.jp/login?utm_source=chatgpt.com', '_blank');
   };
 
-  // エスたまからデータを取得
-  const handlePull = async (syncType: 'schedule' | 'profiles' | 'both') => {
-    setSyncing(`pull-${syncType}`);
-    try {
-      const { data, error } = await supabase.functions.invoke('sync-estama-schedule', {
-        body: { syncType }
-      });
-      if (error) throw error;
-
-      const parts = [];
-      if (data.shiftsProcessed > 0) parts.push(`シフト: ${data.shiftsProcessed}件`);
-      if (data.profilesProcessed > 0) parts.push(`プロフィール: ${data.profilesProcessed}件`);
-
-      toast({
-        title: "取得完了",
-        description: parts.length > 0 ? parts.join('、') : "対象データなし",
-      });
-    } catch (error) {
-      console.error('Pull error:', error);
-      toast({ title: "取得エラー", description: "取得に失敗しました", variant: "destructive" });
-    } finally {
-      setSyncing(null);
-    }
-  };
+  // こちらのデータをエスたまに反映（マスタデータはこちら）
 
   // エスたまにデータをプッシュ
   const handlePush = async (pushType: 'schedule' | 'profiles' | 'photos' | 'all') => {
@@ -104,109 +81,58 @@ export default function EstamaIntegration() {
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         
         <main className="flex-1 p-6 md:ml-[240px]">
-          <div className="grid gap-4 md:grid-cols-2 mb-4">
-            {/* こちら → エスたま（プッシュ） */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ArrowUpFromLine className="w-4 h-4" />
-                  こちら → エスたま
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">当システムのデータをエスたまに反映</p>
-              </CardHeader>
-              <CardContent className="space-y-2">
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                エスたまへ反映（マスタ: こちら）
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">当システムのデータをエスたまに反映します</p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => handlePush('schedule')}
                   disabled={!!syncing}
                   variant="outline"
-                  className="w-full justify-start"
                   size="sm"
                 >
                   <LoadingIcon loading={isLoading('push-schedule')} />
                   {!isLoading('push-schedule') && <Calendar className="w-4 h-4 mr-2" />}
-                  スケジュールを更新
+                  スケジュール
                 </Button>
                 <Button
                   onClick={() => handlePush('profiles')}
                   disabled={!!syncing}
                   variant="outline"
-                  className="w-full justify-start"
                   size="sm"
                 >
                   <LoadingIcon loading={isLoading('push-profiles')} />
                   {!isLoading('push-profiles') && <Users className="w-4 h-4 mr-2" />}
-                  プロフィールを更新
+                  プロフィール
                 </Button>
                 <Button
                   onClick={() => handlePush('photos')}
                   disabled={!!syncing}
                   variant="outline"
-                  className="w-full justify-start"
                   size="sm"
                 >
                   <LoadingIcon loading={isLoading('push-photos')} />
                   {!isLoading('push-photos') && <Image className="w-4 h-4 mr-2" />}
-                  写真をアップロード
+                  写真
                 </Button>
                 <Button
                   onClick={() => handlePush('all')}
                   disabled={!!syncing}
-                  className="w-full"
                   size="sm"
                 >
                   <LoadingIcon loading={isLoading('push-all')} />
                   {!isLoading('push-all') && <Upload className="w-4 h-4 mr-2" />}
-                  全て更新
+                  全て反映
                 </Button>
-              </CardContent>
-            </Card>
-
-            {/* エスたま → こちら（プル） */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <ArrowDownToLine className="w-4 h-4" />
-                  エスたま → こちら
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">エスたまからデータを取得</p>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Button
-                  onClick={() => handlePull('schedule')}
-                  disabled={!!syncing}
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <LoadingIcon loading={isLoading('pull-schedule')} />
-                  {!isLoading('pull-schedule') && <Calendar className="w-4 h-4 mr-2" />}
-                  スケジュール取得
-                </Button>
-                <Button
-                  onClick={() => handlePull('profiles')}
-                  disabled={!!syncing}
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <LoadingIcon loading={isLoading('pull-profiles')} />
-                  {!isLoading('pull-profiles') && <Users className="w-4 h-4 mr-2" />}
-                  プロフィール取得
-                </Button>
-                <Button
-                  onClick={() => handlePull('both')}
-                  disabled={!!syncing}
-                  className="w-full"
-                  variant="secondary"
-                  size="sm"
-                >
-                  <LoadingIcon loading={isLoading('pull-both')} />
-                  {!isLoading('pull-both') && <RefreshCw className="w-4 h-4 mr-2" />}
-                  全て取得
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* iframe */}
           <div className="h-[calc(100vh-360px)]">
