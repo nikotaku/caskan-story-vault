@@ -563,8 +563,8 @@ export default function PricingManagement() {
           <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h1 className="text-2xl font-bold">料金設定</h1>
-                <p className="text-muted-foreground">コース料金とオプションの管理</p>
+                <h1 className="text-2xl font-bold">料金設定（マスター）</h1>
+                <p className="text-muted-foreground">ここで設定した料金がフロント予約・料金ページ・管理画面すべてに反映されます</p>
               </div>
             </div>
 
