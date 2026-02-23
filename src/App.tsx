@@ -34,6 +34,7 @@ import RoomSettings from "./pages/RoomSettings";
 import SchedulePage from "./pages/Schedule";
 import Expenses from "./pages/Expenses";
 import Board from "./pages/Board";
+import Knowledge from "./pages/Knowledge";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ const App = () => (
           <Route path="/shop" element={<Settings />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/board" element={<Board />} />
+          <Route path="/knowledge" element={<Knowledge />} />
           
           {/* Therapist Portal - Token-based access */}
           <Route path="/therapist/:token" element={<TherapistPortal />} />
