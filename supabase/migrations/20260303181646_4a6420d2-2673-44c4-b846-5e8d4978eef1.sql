@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS shifts_cast_date_time_unique ON public.shifts (cast_id, shift_date, start_time);
