@@ -221,9 +221,9 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
         <TabsContent value={selectedRoom} className="mt-4">
           <Card>
             <CardContent className="p-4">
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
                 {["日", "月", "火", "水", "木", "金", "土"].map((day) => (
-                  <div key={day} className="text-center text-xs font-medium p-2 border-b">
+                  <div key={day} className="text-center text-[10px] sm:text-xs font-medium p-1 sm:p-2 border-b">
                     {day}
                   </div>
                 ))}
@@ -235,23 +235,23 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
                     <div
                       key={index}
                       className={`
-                        border p-2 min-h-[100px] text-xs
+                        border p-0.5 sm:p-2 min-h-[60px] sm:min-h-[100px] text-[9px] sm:text-xs
                         ${!isCurrentMonth ? "bg-muted/50 text-muted-foreground" : "bg-card"}
                       `}
                     >
-                      <div className="font-semibold mb-1">{format(day, "d")}</div>
+                      <div className="font-semibold mb-0.5 sm:mb-1 text-[10px] sm:text-xs">{format(day, "d")}</div>
                       {dayShifts.length > 0 && isCurrentMonth ? (
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           {dayShifts.map((shift) => {
                             const cast = casts.find(c => c.id === shift.cast_id);
                             return (
-                              <div key={shift.id} className="bg-primary/10 rounded px-1 py-0.5">
-                                <div className="font-medium truncate">{cast?.name}</div>
-                                <div className="text-[10px] text-muted-foreground">
+                              <div key={shift.id} className="bg-primary/10 rounded px-0.5 sm:px-1 py-px sm:py-0.5">
+                                <div className="font-medium truncate text-[8px] sm:text-[10px] leading-tight">{cast?.name}</div>
+                                <div className="text-[7px] sm:text-[10px] text-muted-foreground leading-tight">
                                   {shift.start_time.slice(0, 5)}-{shift.end_time.slice(0, 5)}
                                 </div>
                                 {selectedRoom === "all" && shift.room && (
-                                  <div className="text-[10px] text-muted-foreground">
+                                  <div className="text-[7px] sm:text-[10px] text-muted-foreground leading-tight">
                                     {shift.room}
                                   </div>
                                 )}
