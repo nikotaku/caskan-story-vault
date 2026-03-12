@@ -17,10 +17,9 @@ import Pricing from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import TherapistPortal from "./pages/TherapistPortal";
-import PublicHome from "./pages/public/Home";
+import PublicSchedule from "./pages/public/Schedule";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
-import PublicSchedule from "./pages/public/Schedule";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
 import PublicAccess from "./pages/public/Access";
@@ -46,10 +45,9 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Public Pages */}
-          <Route path="/" element={<PublicHome />} />
+          <Route path="/" element={<PublicSchedule />} />
           <Route path="/casts" element={<PublicCasts />} />
           <Route path="/casts/:id" element={<PublicCastDetail />} />
-          <Route path="/schedule" element={<PublicSchedule />} />
           <Route path="/pricing" element={<PublicPricing />} />
           <Route path="/system" element={<PublicSystem />} />
           <Route path="/access" element={<PublicAccess />} />
