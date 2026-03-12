@@ -17,7 +17,7 @@ import Pricing from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import TherapistPortal from "./pages/TherapistPortal";
-import PublicHome from "./pages/public/Home";
+import PublicSchedule from "./pages/public/Schedule";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
 import PublicSchedule from "./pages/public/Schedule";
