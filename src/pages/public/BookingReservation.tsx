@@ -492,12 +492,80 @@ const BookingReservation = () => {
     "エステ図鑑", "チョイエス", "メンズビズ", "該当なし"
   ];
 
+  const handleCopyBooking = async () => {
+    try {
+      await navigator.clipboard.writeText(completedBookingText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "コピーしました", description: "予約詳細をクリップボードにコピーしました" });
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = completedBookingText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (bookingComplete) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
+        <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
+          <div className="container mx-auto flex justify-center items-center">
+            <span>12:00〜26:00(24:40最終受付)</span>
+          </div>
+        </div>
+        <div className="bg-white py-6">
+          <div className="container mx-auto text-center">
+            <Link to="/">
+              <img src={caskanLogo} alt="全力エステ" className="h-16 mx-auto" />
+            </Link>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-8 max-w-lg">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+              <CardTitle className="text-xl">ご予約を承りました</CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">担当者より確認のご連絡をさせていただきます</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <pre className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap font-sans leading-relaxed border">
+                  {completedBookingText}
+                </pre>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={handleCopyBooking}
+                >
+                  {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+                  {copied ? "コピー済" : "コピー"}
+                </Button>
+              </div>
+              <Button className="w-full" onClick={() => navigate("/")}>
+                トップページへ戻る
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
