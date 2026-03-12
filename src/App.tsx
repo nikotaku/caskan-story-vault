@@ -20,7 +20,6 @@ import TherapistPortal from "./pages/TherapistPortal";
 import PublicSchedule from "./pages/public/Schedule";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
-import PublicSchedule from "./pages/public/Schedule";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
 import PublicAccess from "./pages/public/Access";
