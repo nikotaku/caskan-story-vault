@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CalendarIcon, Clock, User, Phone, Mail, CreditCard } from "lucide-react";
+import { CalendarIcon, Clock, User, Phone, Mail, CreditCard, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,6 +87,9 @@ const BookingReservation = () => {
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [bookingComplete, setBookingComplete] = useState(false);
+  const [completedBookingText, setCompletedBookingText] = useState("");
+  const [copied, setCopied] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -440,14 +443,30 @@ const BookingReservation = () => {
 
       if (error) throw error;
 
+      // Build copyable reservation summary
+      const castName = selectedCastId === "none" ? "指名なし" : (selectedCast?.name || "");
+      const dateStr = format(selectedDate, "yyyy年M月d日(E)", { locale: ja });
+      const summaryLines = [
+        `【予約詳細】`,
+        `日付: ${dateStr}`,
+        `時間: ${startTime}〜`,
+        `コース: ${courseType} ${duration}分`,
+        `セラピスト: ${castName}`,
+        ...(nominationType && nominationType !== 'none' ? [`指名: ${nominationType}`] : []),
+        ...(selectedOptions.length > 0 ? [`オプション: ${selectedOptions.join(', ')}`] : []),
+        `料金: ¥${totalPrice.toLocaleString()}`,
+        ``,
+        `お名前: ${customerName}`,
+        `電話番号: ${customerPhone}`,
+        ...(notes ? [`備考: ${notes}`] : []),
+      ];
+      setCompletedBookingText(summaryLines.join('\n'));
+      setBookingComplete(true);
+
       toast({
         title: "予約完了",
         description: "ご予約を承りました。担当者より確認のご連絡をさせていただきます。",
       });
-
-      setTimeout(() => {
-        navigate("/");
-      }, 2000);
     } catch (error) {
       console.error("Error creating reservation:", error);
       toast({
@@ -473,12 +492,80 @@ const BookingReservation = () => {
     "エステ図鑑", "チョイエス", "メンズビズ", "該当なし"
   ];
 
+  const handleCopyBooking = async () => {
+    try {
+      await navigator.clipboard.writeText(completedBookingText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "コピーしました", description: "予約詳細をクリップボードにコピーしました" });
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = completedBookingText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (bookingComplete) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: "#f5e8e4" }}>
+        <div className="bg-[#d4b5a8] text-white py-2 px-4 flex justify-between items-center text-sm">
+          <div className="container mx-auto flex justify-center items-center">
+            <span>12:00〜26:00(24:40最終受付)</span>
+          </div>
+        </div>
+        <div className="bg-white py-6">
+          <div className="container mx-auto text-center">
+            <Link to="/">
+              <img src={caskanLogo} alt="全力エステ" className="h-16 mx-auto" />
+            </Link>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-8 max-w-lg">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Check className="w-8 h-8 text-green-600" />
+              </div>
+              <CardTitle className="text-xl">ご予約を承りました</CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">担当者より確認のご連絡をさせていただきます</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <pre className="bg-muted p-4 rounded-lg text-sm whitespace-pre-wrap font-sans leading-relaxed border">
+                  {completedBookingText}
+                </pre>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={handleCopyBooking}
+                >
+                  {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+                  {copied ? "コピー済" : "コピー"}
+                </Button>
+              </div>
+              <Button className="w-full" onClick={() => navigate("/")}>
+                トップページへ戻る
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
