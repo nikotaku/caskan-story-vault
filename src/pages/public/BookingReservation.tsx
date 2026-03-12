@@ -443,14 +443,30 @@ const BookingReservation = () => {
 
       if (error) throw error;
 
+      // Build copyable reservation summary
+      const castName = selectedCastId === "none" ? "指名なし" : (selectedCast?.name || "");
+      const dateStr = format(selectedDate, "yyyy年M月d日(E)", { locale: ja });
+      const summaryLines = [
+        `【予約詳細】`,
+        `日付: ${dateStr}`,
+        `時間: ${startTime}〜`,
+        `コース: ${courseType} ${duration}分`,
+        `セラピスト: ${castName}`,
+        ...(nominationType && nominationType !== 'none' ? [`指名: ${nominationType}`] : []),
+        ...(selectedOptions.length > 0 ? [`オプション: ${selectedOptions.join(', ')}`] : []),
+        `料金: ¥${totalPrice.toLocaleString()}`,
+        ``,
+        `お名前: ${customerName}`,
+        `電話番号: ${customerPhone}`,
+        ...(notes ? [`備考: ${notes}`] : []),
+      ];
+      setCompletedBookingText(summaryLines.join('\n'));
+      setBookingComplete(true);
+
       toast({
         title: "予約完了",
         description: "ご予約を承りました。担当者より確認のご連絡をさせていただきます。",
       });
-
-      setTimeout(() => {
-        navigate("/");
-      }, 2000);
     } catch (error) {
       console.error("Error creating reservation:", error);
       toast({
