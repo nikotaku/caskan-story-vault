@@ -46,11 +46,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Public Pages */}
-          <Route path="/" element={<PublicHome />} />
+          <Route path="/" element={<PublicSchedule />} />
           <Route path="/casts" element={<PublicCasts />} />
-          <Route path="/casts/:id" element={<PublicCastDetail />} />
-          <Route path="/schedule" element={<PublicSchedule />} />
-          <Route path="/pricing" element={<PublicPricing />} />
           <Route path="/system" element={<PublicSystem />} />
           <Route path="/access" element={<PublicAccess />} />
           <Route path="/booking" element={<BookingReservation />} />
