@@ -87,6 +87,9 @@ const BookingReservation = () => {
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [bookingComplete, setBookingComplete] = useState(false);
+  const [completedBookingText, setCompletedBookingText] = useState("");
+  const [copied, setCopied] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
