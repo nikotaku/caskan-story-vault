@@ -161,7 +161,7 @@ const SyncDashboard = () => {
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
             <AlertDescription>
-              エスタマとNotionの自動同期が30分ごとに実行されています。手動で即時同期することもできます。
+              エスタマとの自動同期が実行されています。手動で即時同期することもできます。
             </AlertDescription>
           </Alert>
 
