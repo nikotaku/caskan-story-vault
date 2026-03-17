@@ -21,5 +21,3 @@ verify_jwt = false
 [functions.auto-therapist-intro]
 verify_jwt = false
 
-[functions.sync-notion-shifts]
-verify_jwt = false

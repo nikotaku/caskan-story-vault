@@ -64,26 +64,6 @@ const SyncDashboard = () => {
     }
   });
 
-  // Notionシフト同期を実行
-  const notionSyncMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-notion-shifts', {
-        body: { direction: 'both' }
-      });
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      const toDb = data.notionToDb?.synced || 0;
-      const toNotion = data.dbToNotion?.synced || 0;
-      toast.success(`Notion同期完了: DB→${toDb}件, Notion→${toNotion}件`);
-      queryClient.invalidateQueries({ queryKey: ['shifts-all'] });
-    },
-    onError: (error: Error) => {
-      toast.error(`Notion同期エラー: ${error.message}`);
-    }
-  });
 
   // 統計情報の計算
   const stats = {
@@ -115,15 +95,6 @@ const SyncDashboard = () => {
               <p className="text-muted-foreground mt-1">エスタマとのスケジュール同期状況</p>
             </div>
             <div className="flex gap-3">
-              <Button 
-                onClick={() => notionSyncMutation.mutate()}
-                disabled={notionSyncMutation.isPending}
-                size="lg"
-                variant="outline"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${notionSyncMutation.isPending ? 'animate-spin' : ''}`} />
-                {notionSyncMutation.isPending ? 'Notion同期中...' : 'Notion同期'}
-              </Button>
               <Button 
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
@@ -190,7 +161,7 @@ const SyncDashboard = () => {
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
             <AlertDescription>
-              エスタマとNotionの自動同期が30分ごとに実行されています。手動で即時同期することもできます。
+              エスタマとの自動同期が実行されています。手動で即時同期することもできます。
             </AlertDescription>
           </Alert>
 
