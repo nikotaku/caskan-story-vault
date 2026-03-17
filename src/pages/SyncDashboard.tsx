@@ -64,26 +64,6 @@ const SyncDashboard = () => {
     }
   });
 
-  // Notionシフト同期を実行
-  const notionSyncMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-notion-shifts', {
-        body: { direction: 'both' }
-      });
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      const toDb = data.notionToDb?.synced || 0;
-      const toNotion = data.dbToNotion?.synced || 0;
-      toast.success(`Notion同期完了: DB→${toDb}件, Notion→${toNotion}件`);
-      queryClient.invalidateQueries({ queryKey: ['shifts-all'] });
-    },
-    onError: (error: Error) => {
-      toast.error(`Notion同期エラー: ${error.message}`);
-    }
-  });
 
   // 統計情報の計算
   const stats = {
