@@ -96,15 +96,6 @@ const SyncDashboard = () => {
             </div>
             <div className="flex gap-3">
               <Button 
-                onClick={() => notionSyncMutation.mutate()}
-                disabled={notionSyncMutation.isPending}
-                size="lg"
-                variant="outline"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${notionSyncMutation.isPending ? 'animate-spin' : ''}`} />
-                {notionSyncMutation.isPending ? 'Notion同期中...' : 'Notion同期'}
-              </Button>
-              <Button 
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
                 size="lg"
