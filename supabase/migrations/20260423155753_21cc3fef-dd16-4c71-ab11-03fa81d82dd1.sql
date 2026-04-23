@@ -1,0 +1,1 @@
+UPDATE public.casts SET is_visible = false;
