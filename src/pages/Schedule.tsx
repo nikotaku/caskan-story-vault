@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { format, addDays, subDays, parse, addMinutes } from "date-fns";
+import { format, addDays, subDays, parse, addMinutes, startOfMonth, endOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,7 @@ export default function Schedule() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [shifts, setShifts] = useState<(Shift & { cast: Cast })[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
@@ -134,8 +135,10 @@ export default function Schedule() {
   const fetchData = async () => {
     setLoading(true);
     const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const monthStart = format(startOfMonth(selectedDate), "yyyy-MM-dd");
+    const monthEnd = format(endOfMonth(selectedDate), "yyyy-MM-dd");
 
-    const [{ data: shiftsData }, { data: reservationsData }] = await Promise.all([
+    const [{ data: shiftsData }, { data: reservationsData }, { data: monthData }] = await Promise.all([
       supabase
         .from("shifts")
         .select("*, cast:casts(id, name, photo)")
@@ -145,12 +148,24 @@ export default function Schedule() {
         .select("*")
         .eq("reservation_date", dateStr)
         .neq("status", "cancelled"),
+      supabase
+        .from("reservations")
+        .select("price")
+        .gte("reservation_date", monthStart)
+        .lte("reservation_date", monthEnd)
+        .neq("status", "cancelled"),
     ]);
 
     setShifts((shiftsData as any) || []);
     setReservations(reservationsData || []);
+    setMonthlyTotal((monthData || []).reduce((sum, r: any) => sum + (r.price || 0), 0));
     setLoading(false);
   };
+
+  const dailyTotal = useMemo(
+    () => reservations.reduce((sum, r) => sum + (r.price || 0), 0),
+    [reservations]
+  );
 
   // Group shifts by cast
   const castRows = useMemo(() => {
