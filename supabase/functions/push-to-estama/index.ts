@@ -88,7 +88,7 @@ serve(async (req) => {
             });
             if (success) schedulesUpdated++;
           } catch (e) {
-            const msg = `Schedule push failed for ${cast.name} on ${shift.shift_date}: ${e.message}`;
+            const msg = `Schedule push failed for ${cast.name} on ${shift.shift_date}: ${(e as Error).message}`;
             console.error(msg);
             errors.push(msg);
           }
@@ -123,7 +123,7 @@ serve(async (req) => {
           });
           if (success) profilesUpdated++;
         } catch (e) {
-          const msg = `Profile push failed for ${cast.name}: ${e.message}`;
+          const msg = `Profile push failed for ${cast.name}: ${(e as Error).message}`;
           console.error(msg);
           errors.push(msg);
         }
@@ -146,7 +146,7 @@ serve(async (req) => {
           const uploaded = await pushPhotosToEstama(session, estamaId, photos);
           photosUploaded += uploaded;
         } catch (e) {
-          const msg = `Photo push failed for ${cast.name}: ${e.message}`;
+          const msg = `Photo push failed for ${cast.name}: ${(e as Error).message}`;
           console.error(msg);
           errors.push(msg);
         }
@@ -170,7 +170,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in push-to-estama:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: (error as Error).message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
