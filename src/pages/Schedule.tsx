@@ -301,6 +301,38 @@ export default function Schedule() {
             )}
           </div>
 
+          {/* Sales summary */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Card className="p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <TrendingUp size={18} className="text-primary" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-muted-foreground">本日の売上</div>
+                <div className="text-lg sm:text-xl font-bold truncate">
+                  ¥{dailyTotal.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {reservations.length}件の予約
+                </div>
+              </div>
+            </Card>
+            <Card className="p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-accent/30 flex items-center justify-center flex-shrink-0">
+                <CalendarIcon size={18} className="text-foreground" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-muted-foreground">
+                  {format(selectedDate, "M月", { locale: ja })}の売上合計
+                </div>
+                <div className="text-lg sm:text-xl font-bold truncate">
+                  ¥{monthlyTotal.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground">月次累計</div>
+              </div>
+            </Card>
+          </div>
+
           {/* Timechart */}
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
