@@ -71,7 +71,8 @@ serve(async (req) => {
     
     console.log(`Found ${castBlocks.length} cast blocks on page`);
     
-    for (const block of castBlocks) {
+    for (const blockNode of castBlocks) {
+      const block = blockNode as any;
       try {
         // 画像URLを取得
         const imgElement = block.querySelector('.therapist__img');
@@ -102,7 +103,8 @@ serve(async (req) => {
         // タグを取得（人気セラピスト、新人など）
         const tags: string[] = [];
         const badgeElements = block.querySelectorAll('.icon-badge');
-        for (const badge of badgeElements) {
+        for (const badgeNode of badgeElements) {
+          const badge = badgeNode as any;
           const tagText = badge.textContent?.trim();
           if (tagText) {
             tags.push(tagText);
@@ -144,7 +146,8 @@ serve(async (req) => {
               // プロフィールテーブルから情報を抽出
               const profileRows = detailDoc.querySelectorAll('.therapist__profile-table tr');
               
-              for (const row of profileRows) {
+              for (const rowNode of profileRows) {
+                const row = rowNode as any;
                 const th = row.querySelector('th')?.textContent?.trim();
                 const td = row.querySelector('td')?.textContent?.trim();
                 
@@ -211,7 +214,8 @@ serve(async (req) => {
               
               // ギャラリー画像を取得
               const galleryImages = detailDoc.querySelectorAll('.therapist__gallery img, .therapist__photo img, .slider img');
-              for (const img of galleryImages) {
+              for (const imgNode of galleryImages) {
+                const img = imgNode as any;
                 const imgSrc = img.getAttribute('src');
                 if (imgSrc && !allPhotoUrls.includes(imgSrc)) {
                   allPhotoUrls.push(imgSrc);
@@ -220,7 +224,8 @@ serve(async (req) => {
               
               // data-srcやdata-lazy属性もチェック
               const lazyImages = detailDoc.querySelectorAll('img[data-src], img[data-lazy]');
-              for (const img of lazyImages) {
+              for (const imgNode of lazyImages) {
+                const img = imgNode as any;
                 const imgSrc = img.getAttribute('data-src') || img.getAttribute('data-lazy');
                 if (imgSrc && !allPhotoUrls.includes(imgSrc)) {
                   allPhotoUrls.push(imgSrc);

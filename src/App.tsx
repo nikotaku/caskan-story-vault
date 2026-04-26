@@ -2,8 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Staff from "./pages/Staff";
 import Shift from "./pages/Shift";
 import ShiftSubmission from "./pages/ShiftSubmission";
@@ -56,7 +55,7 @@ const App = () => (
           
           {/* Admin/Staff Pages */}
           <Route path="/login" element={<Auth />} />
-          <Route path="/dashboard" element={<Index />} />
+          <Route path="/dashboard" element={<Navigate to="/admin-schedule" replace />} />
           <Route path="/admin-schedule" element={<SchedulePage />} />
           <Route path="/staff" element={<Staff />} />
           <Route path="/shift" element={<Shift />} />

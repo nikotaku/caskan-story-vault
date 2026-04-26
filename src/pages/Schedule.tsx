@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { format, addDays, subDays, parse, addMinutes } from "date-fns";
+import { format, addDays, subDays, parse, addMinutes, startOfMonth, endOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,7 @@ export default function Schedule() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [shifts, setShifts] = useState<(Shift & { cast: Cast })[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
@@ -134,8 +135,10 @@ export default function Schedule() {
   const fetchData = async () => {
     setLoading(true);
     const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const monthStart = format(startOfMonth(selectedDate), "yyyy-MM-dd");
+    const monthEnd = format(endOfMonth(selectedDate), "yyyy-MM-dd");
 
-    const [{ data: shiftsData }, { data: reservationsData }] = await Promise.all([
+    const [{ data: shiftsData }, { data: reservationsData }, { data: monthData }] = await Promise.all([
       supabase
         .from("shifts")
         .select("*, cast:casts(id, name, photo)")
@@ -145,12 +148,24 @@ export default function Schedule() {
         .select("*")
         .eq("reservation_date", dateStr)
         .neq("status", "cancelled"),
+      supabase
+        .from("reservations")
+        .select("price")
+        .gte("reservation_date", monthStart)
+        .lte("reservation_date", monthEnd)
+        .neq("status", "cancelled"),
     ]);
 
     setShifts((shiftsData as any) || []);
     setReservations(reservationsData || []);
+    setMonthlyTotal((monthData || []).reduce((sum, r: any) => sum + (r.price || 0), 0));
     setLoading(false);
   };
+
+  const dailyTotal = useMemo(
+    () => reservations.reduce((sum, r) => sum + (r.price || 0), 0),
+    [reservations]
+  );
 
   // Group shifts by cast
   const castRows = useMemo(() => {
@@ -284,6 +299,38 @@ export default function Schedule() {
                 </SheetContent>
               </Sheet>
             )}
+          </div>
+
+          {/* Sales summary */}
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Card className="p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <TrendingUp size={18} className="text-primary" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-muted-foreground">本日の売上</div>
+                <div className="text-lg sm:text-xl font-bold truncate">
+                  ¥{dailyTotal.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {reservations.length}件の予約
+                </div>
+              </div>
+            </Card>
+            <Card className="p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-accent/30 flex items-center justify-center flex-shrink-0">
+                <CalendarIcon size={18} className="text-foreground" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-muted-foreground">
+                  {format(selectedDate, "M月", { locale: ja })}の売上合計
+                </div>
+                <div className="text-lg sm:text-xl font-bold truncate">
+                  ¥{monthlyTotal.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground">月次累計</div>
+              </div>
+            </Card>
           </div>
 
           {/* Timechart */}
