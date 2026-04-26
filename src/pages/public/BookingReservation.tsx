@@ -446,6 +446,26 @@ const BookingReservation = () => {
       // Build copyable reservation summary
       const castName = selectedCastId === "none" ? "指名なし" : (selectedCast?.name || "");
       const dateStr = format(selectedDate, "yyyy年M月d日(E)", { locale: ja });
+
+      // LINE通知（失敗しても予約完了表示は継続）
+      try {
+        await supabase.functions.invoke("notify-line-booking", {
+          body: {
+            customer_name: customerName.trim(),
+            customer_phone: customerPhone.trim(),
+            cast_name: castName,
+            reservation_date: dateStr,
+            start_time: startTime,
+            course_name: `${courseType} ${duration}分`,
+            nomination_type: nominationType !== "none" ? nominationType : null,
+            options: selectedOptions.length > 0 ? selectedOptions : null,
+            price: totalPrice,
+            notes: notes.trim() || null,
+          },
+        });
+      } catch (notifyErr) {
+        console.error("LINE notify failed:", notifyErr);
+      }
       const summaryLines = [
         `【予約詳細】`,
         `日付: ${dateStr}`,
