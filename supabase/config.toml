@@ -21,3 +21,6 @@ verify_jwt = false
 [functions.auto-therapist-intro]
 verify_jwt = false
 
+[functions.notify-line-booking]
+verify_jwt = false
+
