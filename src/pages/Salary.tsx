@@ -277,8 +277,22 @@ export default function Salary() {
         
         // Find matching expense rate
         const matchingRate = expenseRates?.find(r => r.expense_type === expense.expense_type);
-        const therapistAmount = matchingRate ? matchingRate.therapist_deduction : 0;
-        const shopAmount = matchingRate ? matchingRate.shop_income : 0;
+        let therapistAmount = 0;
+        let shopAmount = 0;
+        if (matchingRate) {
+          therapistAmount = matchingRate.therapist_deduction;
+          shopAmount = matchingRate.shop_income;
+        } else {
+          // Fallback: use the entered amount. 手当はプラス、雑費・交通費・宿泊費はマイナス（控除）
+          const amt = expense.amount || 0;
+          if (expense.expense_type === 'その他手当') {
+            therapistAmount = amt;
+            shopAmount = -amt;
+          } else {
+            therapistAmount = -amt;
+            shopAmount = amt;
+          }
+        }
 
         castEntry.expenses.push({
           expense_type: expense.expense_type,
@@ -287,7 +301,7 @@ export default function Salary() {
         });
         castEntry.total_expense_therapist += therapistAmount;
         castEntry.total_expense_shop += shopAmount;
-        castEntry.total_salary += therapistAmount; // deductions are negative values
+        castEntry.total_salary += therapistAmount;
       });
 
       setSalaries(Array.from(salaryMap.values()).sort((a, b) => 
