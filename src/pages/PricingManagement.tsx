@@ -126,8 +126,51 @@ export default function PricingManagement() {
       fetchOptionRates();
       fetchNominationRates();
       fetchExpenseRates();
+      fetchPaymentSettings();
     }
   }, [user]);
+
+  const fetchPaymentSettings = async () => {
+    const { data, error } = await supabase
+      .from('payment_settings')
+      .select('*')
+      .order('payment_method');
+    if (error) {
+      console.error(error);
+      return;
+    }
+    setPaymentSettings(data || []);
+    const drafts: Record<string, { payment_link: string; fee_percentage: string }> = {};
+    (data || []).forEach((p: any) => {
+      drafts[p.id] = {
+        payment_link: p.payment_link || "",
+        fee_percentage: String(p.fee_percentage ?? 0),
+      };
+    });
+    setPaymentDrafts(drafts);
+  };
+
+  const handleSavePaymentSetting = async (id: string) => {
+    const draft = paymentDrafts[id];
+    if (!draft) return;
+    const fee = parseFloat(draft.fee_percentage);
+    if (isNaN(fee) || fee < 0 || fee > 100) {
+      toast({ title: "手数料は0〜100の数値で入力してください", variant: "destructive" });
+      return;
+    }
+    setSavingPaymentId(id);
+    const { error } = await supabase
+      .from('payment_settings')
+      .update({ payment_link: draft.payment_link, fee_percentage: fee })
+      .eq('id', id);
+    setSavingPaymentId(null);
+    if (error) {
+      toast({ title: "保存失敗", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "保存しました" });
+    await fetchPaymentSettings();
+  };
 
   const fetchPricing = async () => {
     try {
