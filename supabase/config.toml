@@ -15,8 +15,7 @@ verify_jwt = true
 [functions.sync-website-photos]
 verify_jwt = true
 
-[functions.sync-estama-schedule]
-verify_jwt = false
+
 
 [functions.auto-therapist-intro]
 verify_jwt = false
