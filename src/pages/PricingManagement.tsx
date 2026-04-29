@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Plus, Edit, Trash2, Save, Receipt, Star, Wallet } from "lucide-react";
+import { DollarSign, Plus, Edit, Trash2, Save, Receipt, Star, Wallet, CreditCard } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
