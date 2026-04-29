@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
