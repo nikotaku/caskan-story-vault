@@ -100,6 +100,17 @@ export default function Salary() {
     }
   };
 
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm("この経費・手当を削除しますか？")) return;
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
+      if (error) throw error;
+      toast({ title: "削除しました" });
+      await fetchSalaries();
+    } catch (e: any) {
+      toast({ title: "削除失敗", description: e.message, variant: "destructive" });
+    }
+  };
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
