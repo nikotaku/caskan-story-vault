@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ interface ReservationDetail {
 }
 
 interface ExpenseDetail {
+  id: string;
   expense_type: string;
   therapist_amount: number;
   shop_amount: number;
@@ -99,6 +100,17 @@ export default function Salary() {
     }
   };
 
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm("この経費・手当を削除しますか？")) return;
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
+      if (error) throw error;
+      toast({ title: "削除しました" });
+      await fetchSalaries();
+    } catch (e: any) {
+      toast({ title: "削除失敗", description: e.message, variant: "destructive" });
+    }
+  };
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
@@ -295,6 +307,7 @@ export default function Salary() {
         }
 
         castEntry.expenses.push({
+          id: expense.id,
           expense_type: expense.expense_type,
           therapist_amount: therapistAmount,
           shop_amount: shopAmount,
@@ -490,22 +503,31 @@ export default function Salary() {
 
                           {/* 経費控除 */}
                           {salary.expenses.length > 0 && (
-                            <div className="p-3 bg-destructive/5 border border-destructive/20 rounded space-y-2">
-                              <div className="font-medium text-destructive">経費控除</div>
-                              <div className="grid grid-cols-3 gap-1 text-xs">
-                                <div className="font-medium text-muted-foreground"></div>
-                                <div className="text-center font-medium text-muted-foreground">セラピスト</div>
-                                <div className="text-center font-medium text-muted-foreground">店舗</div>
-                                {salary.expenses.map((exp, idx) => (
-                                  <React.Fragment key={idx}>
-                                    <div className="text-muted-foreground">{exp.expense_type}</div>
-                                    <div className="text-center">¥{exp.therapist_amount.toLocaleString()}</div>
-                                    <div className="text-center">¥{exp.shop_amount.toLocaleString()}</div>
-                                  </React.Fragment>
+                            <div className="p-3 bg-destructive/5 border border-destructive/20 rounded space-y-2" onClick={(e) => e.stopPropagation()}>
+                              <div className="font-medium text-destructive">経費・手当</div>
+                              <div className="space-y-1">
+                                {salary.expenses.map((exp) => (
+                                  <div key={exp.id} className="flex items-center gap-2 text-xs py-1 border-b last:border-0">
+                                    <div className="flex-1 text-muted-foreground">{exp.expense_type}</div>
+                                    <div className="w-20 text-right">セ ¥{exp.therapist_amount.toLocaleString()}</div>
+                                    <div className="w-20 text-right">店 ¥{exp.shop_amount.toLocaleString()}</div>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      onClick={() => handleDeleteExpense(exp.id)}
+                                      aria-label="削除"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
                                 ))}
-                                <div className="font-medium border-t pt-1">経費合計</div>
-                                <div className="text-center font-medium border-t pt-1">¥{salary.total_expense_therapist.toLocaleString()}</div>
-                                <div className="text-center font-medium border-t pt-1">¥{salary.total_expense_shop.toLocaleString()}</div>
+                                <div className="flex items-center gap-2 text-xs pt-1 font-medium">
+                                  <div className="flex-1">経費合計</div>
+                                  <div className="w-20 text-right">セ ¥{salary.total_expense_therapist.toLocaleString()}</div>
+                                  <div className="w-20 text-right">店 ¥{salary.total_expense_shop.toLocaleString()}</div>
+                                  <div className="w-7" />
+                                </div>
                               </div>
                             </div>
                           )}
