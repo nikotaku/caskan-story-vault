@@ -60,9 +60,44 @@ export default function Salary() {
   const [salaries, setSalaries] = useState<CastSalary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCastId, setExpandedCastId] = useState<string | null>(null);
+  const [expenseForms, setExpenseForms] = useState<Record<string, { type: string; amount: string; custom: string; saving: boolean }>>({});
 
+  const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  const getForm = (castId: string) =>
+    expenseForms[castId] ?? { type: "雑費", amount: "1000", custom: "", saving: false };
+
+  const updateForm = (castId: string, patch: Partial<{ type: string; amount: string; custom: string; saving: boolean }>) => {
+    setExpenseForms(prev => ({ ...prev, [castId]: { ...getForm(castId), ...patch } }));
+  };
+
+  const handleAddExpense = async (castId: string) => {
+    const form = getForm(castId);
+    const isCustom = form.type === "その他手当";
+    const amount = isCustom ? parseInt(form.custom, 10) : parseInt(form.amount, 10);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast({ title: "金額を入力してください", variant: "destructive" });
+      return;
+    }
+    updateForm(castId, { saving: true });
+    try {
+      const { error } = await supabase.from("expenses").insert({
+        cast_id: castId,
+        expense_date: format(selectedDate, "yyyy-MM-dd"),
+        expense_type: form.type,
+        amount,
+      });
+      if (error) throw error;
+      toast({ title: "登録しました" });
+      updateForm(castId, { custom: "", saving: false });
+      await fetchSalaries();
+    } catch (e: any) {
+      toast({ title: "登録失敗", description: e.message, variant: "destructive" });
+      updateForm(castId, { saving: false });
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
