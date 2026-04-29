@@ -6,9 +6,16 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+
+const EXPENSE_TYPES = ["雑費", "宿泊費", "交通費"] as const;
+const AMOUNT_OPTIONS = Array.from({ length: 30 }, (_, i) => (i + 1) * 1000);
 
 interface ReservationDetail {
   course_type: string | null;
@@ -53,9 +60,44 @@ export default function Salary() {
   const [salaries, setSalaries] = useState<CastSalary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCastId, setExpandedCastId] = useState<string | null>(null);
+  const [expenseForms, setExpenseForms] = useState<Record<string, { type: string; amount: string; custom: string; saving: boolean }>>({});
 
+  const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  const getForm = (castId: string) =>
+    expenseForms[castId] ?? { type: "雑費", amount: "1000", custom: "", saving: false };
+
+  const updateForm = (castId: string, patch: Partial<{ type: string; amount: string; custom: string; saving: boolean }>) => {
+    setExpenseForms(prev => ({ ...prev, [castId]: { ...getForm(castId), ...patch } }));
+  };
+
+  const handleAddExpense = async (castId: string) => {
+    const form = getForm(castId);
+    const isCustom = form.type === "その他手当";
+    const amount = isCustom ? parseInt(form.custom, 10) : parseInt(form.amount, 10);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast({ title: "金額を入力してください", variant: "destructive" });
+      return;
+    }
+    updateForm(castId, { saving: true });
+    try {
+      const { error } = await supabase.from("expenses").insert({
+        cast_id: castId,
+        expense_date: format(selectedDate, "yyyy-MM-dd"),
+        expense_type: form.type,
+        amount,
+      });
+      if (error) throw error;
+      toast({ title: "登録しました" });
+      updateForm(castId, { custom: "", saving: false });
+      await fetchSalaries();
+    } catch (e: any) {
+      toast({ title: "登録失敗", description: e.message, variant: "destructive" });
+      updateForm(castId, { saving: false });
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -235,8 +277,22 @@ export default function Salary() {
         
         // Find matching expense rate
         const matchingRate = expenseRates?.find(r => r.expense_type === expense.expense_type);
-        const therapistAmount = matchingRate ? matchingRate.therapist_deduction : 0;
-        const shopAmount = matchingRate ? matchingRate.shop_income : 0;
+        let therapistAmount = 0;
+        let shopAmount = 0;
+        if (matchingRate) {
+          therapistAmount = matchingRate.therapist_deduction;
+          shopAmount = matchingRate.shop_income;
+        } else {
+          // Fallback: use the entered amount. 手当はプラス、雑費・交通費・宿泊費はマイナス（控除）
+          const amt = expense.amount || 0;
+          if (expense.expense_type === 'その他手当') {
+            therapistAmount = amt;
+            shopAmount = -amt;
+          } else {
+            therapistAmount = -amt;
+            shopAmount = amt;
+          }
+        }
 
         castEntry.expenses.push({
           expense_type: expense.expense_type,
@@ -245,7 +301,7 @@ export default function Salary() {
         });
         castEntry.total_expense_therapist += therapistAmount;
         castEntry.total_expense_shop += shopAmount;
-        castEntry.total_salary += therapistAmount; // deductions are negative values
+        castEntry.total_salary += therapistAmount;
       });
 
       setSalaries(Array.from(salaryMap.values()).sort((a, b) => 
@@ -379,6 +435,58 @@ export default function Salary() {
                               </div>
                             </div>
                           ))}
+
+                          {/* 経費・手当 入力 */}
+                          {(() => {
+                            const form = getForm(salary.cast_id);
+                            const isCustom = form.type === "その他手当";
+                            return (
+                              <div className="p-3 bg-muted/30 border rounded space-y-2" onClick={(e) => e.stopPropagation()}>
+                                <div className="font-medium text-sm">経費・手当を追加</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <div>
+                                    <Label className="text-xs">種類</Label>
+                                    <Select value={form.type} onValueChange={(v) => updateForm(salary.cast_id, { type: v })}>
+                                      <SelectTrigger><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        {EXPENSE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                        <SelectItem value="その他手当">その他手当</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">金額</Label>
+                                    {isCustom ? (
+                                      <Input
+                                        type="number"
+                                        placeholder="自由入力"
+                                        value={form.custom}
+                                        onChange={(e) => updateForm(salary.cast_id, { custom: e.target.value })}
+                                      />
+                                    ) : (
+                                      <Select value={form.amount} onValueChange={(v) => updateForm(salary.cast_id, { amount: v })}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent className="max-h-60">
+                                          {AMOUNT_OPTIONS.map(a => (
+                                            <SelectItem key={a} value={String(a)}>¥{a.toLocaleString()}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </div>
+                                  <div className="flex items-end">
+                                    <Button
+                                      className="w-full"
+                                      disabled={form.saving}
+                                      onClick={() => handleAddExpense(salary.cast_id)}
+                                    >
+                                      {form.saving ? "登録中..." : "追加"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* 経費控除 */}
                           {salary.expenses.length > 0 && (
