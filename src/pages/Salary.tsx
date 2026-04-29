@@ -422,6 +422,58 @@ export default function Salary() {
                             </div>
                           ))}
 
+                          {/* 経費・手当 入力 */}
+                          {(() => {
+                            const form = getForm(salary.cast_id);
+                            const isCustom = form.type === "その他手当";
+                            return (
+                              <div className="p-3 bg-muted/30 border rounded space-y-2" onClick={(e) => e.stopPropagation()}>
+                                <div className="font-medium text-sm">経費・手当を追加</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <div>
+                                    <Label className="text-xs">種類</Label>
+                                    <Select value={form.type} onValueChange={(v) => updateForm(salary.cast_id, { type: v })}>
+                                      <SelectTrigger><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        {EXPENSE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                        <SelectItem value="その他手当">その他手当</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">金額</Label>
+                                    {isCustom ? (
+                                      <Input
+                                        type="number"
+                                        placeholder="自由入力"
+                                        value={form.custom}
+                                        onChange={(e) => updateForm(salary.cast_id, { custom: e.target.value })}
+                                      />
+                                    ) : (
+                                      <Select value={form.amount} onValueChange={(v) => updateForm(salary.cast_id, { amount: v })}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent className="max-h-60">
+                                          {AMOUNT_OPTIONS.map(a => (
+                                            <SelectItem key={a} value={String(a)}>¥{a.toLocaleString()}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </div>
+                                  <div className="flex items-end">
+                                    <Button
+                                      className="w-full"
+                                      disabled={form.saving}
+                                      onClick={() => handleAddExpense(salary.cast_id)}
+                                    >
+                                      {form.saving ? "登録中..." : "追加"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {/* 経費控除 */}
                           {salary.expenses.length > 0 && (
                             <div className="p-3 bg-destructive/5 border border-destructive/20 rounded space-y-2">
