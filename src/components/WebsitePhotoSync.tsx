@@ -136,7 +136,7 @@ export const WebsitePhotoSync = () => {
                 <li>休日の過ごし方、趣味・特技、メッセージ、Xアカウント</li>
               </ul>
               <p className="mt-2 text-amber-600 dark:text-amber-400 font-medium">
-                ⚠ 注意: 名前が一致する既存セラピストのみ更新（新規作成なし）
+                ✓ 既存の同名セラピストは更新、未登録のセラピストは新規作成されます
               </p>
               <a 
                 href="https://estama.jp/shop/43923/cast/"
