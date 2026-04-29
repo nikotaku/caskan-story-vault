@@ -25,9 +25,7 @@ import PublicAccess from "./pages/public/Access";
 import NotionPageView from "./pages/NotionPageView";
 import BookingReservation from "./pages/public/BookingReservation";
 import TextGeneration from "./pages/TextGeneration";
-import EstamaIntegration from "./pages/EstamaIntegration";
 import Agreement from "./pages/Agreement";
-import SyncDashboard from "./pages/SyncDashboard";
 import RoomSettings from "./pages/RoomSettings";
 import SchedulePage from "./pages/Schedule";
 import Expenses from "./pages/Expenses";
@@ -69,8 +67,6 @@ const App = () => (
           <Route path="/salary" element={<Salary />} />
           <Route path="/pricing-management" element={<Pricing />} />
           <Route path="/text-generation" element={<TextGeneration />} />
-          <Route path="/estama" element={<EstamaIntegration />} />
-          <Route path="/sync" element={<SyncDashboard />} />
           <Route path="/shop" element={<Settings />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/board" element={<Board />} />

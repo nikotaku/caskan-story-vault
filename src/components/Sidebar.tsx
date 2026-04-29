@@ -49,8 +49,6 @@ const menuItems = [
   { href: "/board", label: "掲示板", icon: MessageSquare },
   { href: "/knowledge", label: "ナレッジ", icon: BookOpen },
   { href: "/text-generation", label: "文章生成", icon: Sparkles },
-  { href: "/estama", label: "Estama連携", icon: ExternalLink },
-  { href: "/sync", label: "同期状況", icon: RefreshCw },
   { href: "/design", label: "ホームページ", icon: Globe },
   { href: "/shop", label: "設定", icon: Settings },
 ];
