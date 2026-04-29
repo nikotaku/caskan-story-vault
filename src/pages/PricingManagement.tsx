@@ -450,7 +450,7 @@ export default function PricingManagement() {
           </div>
 
           <Tabs defaultValue="courses" className="w-full">
-            <TabsList className="w-full grid grid-cols-4 mb-4">
+            <TabsList className="w-full grid grid-cols-5 mb-4">
               <TabsTrigger value="courses" className="text-xs sm:text-sm gap-1">
                 <DollarSign className="h-3 w-3 hidden sm:inline" />
                 コース
@@ -466,6 +466,10 @@ export default function PricingManagement() {
               <TabsTrigger value="expenses" className="text-xs sm:text-sm gap-1">
                 <Receipt className="h-3 w-3 hidden sm:inline" />
                 経費率
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="text-xs sm:text-sm gap-1">
+                <CreditCard className="h-3 w-3 hidden sm:inline" />
+                決済
               </TabsTrigger>
             </TabsList>
 
