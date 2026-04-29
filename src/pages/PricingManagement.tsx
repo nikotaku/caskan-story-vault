@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Plus, Edit, Trash2, Save, Receipt, Star, Wallet } from "lucide-react";
+import { DollarSign, Plus, Edit, Trash2, Save, Receipt, Star, Wallet, CreditCard } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -104,6 +104,10 @@ export default function PricingManagement() {
     min_days: 1,
   });
 
+  const [paymentSettings, setPaymentSettings] = useState<Array<{ id: string; payment_method: string; payment_link: string | null; fee_percentage: number }>>([]);
+  const [paymentDrafts, setPaymentDrafts] = useState<Record<string, { payment_link: string; fee_percentage: string }>>({});
+  const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null);
+
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -122,8 +126,51 @@ export default function PricingManagement() {
       fetchOptionRates();
       fetchNominationRates();
       fetchExpenseRates();
+      fetchPaymentSettings();
     }
   }, [user]);
+
+  const fetchPaymentSettings = async () => {
+    const { data, error } = await supabase
+      .from('payment_settings')
+      .select('*')
+      .order('payment_method');
+    if (error) {
+      console.error(error);
+      return;
+    }
+    setPaymentSettings(data || []);
+    const drafts: Record<string, { payment_link: string; fee_percentage: string }> = {};
+    (data || []).forEach((p: any) => {
+      drafts[p.id] = {
+        payment_link: p.payment_link || "",
+        fee_percentage: String(p.fee_percentage ?? 0),
+      };
+    });
+    setPaymentDrafts(drafts);
+  };
+
+  const handleSavePaymentSetting = async (id: string) => {
+    const draft = paymentDrafts[id];
+    if (!draft) return;
+    const fee = parseFloat(draft.fee_percentage);
+    if (isNaN(fee) || fee < 0 || fee > 100) {
+      toast({ title: "手数料は0〜100の数値で入力してください", variant: "destructive" });
+      return;
+    }
+    setSavingPaymentId(id);
+    const { error } = await supabase
+      .from('payment_settings')
+      .update({ payment_link: draft.payment_link, fee_percentage: fee })
+      .eq('id', id);
+    setSavingPaymentId(null);
+    if (error) {
+      toast({ title: "保存失敗", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "保存しました" });
+    await fetchPaymentSettings();
+  };
 
   const fetchPricing = async () => {
     try {
@@ -403,7 +450,7 @@ export default function PricingManagement() {
           </div>
 
           <Tabs defaultValue="courses" className="w-full">
-            <TabsList className="w-full grid grid-cols-4 mb-4">
+            <TabsList className="w-full grid grid-cols-5 mb-4">
               <TabsTrigger value="courses" className="text-xs sm:text-sm gap-1">
                 <DollarSign className="h-3 w-3 hidden sm:inline" />
                 コース
@@ -419,6 +466,10 @@ export default function PricingManagement() {
               <TabsTrigger value="expenses" className="text-xs sm:text-sm gap-1">
                 <Receipt className="h-3 w-3 hidden sm:inline" />
                 経費率
+              </TabsTrigger>
+              <TabsTrigger value="payments" className="text-xs sm:text-sm gap-1">
+                <CreditCard className="h-3 w-3 hidden sm:inline" />
+                決済
               </TabsTrigger>
             </TabsList>
 
@@ -791,6 +842,85 @@ export default function PricingManagement() {
                           })}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* 決済設定 */}
+            <TabsContent value="payments">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    決済設定
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    各決済方法の決済リンクと手数料率を設定してください。
+                  </p>
+                  {paymentSettings.map((p) => {
+                    const draft = paymentDrafts[p.id] ?? { payment_link: "", fee_percentage: "0" };
+                    return (
+                      <div key={p.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="font-semibold text-base flex items-center gap-2">
+                          {p.payment_method === "PayPay" ? (
+                            <Wallet className="h-4 w-4" />
+                          ) : (
+                            <CreditCard className="h-4 w-4" />
+                          )}
+                          {p.payment_method}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs">決済リンク</Label>
+                            <Input
+                              type="url"
+                              placeholder="https://..."
+                              value={draft.payment_link}
+                              onChange={(e) =>
+                                setPaymentDrafts((prev) => ({
+                                  ...prev,
+                                  [p.id]: { ...draft, payment_link: e.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">手数料 (%)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={draft.fee_percentage}
+                              onChange={(e) =>
+                                setPaymentDrafts((prev) => ({
+                                  ...prev,
+                                  [p.id]: { ...draft, fee_percentage: e.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              className="w-full"
+                              disabled={savingPaymentId === p.id || !isAdmin}
+                              onClick={() => handleSavePaymentSetting(p.id)}
+                            >
+                              <Save className="h-4 w-4 mr-1" />
+                              {savingPaymentId === p.id ? "保存中..." : "保存"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {paymentSettings.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      決済設定が見つかりません
                     </div>
                   )}
                 </CardContent>

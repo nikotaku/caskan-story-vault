@@ -436,6 +436,36 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_settings: {
+        Row: {
+          created_at: string
+          fee_percentage: number
+          id: string
+          is_active: boolean
+          payment_link: string | null
+          payment_method: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fee_percentage?: number
+          id?: string
+          is_active?: boolean
+          payment_link?: string | null
+          payment_method: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fee_percentage?: number
+          id?: string
+          is_active?: boolean
+          payment_link?: string | null
+          payment_method?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pricing: {
         Row: {
           course_type: string
