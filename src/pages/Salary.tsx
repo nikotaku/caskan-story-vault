@@ -6,9 +6,16 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+
+const EXPENSE_TYPES = ["雑費", "宿泊費", "交通費"] as const;
+const AMOUNT_OPTIONS = Array.from({ length: 30 }, (_, i) => (i + 1) * 1000);
 
 interface ReservationDetail {
   course_type: string | null;
