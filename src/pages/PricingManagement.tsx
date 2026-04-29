@@ -104,6 +104,10 @@ export default function PricingManagement() {
     min_days: 1,
   });
 
+  const [paymentSettings, setPaymentSettings] = useState<Array<{ id: string; payment_method: string; payment_link: string | null; fee_percentage: number }>>([]);
+  const [paymentDrafts, setPaymentDrafts] = useState<Record<string, { payment_link: string; fee_percentage: string }>>({});
+  const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null);
+
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
