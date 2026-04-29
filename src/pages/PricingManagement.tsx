@@ -847,6 +847,85 @@ export default function PricingManagement() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* 決済設定 */}
+            <TabsContent value="payments">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    決済設定
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    各決済方法の決済リンクと手数料率を設定してください。
+                  </p>
+                  {paymentSettings.map((p) => {
+                    const draft = paymentDrafts[p.id] ?? { payment_link: "", fee_percentage: "0" };
+                    return (
+                      <div key={p.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="font-semibold text-base flex items-center gap-2">
+                          {p.payment_method === "PayPay" ? (
+                            <Wallet className="h-4 w-4" />
+                          ) : (
+                            <CreditCard className="h-4 w-4" />
+                          )}
+                          {p.payment_method}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs">決済リンク</Label>
+                            <Input
+                              type="url"
+                              placeholder="https://..."
+                              value={draft.payment_link}
+                              onChange={(e) =>
+                                setPaymentDrafts((prev) => ({
+                                  ...prev,
+                                  [p.id]: { ...draft, payment_link: e.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">手数料 (%)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={draft.fee_percentage}
+                              onChange={(e) =>
+                                setPaymentDrafts((prev) => ({
+                                  ...prev,
+                                  [p.id]: { ...draft, fee_percentage: e.target.value },
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              className="w-full"
+                              disabled={savingPaymentId === p.id || !isAdmin}
+                              onClick={() => handleSavePaymentSetting(p.id)}
+                            >
+                              <Save className="h-4 w-4 mr-1" />
+                              {savingPaymentId === p.id ? "保存中..." : "保存"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {paymentSettings.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      決済設定が見つかりません
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
       </div>
