@@ -268,9 +268,7 @@ const BookingReservation = () => {
 
   const fetchRates = async () => {
     try {
-      const { data: backData } = await supabase
-        .from('back_rates')
-        .select('*');
+      const { data: backData } = await supabase.rpc('get_public_back_rates');
       
       const { data: optionData } = await supabase
         .from('option_rates')
@@ -280,7 +278,7 @@ const BookingReservation = () => {
         .from('nomination_rates')
         .select('*');
 
-      if (backData) setBackRates(backData);
+      if (backData) setBackRates(backData as any);
       if (optionData) setOptionRates(optionData);
       if (nominationData) setNominationRates(nominationData);
     } catch (error) {
