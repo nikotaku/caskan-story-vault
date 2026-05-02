@@ -136,7 +136,17 @@ export default function Staff() {
 
       if (error) throw error;
 
-      setCasts((data || []) as Cast[]);
+      let tokensMap: Record<string, string> = {};
+      const { data: tokenData } = await supabase.rpc('get_cast_access_tokens');
+      if (tokenData) {
+        tokensMap = (tokenData as any[]).reduce((acc, t) => {
+          acc[t.cast_id] = t.access_token;
+          return acc;
+        }, {} as Record<string, string>);
+      }
+
+      const merged = (data || []).map((c: any) => ({ ...c, access_token: tokensMap[c.id] || null }));
+      setCasts(merged as Cast[]);
     } catch (error) {
       console.error('Error fetching casts:', error);
       toast({
