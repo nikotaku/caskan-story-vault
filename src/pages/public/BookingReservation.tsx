@@ -194,16 +194,14 @@ const BookingReservation = () => {
 
       if (shiftsError) throw shiftsError;
 
-      // Get all reservations for the selected date
+      // Get all reservation slots for the selected date (PII-free RPC)
       const { data: reservationsData, error: reservationsError } = await supabase
-        .from("reservations")
-        .select("*")
-        .eq("reservation_date", dateStr);
+        .rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: null });
 
       if (reservationsError) throw reservationsError;
 
       setAllShifts(shiftsData || []);
-      setAllReservations(reservationsData || []);
+      setAllReservations((reservationsData || []) as any);
 
       // Get unique cast IDs from shifts
       const castIds = [...new Set(shiftsData?.map(s => s.cast_id) || [])];
