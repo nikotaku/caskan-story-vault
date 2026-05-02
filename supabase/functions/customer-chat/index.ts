@@ -5,20 +5,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 20;
+const WINDOW_MS = 60 * 60 * 1000;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const now = Date.now();
+    const entry = rateLimitMap.get(ip);
+    if (entry && entry.resetAt > now) {
+      if (entry.count >= RATE_LIMIT) {
+        return new Response(JSON.stringify({ error: "リクエストが多すぎます。しばらく待ってからお試しください。" }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      entry.count++;
+    } else {
+      rateLimitMap.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    }
+
     const { messages } = await req.json();
+    if (!Array.isArray(messages) || messages.length > 50) {
+      return new Response(JSON.stringify({ error: "リクエストが無効です。" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    for (const m of messages) {
+      if (typeof m?.content !== "string" || m.content.length > 1000) {
+        return new Response(JSON.stringify({ error: "メッセージが長すぎます（1000文字以内）。" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
-
-    console.log("Received chat request with", messages.length, "messages");
 
     const systemPrompt = `あなたはメンズエステの顧客対応スタッフです。以下の情報を基に、親切で丁寧に対応してください：
 
