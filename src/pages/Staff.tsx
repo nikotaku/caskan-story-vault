@@ -462,10 +462,10 @@ export default function Staff() {
 
     try {
       const token = crypto.randomUUID();
-      const { error } = await supabase
-        .from('casts')
-        .update({ access_token: token })
-        .eq('id', castId);
+      const { error } = await supabase.rpc('set_cast_access_token', {
+        p_cast_id: castId,
+        p_token: token,
+      });
 
       if (error) throw error;
 
@@ -473,6 +473,7 @@ export default function Staff() {
         title: "トークン生成完了",
         description: "専用リンクが生成されました",
       });
+      fetchCasts();
     } catch (error) {
       console.error('Error generating token:', error);
       toast({
