@@ -80,9 +80,37 @@ export type Database = {
         }
         Relationships: []
       }
+      cast_access_tokens: {
+        Row: {
+          access_token: string
+          cast_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          cast_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          cast_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cast_access_tokens_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: true
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       casts: {
         Row: {
-          access_token: string | null
           age: number | null
           blood_type: string | null
           body_type: string | null
@@ -132,7 +160,6 @@ export type Database = {
           x_account: string | null
         }
         Insert: {
-          access_token?: string | null
           age?: number | null
           blood_type?: string | null
           body_type?: string | null
@@ -182,7 +209,6 @@ export type Database = {
           x_account?: string | null
         }
         Update: {
-          access_token?: string | null
           age?: number | null
           blood_type?: string | null
           body_type?: string | null
@@ -796,12 +822,50 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_cast_access_tokens: {
+        Args: never
+        Returns: {
+          access_token: string
+          cast_id: string
+        }[]
+      }
+      get_cast_by_access_token: {
+        Args: { p_token: string }
+        Returns: {
+          id: string
+          name: string
+          photo: string
+        }[]
+      }
+      get_public_back_rates: {
+        Args: never
+        Returns: {
+          course_type: string
+          customer_price: number
+          duration: number
+          id: string
+        }[]
+      }
+      get_reservation_slots: {
+        Args: { p_cast_id?: string; p_date: string }
+        Returns: {
+          cast_id: string
+          duration: number
+          id: string
+          reservation_date: string
+          start_time: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      set_cast_access_token: {
+        Args: { p_cast_id: string; p_token: string }
+        Returns: undefined
       }
     }
     Enums: {
