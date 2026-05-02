@@ -32,7 +32,7 @@ interface Cast {
   upload_check: string | null;
   x_account: string | null;
   join_date: string;
-  access_token: string | null;
+  access_token?: string | null;
   therapist_years: number | null;
   favorite_techniques: string | null;
   favorite_food: string | null;
