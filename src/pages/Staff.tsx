@@ -493,6 +493,15 @@ export default function Staff() {
     });
   };
 
+  const copyShiftLink = (token: string) => {
+    const link = `${window.location.origin}/therapist/${token}/shift`;
+    navigator.clipboard.writeText(link);
+    toast({
+      title: "シフト提出URLをコピーしました",
+      description: "セラピストに送付してください",
+    });
+  };
+
   const handlePhotoUpload = async (file: File, isEdit: boolean = false) => {
     if (!isAdmin) {
       toast({
