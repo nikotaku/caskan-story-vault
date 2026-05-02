@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload, Eye, EyeOff, CalendarPlus } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { WebsitePhotoSync } from "@/components/WebsitePhotoSync";
@@ -1391,11 +1391,16 @@ export default function Staff() {
                   {isAdmin && (
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {cast.access_token ? (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); copyPortalLink(cast.access_token!); }}>
-                          <Copy size={14} />
-                        </Button>
+                        <>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="ポータルURLをコピー" onClick={(e) => { e.stopPropagation(); copyPortalLink(cast.access_token!); }}>
+                            <Copy size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="シフト提出URLをコピー" onClick={(e) => { e.stopPropagation(); copyShiftLink(cast.access_token!); }}>
+                            <CalendarPlus size={14} />
+                          </Button>
+                        </>
                       ) : (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); generateAccessToken(cast.id); }}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="アクセストークン発行" onClick={(e) => { e.stopPropagation(); generateAccessToken(cast.id); }}>
                           <LinkIcon size={14} />
                         </Button>
                       )}
