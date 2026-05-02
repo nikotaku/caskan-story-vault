@@ -68,11 +68,11 @@ interface NominationRate {
 }
 
 const reservationSchema = z.object({
-  customer_name: z.string().trim().min(1, "お名前を入力してください").max(100, "お名前は100文字以内で入力してください"),
-  customer_furigana: z.string().trim().min(1, "フリガナを入力してください").max(100, "フリガナは100文字以内で入力してください"),
-  customer_phone: z.string().trim().min(10, "電話番号を入力してください").max(20, "電話番号は20文字以内で入力してください"),
+  customer_name: z.string().trim().min(1, "お名前を入力してください").max(100, "お名前は100文字以内で入力してください").regex(/^[\p{L}\p{N}\s\-\.]+$/u, "お名前に使用できない文字が含まれています"),
+  customer_furigana: z.string().trim().min(1, "フリガナを入力してください").max(100, "フリガナは100文字以内で入力してください").regex(/^[\p{L}\p{N}\s\-\.]+$/u, "フリガナに使用できない文字が含まれています"),
+  customer_phone: z.string().trim().min(10, "電話番号を入力してください").max(20, "電話番号は20文字以内で入力してください").regex(/^[0-9\-\(\)\+\s]+$/, "電話番号の形式が正しくありません"),
   customer_email: z.string().trim().email("有効なメールアドレスを入力してください").max(255, "メールアドレスは255文字以内で入力してください"),
-  notes: z.string().max(1000, "備考は1000文字以内で入力してください").optional(),
+  notes: z.string().max(1000, "備考は1000文字以内で入力してください").refine(val => !val || !/<[^>]*>/g.test(val), "HTMLタグは使用できません").optional(),
 });
 
 const BookingReservation = () => {
@@ -194,16 +194,14 @@ const BookingReservation = () => {
 
       if (shiftsError) throw shiftsError;
 
-      // Get all reservations for the selected date
+      // Get all reservation slots for the selected date (PII-free RPC)
       const { data: reservationsData, error: reservationsError } = await supabase
-        .from("reservations")
-        .select("*")
-        .eq("reservation_date", dateStr);
+        .rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: null });
 
       if (reservationsError) throw reservationsError;
 
       setAllShifts(shiftsData || []);
-      setAllReservations(reservationsData || []);
+      setAllReservations((reservationsData || []) as any);
 
       // Get unique cast IDs from shifts
       const castIds = [...new Set(shiftsData?.map(s => s.cast_id) || [])];
@@ -270,9 +268,7 @@ const BookingReservation = () => {
 
   const fetchRates = async () => {
     try {
-      const { data: backData } = await supabase
-        .from('back_rates')
-        .select('*');
+      const { data: backData } = await supabase.rpc('get_public_back_rates');
       
       const { data: optionData } = await supabase
         .from('option_rates')
@@ -282,7 +278,7 @@ const BookingReservation = () => {
         .from('nomination_rates')
         .select('*');
 
-      if (backData) setBackRates(backData);
+      if (backData) setBackRates(backData as any);
       if (optionData) setOptionRates(optionData);
       if (nominationData) setNominationRates(nominationData);
     } catch (error) {
@@ -303,16 +299,13 @@ const BookingReservation = () => {
         .eq("shift_date", dateStr);
 
       const { data: reservationsData, error: reservationsError } = await supabase
-        .from("reservations")
-        .select("*")
-        .eq("cast_id", selectedCastId)
-        .eq("reservation_date", dateStr);
+        .rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: selectedCastId });
 
       if (shiftsError) throw shiftsError;
       if (reservationsError) throw reservationsError;
 
       setShifts(shiftsData || []);
-      setReservations(reservationsData || []);
+      setReservations((reservationsData || []) as any);
     } catch (error) {
       console.error("Error fetching shifts and reservations:", error);
       toast({

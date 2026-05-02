@@ -32,7 +32,7 @@ interface Cast {
   upload_check: string | null;
   x_account: string | null;
   join_date: string;
-  access_token: string | null;
+  access_token?: string | null;
   therapist_years: number | null;
   favorite_techniques: string | null;
   favorite_food: string | null;
@@ -136,7 +136,17 @@ export default function Staff() {
 
       if (error) throw error;
 
-      setCasts((data || []) as Cast[]);
+      let tokensMap: Record<string, string> = {};
+      const { data: tokenData } = await supabase.rpc('get_cast_access_tokens');
+      if (tokenData) {
+        tokensMap = (tokenData as any[]).reduce((acc, t) => {
+          acc[t.cast_id] = t.access_token;
+          return acc;
+        }, {} as Record<string, string>);
+      }
+
+      const merged = (data || []).map((c: any) => ({ ...c, access_token: tokensMap[c.id] || null }));
+      setCasts(merged as Cast[]);
     } catch (error) {
       console.error('Error fetching casts:', error);
       toast({
@@ -452,10 +462,10 @@ export default function Staff() {
 
     try {
       const token = crypto.randomUUID();
-      const { error } = await supabase
-        .from('casts')
-        .update({ access_token: token })
-        .eq('id', castId);
+      const { error } = await supabase.rpc('set_cast_access_token', {
+        p_cast_id: castId,
+        p_token: token,
+      });
 
       if (error) throw error;
 
@@ -463,6 +473,7 @@ export default function Staff() {
         title: "トークン生成完了",
         description: "専用リンクが生成されました",
       });
+      fetchCasts();
     } catch (error) {
       console.error('Error generating token:', error);
       toast({
