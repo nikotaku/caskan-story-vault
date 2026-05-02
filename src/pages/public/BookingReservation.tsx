@@ -301,16 +301,13 @@ const BookingReservation = () => {
         .eq("shift_date", dateStr);
 
       const { data: reservationsData, error: reservationsError } = await supabase
-        .from("reservations")
-        .select("*")
-        .eq("cast_id", selectedCastId)
-        .eq("reservation_date", dateStr);
+        .rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: selectedCastId });
 
       if (shiftsError) throw shiftsError;
       if (reservationsError) throw reservationsError;
 
       setShifts(shiftsData || []);
-      setReservations(reservationsData || []);
+      setReservations((reservationsData || []) as any);
     } catch (error) {
       console.error("Error fetching shifts and reservations:", error);
       toast({
