@@ -37,14 +37,14 @@ export default function Pricing() {
   const fetchPricing = async () => {
     try {
       const [backRes, optionRes, nomRes] = await Promise.all([
-        supabase.from('back_rates').select('*').order('duration', { ascending: true }),
+        supabase.rpc('get_public_back_rates'),
         supabase.from('option_rates').select('*').order('created_at', { ascending: true }),
         supabase.from('nomination_rates').select('*').order('created_at', { ascending: true }),
       ]);
       if (backRes.error) throw backRes.error;
       if (optionRes.error) throw optionRes.error;
       if (nomRes.error) throw nomRes.error;
-      setBackRates(backRes.data || []);
+      setBackRates((backRes.data || []) as any);
       setOptionRates(optionRes.data || []);
       setNominationRates(nomRes.data || []);
     } catch (error) {
