@@ -77,10 +77,21 @@ export default function Salary() {
   const handleAddExpense = async (castId: string) => {
     const form = getForm(castId);
     const isCustom = form.type === "その他手当";
-    const amount = isCustom ? parseInt(form.custom, 10) : parseInt(form.amount, 10);
+    const isMisc = form.type === "雑費";
+    const amount = isMisc ? 1000 : (isCustom ? parseInt(form.custom, 10) : parseInt(form.amount, 10));
     if (!amount || isNaN(amount) || amount <= 0) {
       toast({ title: "金額を入力してください", variant: "destructive" });
       return;
+    }
+    if (isMisc) {
+      const castEntry = salaries.find(s => s.cast_id === castId);
+      const currentMiscTotal = castEntry?.expenses
+        .filter(e => e.expense_type === "雑費")
+        .reduce((sum, e) => sum + (e.amount || 0), 0) ?? 0;
+      if (currentMiscTotal + 1000 > 2000) {
+        toast({ title: "雑費は1日2,000円までです", variant: "destructive" });
+        return;
+      }
     }
     updateForm(castId, { saving: true });
     try {
