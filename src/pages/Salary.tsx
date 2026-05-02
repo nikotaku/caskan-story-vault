@@ -35,6 +35,7 @@ interface ReservationDetail {
 interface ExpenseDetail {
   id: string;
   expense_type: string;
+  amount: number;
   therapist_amount: number;
   shop_amount: number;
 }
@@ -77,10 +78,21 @@ export default function Salary() {
   const handleAddExpense = async (castId: string) => {
     const form = getForm(castId);
     const isCustom = form.type === "その他手当";
-    const amount = isCustom ? parseInt(form.custom, 10) : parseInt(form.amount, 10);
+    const isMisc = form.type === "雑費";
+    const amount = isMisc ? 1000 : (isCustom ? parseInt(form.custom, 10) : parseInt(form.amount, 10));
     if (!amount || isNaN(amount) || amount <= 0) {
       toast({ title: "金額を入力してください", variant: "destructive" });
       return;
+    }
+    if (isMisc) {
+      const castEntry = salaries.find(s => s.cast_id === castId);
+      const currentMiscTotal = castEntry?.expenses
+        .filter(e => e.expense_type === "雑費")
+        .reduce((sum, e) => sum + (e.amount || 0), 0) ?? 0;
+      if (currentMiscTotal + 1000 > 2000) {
+        toast({ title: "雑費は1日2,000円までです", variant: "destructive" });
+        return;
+      }
     }
     updateForm(castId, { saving: true });
     try {
@@ -309,6 +321,7 @@ export default function Salary() {
         castEntry.expenses.push({
           id: expense.id,
           expense_type: expense.expense_type,
+          amount: expense.amount || 0,
           therapist_amount: therapistAmount,
           shop_amount: shopAmount,
         });
@@ -453,6 +466,11 @@ export default function Salary() {
                           {(() => {
                             const form = getForm(salary.cast_id);
                             const isCustom = form.type === "その他手当";
+                            const isMisc = form.type === "雑費";
+                            const miscTotal = salary.expenses
+                              .filter(e => e.expense_type === "雑費")
+                              .reduce((sum, e) => sum + (e.amount || 0), 0);
+                            const miscCapReached = miscTotal >= 2000;
                             return (
                               <div className="p-3 bg-muted/30 border rounded space-y-2" onClick={(e) => e.stopPropagation()}>
                                 <div className="font-medium text-sm">経費・手当を追加</div>
@@ -468,8 +486,13 @@ export default function Salary() {
                                     </Select>
                                   </div>
                                   <div>
-                                    <Label className="text-xs">金額</Label>
-                                    {isCustom ? (
+                                    <Label className="text-xs">
+                                      金額
+                                      {isMisc && <span className="ml-1 text-muted-foreground">（雑費は1本¥1,000 / 日上限¥2,000）</span>}
+                                    </Label>
+                                    {isMisc ? (
+                                      <Input type="text" value="¥1,000" disabled />
+                                    ) : isCustom ? (
                                       <Input
                                         type="number"
                                         placeholder="自由入力"
@@ -490,10 +513,10 @@ export default function Salary() {
                                   <div className="flex items-end">
                                     <Button
                                       className="w-full"
-                                      disabled={form.saving}
+                                      disabled={form.saving || (isMisc && miscCapReached)}
                                       onClick={() => handleAddExpense(salary.cast_id)}
                                     >
-                                      {form.saving ? "登録中..." : "追加"}
+                                      {form.saving ? "登録中..." : isMisc && miscCapReached ? "上限到達" : "追加"}
                                     </Button>
                                   </div>
                                 </div>
