@@ -321,6 +321,7 @@ export default function Salary() {
         castEntry.expenses.push({
           id: expense.id,
           expense_type: expense.expense_type,
+          amount: expense.amount || 0,
           therapist_amount: therapistAmount,
           shop_amount: shopAmount,
         });
