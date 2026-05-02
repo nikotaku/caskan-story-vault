@@ -35,6 +35,7 @@ interface ReservationDetail {
 interface ExpenseDetail {
   id: string;
   expense_type: string;
+  amount: number;
   therapist_amount: number;
   shop_amount: number;
 }
