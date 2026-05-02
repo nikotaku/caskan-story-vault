@@ -46,7 +46,7 @@ const System = () => {
       if (backRes.error) throw backRes.error;
       if (optionRes.error) throw optionRes.error;
       if (nominationRes.error) throw nominationRes.error;
-      setBackRates(backRes.data || []);
+      setBackRates((backRes.data || []) as any);
       setOptionRates(optionRes.data || []);
       setNominationRates(nominationRes.data || []);
     } catch (error) {
