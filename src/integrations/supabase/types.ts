@@ -867,6 +867,10 @@ export type Database = {
         Args: { p_cast_id: string; p_token: string }
         Returns: undefined
       }
+      submit_therapist_shifts: {
+        Args: { p_shifts: Json; p_token: string }
+        Returns: number
+      }
     }
     Enums: {
       app_role: "admin" | "user"
