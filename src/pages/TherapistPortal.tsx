@@ -29,21 +29,20 @@ export default function TherapistPortal() {
 
     const fetchCastByToken = async () => {
       try {
-        const { data, error } = await supabase
-          .from("casts")
-          .select("id, name, photo")
-          .eq("access_token", token)
-          .maybeSingle();
+        const { data, error } = await supabase.rpc('get_cast_by_access_token', {
+          p_token: token,
+        });
 
         if (error) throw error;
 
-        if (!data) {
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row) {
           toast.error("無効なアクセスリンクです");
           navigate("/");
           return;
         }
 
-        setCast(data);
+        setCast(row as Cast);
       } catch (error) {
         console.error("Error fetching cast:", error);
         toast.error("データの取得に失敗しました");
