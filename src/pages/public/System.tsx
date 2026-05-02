@@ -39,7 +39,7 @@ const System = () => {
   const fetchPricing = async () => {
     try {
       const [backRes, optionRes, nominationRes] = await Promise.all([
-        supabase.from('back_rates').select('*').order('duration', { ascending: true }),
+        supabase.rpc('get_public_back_rates'),
         supabase.from('option_rates').select('*').order('created_at', { ascending: true }),
         supabase.from('nomination_rates').select('*').order('created_at', { ascending: true }),
       ]);
