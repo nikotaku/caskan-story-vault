@@ -73,7 +73,7 @@ const Schedule = () => {
       const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
       const [shiftsResult, reservationsResult] = await Promise.all([
         supabase.from("shifts").select(`*, casts (name, photo, type, status)`).eq("shift_date", selectedDateStr).order("start_time", { ascending: true }),
-        supabase.from("reservations").select("id, cast_id, reservation_date, start_time, duration").eq("reservation_date", selectedDateStr),
+        supabase.rpc("get_reservation_slots", { p_date: selectedDateStr, p_cast_id: null }),
       ]);
       if (shiftsResult.error) throw shiftsResult.error;
       if (reservationsResult.error) throw reservationsResult.error;
