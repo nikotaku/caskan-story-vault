@@ -16,6 +16,7 @@ import Pricing from "./pages/PricingManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import TherapistPortal from "./pages/TherapistPortal";
+import TherapistShiftSubmission from "./pages/TherapistShiftSubmission";
 import PublicSchedule from "./pages/public/Schedule";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
@@ -74,6 +75,7 @@ const App = () => (
           
           {/* Therapist Portal - Token-based access */}
           <Route path="/therapist/:token" element={<TherapistPortal />} />
+          <Route path="/therapist/:token/shift" element={<TherapistShiftSubmission />} />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
