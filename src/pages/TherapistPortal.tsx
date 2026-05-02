@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, FileText, DollarSign, Receipt, Plane, X } from "lucide-react";
+import { Loader2, FileText, DollarSign, Receipt, Plane, X, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import backRatesImage from "@/assets/back-rates-table.jpg";
@@ -68,6 +68,12 @@ export default function TherapistPortal() {
   }
 
   const menuItems = [
+    {
+      title: "シフト提出",
+      description: "希望シフトをカレンダーから提出",
+      icon: CalendarPlus,
+      action: () => navigate(`/therapist/${token}/shift`),
+    },
     {
       title: "精算はこちら",
       description: "今月の売上と精算情報を確認",
