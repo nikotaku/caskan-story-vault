@@ -38,10 +38,18 @@ interface Reservation {
   duration: number;
 }
 
+interface Banner {
+  id: string;
+  title: string | null;
+  image_url: string;
+  link_url: string | null;
+}
+
 const Schedule = () => {
   const navigate = useNavigate();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
