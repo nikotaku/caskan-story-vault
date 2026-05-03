@@ -91,6 +91,7 @@ export default function Staff() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const dragCastId = useRef<string | null>(null);
   
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
