@@ -132,6 +132,7 @@ export default function Staff() {
       const { data, error } = await supabase
         .from('casts')
         .select('*')
+        .order('display_order', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
