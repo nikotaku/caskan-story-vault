@@ -136,6 +136,30 @@ const Schedule = () => {
         </div>
       </div>
 
+      {/* Banners */}
+      {banners.length > 0 && (
+        <div className="container mx-auto px-4 pt-6">
+          <div className="max-w-6xl mx-auto grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {banners.map((b) => {
+              const inner = (
+                <img
+                  src={b.image_url}
+                  alt={b.title || "banner"}
+                  className="w-full h-auto rounded-lg shadow-md hover:shadow-xl transition-shadow"
+                  loading="lazy"
+                />
+              );
+              return b.link_url ? (
+                <a key={b.id} href={b.link_url} target="_blank" rel="noopener noreferrer" className="block">
+                  {inner}
+                </a>
+              ) : (
+                <div key={b.id}>{inner}</div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <main className="container py-8 px-4">
         <div className="max-w-6xl mx-auto">
           {/* View Toggle */}
