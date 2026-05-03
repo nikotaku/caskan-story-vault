@@ -48,6 +48,7 @@ interface Cast {
   dispatch_status: string | null;
   repeat_scheduled: boolean | null;
   is_visible: boolean;
+  display_order?: number;
 }
 
 export default function Staff() {
