@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload, Eye, EyeOff, CalendarPlus } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Link as LinkIcon, Copy, Upload, Eye, EyeOff, CalendarPlus, GripVertical } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { WebsitePhotoSync } from "@/components/WebsitePhotoSync";
@@ -48,6 +48,7 @@ interface Cast {
   dispatch_status: string | null;
   repeat_scheduled: boolean | null;
   is_visible: boolean;
+  display_order?: number;
 }
 
 export default function Staff() {
@@ -90,6 +91,7 @@ export default function Staff() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const dragCastId = useRef<string | null>(null);
   
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
@@ -132,6 +134,7 @@ export default function Staff() {
       const { data, error } = await supabase
         .from('casts')
         .select('*')
+        .order('display_order', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -447,6 +450,29 @@ export default function Staff() {
       case "残タスク": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
       case "未着手": return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
       default: return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+    }
+  };
+
+  const handleDropCast = async (targetId: string) => {
+    if (!isAdmin || !dragCastId.current || dragCastId.current === targetId) return;
+    const fromIdx = casts.findIndex(c => c.id === dragCastId.current);
+    const toIdx = casts.findIndex(c => c.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const reordered = [...casts];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setCasts(reordered);
+    dragCastId.current = null;
+    try {
+      await Promise.all(
+        reordered.map((c, i) =>
+          supabase.from('casts').update({ display_order: i + 1 }).eq('id', c.id)
+        )
+      );
+    } catch (e) {
+      console.error('reorder failed', e);
+      toast({ title: '並び替えに失敗しました', variant: 'destructive' });
+      fetchCasts();
     }
   };
 
@@ -1342,9 +1368,22 @@ export default function Staff() {
               {filteredCasts.map((cast) => (
                 <div
                   key={cast.id}
+                  draggable={isAdmin}
+                  onDragStart={() => { dragCastId.current = cast.id; }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleDropCast(cast.id)}
                   className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
                   onClick={() => handleEditCast(cast)}
                 >
+                  {isAdmin && (
+                    <div
+                      className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                      onClick={(e) => e.stopPropagation()}
+                      title="ドラッグして並び替え"
+                    >
+                      <GripVertical size={16} />
+                    </div>
+                  )}
                   {/* Photo */}
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
                     {cast.photo ? (

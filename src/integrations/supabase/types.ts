@@ -47,6 +47,39 @@ export type Database = {
         }
         Relationships: []
       }
+      banners: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          image_url: string
+          is_active: boolean
+          link_url: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          image_url: string
+          is_active?: boolean
+          link_url?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          image_url?: string
+          is_active?: boolean
+          link_url?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       board_posts: {
         Row: {
           author_id: string | null
@@ -120,6 +153,7 @@ export type Database = {
           cup_size: string | null
           day_off_activities: string | null
           dispatch_status: string | null
+          display_order: number
           execution_date_end: string | null
           execution_date_start: string | null
           experience_years: number | null
@@ -169,6 +203,7 @@ export type Database = {
           cup_size?: string | null
           day_off_activities?: string | null
           dispatch_status?: string | null
+          display_order?: number
           execution_date_end?: string | null
           execution_date_start?: string | null
           experience_years?: number | null
@@ -218,6 +253,7 @@ export type Database = {
           cup_size?: string | null
           day_off_activities?: string | null
           dispatch_status?: string | null
+          display_order?: number
           execution_date_end?: string | null
           execution_date_start?: string | null
           experience_years?: number | null

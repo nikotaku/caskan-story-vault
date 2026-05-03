@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BannerManagement } from "@/components/BannerManagement";
 
 interface ShopSettings {
   id: string;
@@ -243,6 +244,8 @@ export default function Settings() {
                 設定情報が見つかりません
               </div>
             )}
+
+            {isAdmin && <BannerManagement />}
           </div>
         </main>
       </div>

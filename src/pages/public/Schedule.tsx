@@ -38,16 +38,34 @@ interface Reservation {
   duration: number;
 }
 
+interface Banner {
+  id: string;
+  title: string | null;
+  image_url: string;
+  link_url: string | null;
+}
+
 const Schedule = () => {
   const navigate = useNavigate();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   useEffect(() => {
     document.title = "全力エステ - スケジュール";
+    fetchBanners();
   }, []);
+
+  const fetchBanners = async () => {
+    const { data } = await supabase
+      .from("banners")
+      .select("id,title,image_url,link_url")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true });
+    if (data) setBanners(data as Banner[]);
+  };
 
   useEffect(() => {
     fetchData();
@@ -118,6 +136,30 @@ const Schedule = () => {
         </div>
       </div>
 
+      {/* Banners */}
+      {banners.length > 0 && (
+        <div className="container mx-auto px-4 pt-6">
+          <div className="max-w-6xl mx-auto grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {banners.map((b) => {
+              const inner = (
+                <img
+                  src={b.image_url}
+                  alt={b.title || "banner"}
+                  className="w-full h-auto rounded-lg shadow-md hover:shadow-xl transition-shadow"
+                  loading="lazy"
+                />
+              );
+              return b.link_url ? (
+                <a key={b.id} href={b.link_url} target="_blank" rel="noopener noreferrer" className="block">
+                  {inner}
+                </a>
+              ) : (
+                <div key={b.id}>{inner}</div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <main className="container py-8 px-4">
         <div className="max-w-6xl mx-auto">
           {/* View Toggle */}
