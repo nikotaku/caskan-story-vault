@@ -243,6 +243,8 @@ export default function Settings() {
                 設定情報が見つかりません
               </div>
             )}
+
+            {isAdmin && <BannerManagement />}
           </div>
         </main>
       </div>
