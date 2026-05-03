@@ -1368,9 +1368,22 @@ export default function Staff() {
               {filteredCasts.map((cast) => (
                 <div
                   key={cast.id}
+                  draggable={isAdmin}
+                  onDragStart={() => { dragCastId.current = cast.id; }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleDropCast(cast.id)}
                   className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
                   onClick={() => handleEditCast(cast)}
                 >
+                  {isAdmin && (
+                    <div
+                      className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                      onClick={(e) => e.stopPropagation()}
+                      title="ドラッグして並び替え"
+                    >
+                      <GripVertical size={16} />
+                    </div>
+                  )}
                   {/* Photo */}
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
                     {cast.photo ? (
