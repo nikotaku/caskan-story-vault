@@ -453,6 +453,29 @@ export default function Staff() {
     }
   };
 
+  const handleDropCast = async (targetId: string) => {
+    if (!isAdmin || !dragCastId.current || dragCastId.current === targetId) return;
+    const fromIdx = casts.findIndex(c => c.id === dragCastId.current);
+    const toIdx = casts.findIndex(c => c.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const reordered = [...casts];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setCasts(reordered);
+    dragCastId.current = null;
+    try {
+      await Promise.all(
+        reordered.map((c, i) =>
+          supabase.from('casts').update({ display_order: i + 1 }).eq('id', c.id)
+        )
+      );
+    } catch (e) {
+      console.error('reorder failed', e);
+      toast({ title: '並び替えに失敗しました', variant: 'destructive' });
+      fetchCasts();
+    }
+  };
+
   const generateAccessToken = async (castId: string) => {
     if (!isAdmin) {
       toast({
