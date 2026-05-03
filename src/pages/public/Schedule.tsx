@@ -55,7 +55,17 @@ const Schedule = () => {
 
   useEffect(() => {
     document.title = "全力エステ - スケジュール";
+    fetchBanners();
   }, []);
+
+  const fetchBanners = async () => {
+    const { data } = await supabase
+      .from("banners")
+      .select("id,title,image_url,link_url")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true });
+    if (data) setBanners(data as Banner[]);
+  };
 
   useEffect(() => {
     fetchData();
