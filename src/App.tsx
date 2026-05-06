@@ -44,7 +44,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Public Pages */}
-          <Route path="/" element={<PublicSchedule />} />
+          <Route path="/" element={<Top />} />
+          <Route path="/schedule" element={<PublicSchedule />} />
           <Route path="/casts" element={<PublicCasts />} />
           <Route path="/casts/:id" element={<PublicCastDetail />} />
           <Route path="/pricing" element={<PublicPricing />} />
