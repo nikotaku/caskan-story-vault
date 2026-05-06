@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import TherapistPortal from "./pages/TherapistPortal";
 import TherapistShiftSubmission from "./pages/TherapistShiftSubmission";
 import PublicSchedule from "./pages/public/Schedule";
+import Top from "./pages/public/Top";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
 import PublicPricing from "./pages/public/Pricing";
