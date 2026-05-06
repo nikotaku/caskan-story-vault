@@ -1,8 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
-import caskanLogo from "@/assets/caskan-logo.png";
+
+const SHOP_LOGO = "https://cdn2-caskan.com/caskan/img/shop_logo/1401_logo_1750237137.png";
 
 const navItems = [
-  { to: "/", label: "SCHEDULE", sub: "出勤情報" },
+  { to: "/", label: "TOP", sub: "トップ" },
+  { to: "/schedule", label: "SCHEDULE", sub: "出勤情報" },
   { to: "/casts", label: "THERAPIST", sub: "セラピスト" },
   { to: "/system", label: "SYSTEM", sub: "料金システム" },
   { to: "/access", label: "ACCESS", sub: "アクセス" },
