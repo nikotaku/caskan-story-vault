@@ -22,21 +22,27 @@ export const PublicNavigation = () => {
       <div className="bg-[#d4b5a8] text-white py-2 px-4 text-sm">
         <div className="container mx-auto flex justify-center items-center gap-4">
           <span>12:00〜26:00(24:40最終受付)</span>
-          <a href="tel:07090941854" className="hover:opacity-80">
-            07090941854
+          <a href="tel:09081264042" className="hover:opacity-80">
+            09081264042
           </a>
         </div>
       </div>
 
-      {/* Logo Header */}
-      <div className="bg-white py-6 border-b border-[#e5d5cc]">
-        <div className="container mx-auto text-center">
+      {/* Logo Header - 公式と同じ大きな金色ロゴ */}
+      <div
+        className="py-10 md:py-14 border-b border-[#e5d5cc]"
+        style={{
+          background:
+            "linear-gradient(135deg, #f5e1d8 0%, #efd0c2 40%, #f5e1d8 100%)",
+        }}
+      >
+        <div className="container mx-auto text-center px-4">
           <Link to="/">
             <img
-              src={caskanLogo}
-              alt="全力エステ"
-              className="h-20 md:h-28 mx-auto object-contain"
-              style={{ mixBlendMode: "multiply" }}
+              src={SHOP_LOGO}
+              alt="全力エステ 仙台"
+              className="h-24 md:h-40 mx-auto object-contain"
+              loading="eager"
             />
           </Link>
         </div>
