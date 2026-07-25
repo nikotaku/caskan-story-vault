@@ -55,6 +55,7 @@ interface Reservation {
   nomination_type: string | null;
   price: number;
   discount: number | null;
+  discount_ids: string[] | null;
   options: string[] | null;
   payment_method: string | null;
   payment_fee: number | null;
@@ -302,6 +303,19 @@ export default function Schedule() {
     ? `https://${adminStore.custom_domain}`
     : "https://zenryokuesthe.com";
 
+  // クーポン案内SMS用の店舗公式LINE URL（store_info から自店舗分を取得）
+  const [storeLineUrl, setStoreLineUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!adminStore?.id) return;
+    supabase
+      .from("store_info" as any)
+      .select("line_url")
+      .eq("store_id", adminStore.id)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setStoreLineUrl((data as any)?.line_url ?? null));
+  }, [adminStore?.id]);
+
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
   }, [user, authLoading]);
@@ -542,6 +556,12 @@ export default function Schedule() {
       : 0;
     const discountAmount = d.discount ?? 0;
 
+    // 「総額10,000円クーポン(初回)」選択時はLINE追加の案内を追記する
+    const needsLineCouponNote = (d.discount_ids ?? []).some((discId) => {
+      const disc = discounts.find((x) => x.id === discId);
+      return !!disc && disc.name.includes("総額10,000円クーポン");
+    });
+
     return [
       `${d.customer_name} 様`,
       `ご予約ありがとうございます。`,
@@ -564,6 +584,9 @@ export default function Schedule() {
       `決済手数料：${fee.toLocaleString()}円`,
       `総額：${grandTotal.toLocaleString()}円`,
       ...(payLink ? [``, `▼${paySetting?.payment_method ?? "カード"}決済はこちら`, payLink] : []),
+      ...(needsLineCouponNote
+        ? [``, `クーポン受け取り用に下記のLINEを追加お願いいたします。`, ...(storeLineUrl ? [storeLineUrl] : [])]
+        : []),
       roomSmsText
         ? `\n${roomSmsText}${roomMapUrl ? `\n\n📍${roomMapUrl}` : ""}`
         : roomAddress
