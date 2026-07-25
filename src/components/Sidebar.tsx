@@ -16,6 +16,7 @@ import {
   Images,
   PhoneCall,
   Megaphone,
+  Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -72,6 +73,11 @@ const menuItems: MenuItem[] = [
       { href: "/hp/sns-links", label: "店舗SNSリンク" },
       { href: "/hp/recommended-menu", label: "おすすめメニュー" },
     ],
+  },
+  {
+    href: "/sales/daily-sales",
+    label: "日別精算",
+    icon: Calculator,
   },
   {
     href: "/sales",
