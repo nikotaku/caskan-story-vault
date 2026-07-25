@@ -731,18 +731,13 @@ export default function Schedule() {
       if (editFormData.nomination_type && editFormData.nomination_type !== "none") {
         subtotal += nominationRates.find((r) => r.nomination_type === editFormData.nomination_type)?.customer_price ?? 0;
       }
-      let discountAmt = 0;
-      for (const discId of (editFormData.discount_ids ?? [])) {
-        const d = discounts.find((x) => x.id === discId);
-        if (d) {
-          discountAmt += d.discount_type === "percentage"
-            ? Math.round((subtotal * d.discount_value) / 100)
-            : d.discount_value;
-        }
-      }
-      discountAmt = Math.min(discountAmt, subtotal);
+      // 割引はフォーム側（ReservationForm）がマスタ割引＋自由割引を合算して
+      // editFormData.discount に同期済み。ここで discount_ids だけから再計算すると
+      // 自由割引（クーポン等の任意金額）が消えてしまうため、フォームの合計値を採用する。
+      const formDiscount = Math.max(0, Number(editFormData.discount ?? 0));
+      const discountAmt = subtotal > 0 ? Math.min(formDiscount, subtotal) : formDiscount;
       const computedPrice = subtotal > 0 ? subtotal - discountAmt : Number(editFormData.price);
-      const computedDiscount = subtotal > 0 ? discountAmt : Number(editFormData.discount ?? 0);
+      const computedDiscount = discountAmt;
       const courseName = `${editFormData.course_type} ${dur}分`;
 
       const { error } = await supabase.from("reservations").update({
