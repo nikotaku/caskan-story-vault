@@ -1,5 +1,10 @@
 {
   "rewrites": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "(www\\.)?enka-salon\\.jp" }],
+      "destination": "/api/spa"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
