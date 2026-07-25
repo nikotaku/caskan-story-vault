@@ -25,13 +25,27 @@ export function otherStore(currentId: string): StoreDef | null {
   return STORE_DEFS.find((s) => s.id !== currentId) ?? null;
 }
 
-/** 相手店舗のアカウントへ再ログインしてリロード。パスワードが無ければ /login へ誘導。 */
-export async function switchToStore(target: StoreDef): Promise<{ ok: boolean; needLogin?: boolean; error?: string }> {
-  const pw = (() => { try { return sessionStorage.getItem("admin_pw"); } catch { return null; } })();
+/**
+ * 相手店舗のアカウントへ再ログインしてリロード。
+ * パスワードは引数優先、無ければ sessionStorage の保持分を使う。
+ * どちらも無い場合は needLogin を返し、呼び出し側でパスワード入力ダイアログを出す。
+ */
+export async function switchToStore(
+  target: StoreDef,
+  password?: string,
+): Promise<{ ok: boolean; needLogin?: boolean; error?: string }> {
+  const pw = password || (() => { try { return sessionStorage.getItem("admin_pw"); } catch { return null; } })();
   if (!pw) return { ok: false, needLogin: true };
 
-  localStorage.setItem("current_store_id", target.id);
   const { error } = await supabase.auth.signInWithPassword({ email: target.email, password: pw });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    const msg = error.message.includes("Invalid login credentials")
+      ? "パスワードが正しくありません"
+      : error.message;
+    return { ok: false, error: msg };
+  }
+  // 成功時のみ保存（次回以降はダイアログなしで切り替え可能に）
+  try { sessionStorage.setItem("admin_pw", pw); } catch { /* noop */ }
+  localStorage.setItem("current_store_id", target.id);
   return { ok: true };
 }

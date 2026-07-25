@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { Menu, User, LogOut, Loader2, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useToast } from "@/hooks/use-toast";
 import { CtiCallPopup } from "@/components/CtiCallPopup";
 import caskanLogo from "@/assets/caskan-logo.png";
 import { STORE_DEFS, otherStore, switchToStore, ZENRYOKU_STORE_ID } from "@/lib/storeSwitch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,15 +41,19 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
   const target = otherStore(currentStoreId);
   const canSwitch = STORE_DEFS.some((s) => s.id === currentStoreId) && !!target;
 
-  const handleSwitchStore = async () => {
+  const [pwDialogOpen, setPwDialogOpen] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+
+  const doSwitch = async (password?: string) => {
     if (!target || switching) return;
     setSwitching(true);
     toast({ title: `${target.name}に切替中…` });
-    const res = await switchToStore(target);
+    const res = await switchToStore(target, password);
     if (res.needLogin) {
+      // パスワード未保持（この機能導入前からのログイン・新規タブなど）→ その場で入力してもらう
       setSwitching(false);
-      toast({ title: "再ログインが必要です", description: "ログイン画面へ移動します" });
-      window.location.href = "/login";
+      setPwInput("");
+      setPwDialogOpen(true);
       return;
     }
     if (!res.ok) {
@@ -52,6 +63,15 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
     }
     // RLSでデータを店舗別に分離するため、リロードして全ページを再取得
     window.location.href = "/dashboard";
+  };
+
+  const handleSwitchStore = () => doSwitch();
+
+  const handlePwSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pwInput) return;
+    setPwDialogOpen(false);
+    await doSwitch(pwInput);
   };
 
   return (
@@ -135,6 +155,34 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
           )}
         </div>
       </div>
+      {/* 店舗切替用パスワード入力（sessionStorage 未保持時のみ） */}
+      <Dialog open={pwDialogOpen} onOpenChange={setPwDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{target?.name}に切り替え</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePwSubmit} className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              管理パスワードを入力してください（次回からは入力不要です）
+            </p>
+            <Input
+              type="password"
+              placeholder="パスワード"
+              value={pwInput}
+              onChange={(e) => setPwInput(e.target.value)}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setPwDialogOpen(false)}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={!pwInput}>
+                切り替える
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
       {/* CTI着信ポップ（全管理画面共通） */}
       <CtiCallPopup />
     </header>
