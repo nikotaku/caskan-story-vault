@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { driveImgUrl } from "@/lib/drive";
+import { useStore } from "@/hooks/useStore";
 import { format, addDays, startOfDay } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Clock } from "lucide-react";
@@ -31,12 +32,14 @@ export function WeeklyScheduleWidget() {
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
+  const { storeId, loading: storeLoading } = useStore();
 
   const days = Array.from({ length: DAYS }, (_, i) => addDays(today, i));
 
   useEffect(() => {
+    if (storeLoading) return;
     fetchShifts();
-  }, [selectedDate]);
+  }, [selectedDate, storeLoading, storeId]);
 
   const fetchShifts = async () => {
     setLoading(true);
@@ -45,6 +48,7 @@ export function WeeklyScheduleWidget() {
       .from("shifts")
       .select("id,cast_id,start_time,end_time,casts(id,name,photo,age,height,cup_size,bust,waist,hip)")
       .eq("shift_date", dateStr)
+      .eq("store_id", storeId)
       .order("start_time", { ascending: true });
 
     // deduplicate by cast_id, filter hidden
