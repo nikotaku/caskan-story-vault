@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, Send, Loader2, CheckCircle, XCircle, Clock, Link2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Send, Loader2, CheckCircle, XCircle, Clock, Link2, ChevronDown, ChevronUp, Copy, Check, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 interface Cast { id: string; name: string; }
@@ -57,6 +57,10 @@ export default function CastPostManagement() {
   // 連携ステータス（cast_id -> 設定済みサイトの集合）
   const [credsByCast, setCredsByCast] = useState<Record<string, Set<string>>>({});
   const [showStatus, setShowStatus] = useState(true);
+  // エスたま投稿用パネルの開閉・エスたま未投稿のみ表示
+  const [openEsutama, setOpenEsutama] = useState<string | null>(null);
+  const [onlyEsutamaPending, setOnlyEsutamaPending] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -87,6 +91,27 @@ export default function CastPostManagement() {
       .limit(100);
     setPosts((data || []) as Post[]);
     setLoading(false);
+  };
+
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch {
+      toast.error("コピーに失敗しました");
+    }
+  };
+
+  // エスたまの投稿ステータスを手動で切り替える（Claude for Chrome／手作業で投稿した後に印を付ける）
+  const setEsutamaStatus = async (post: Post, status: "posted" | "pending") => {
+    const { error } = await supabase
+      .from("cast_posts")
+      .update({ esutama_status: status })
+      .eq("id", post.id);
+    if (error) { toast.error("更新に失敗しました"); return; }
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, esutama_status: status } : p)));
+    toast.success(status === "posted" ? "エスたま投稿済みにしました" : "エスたま未投稿に戻しました");
   };
 
   const handleSubmit = async () => {
@@ -178,14 +203,32 @@ export default function CastPostManagement() {
             )}
           </div>
 
+          {/* エスたま未投稿フィルタ */}
+          {posts.length > 0 && (
+            <div className="flex items-center justify-end mb-2">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={onlyEsutamaPending}
+                  onChange={(e) => setOnlyEsutamaPending(e.target.checked)}
+                />
+                エスたま未投稿のみ表示
+              </label>
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-12 text-muted-foreground">読み込み中...</div>
           ) : posts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">投稿がありません</div>
           ) : (
             <div className="space-y-2">
-              {posts.map(post => {
+              {posts
+                .filter((p) => !onlyEsutamaPending || (p.esutama_status !== "posted" && p.esutama_status !== "skipped"))
+                .map(post => {
                 const s = STATUS_BADGE[post.status] ?? STATUS_BADGE.draft;
+                const esutamaDone = post.esutama_status === "posted";
+                const isOpen = openEsutama === post.id;
                 return (
                   <div key={post.id} className="border rounded-lg p-3 bg-card">
                     <div className="flex items-start justify-between gap-2">
@@ -219,6 +262,92 @@ export default function CastPostManagement() {
                         {post.esutama_error && ` エスたま: ${post.esutama_error}`}
                       </p>
                     )}
+
+                    {/* エスたま投稿用パネル（Claude for Chrome／手作業で貼り付ける用） */}
+                    <div className="mt-2 border-t pt-2">
+                      <button
+                        onClick={() => setOpenEsutama(isOpen ? null : post.id)}
+                        className="w-full flex items-center justify-between text-xs font-medium"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className={esutamaDone ? "text-green-600" : "text-yellow-600"}>
+                            {esutamaDone ? <CheckCircle size={13} /> : <Clock size={13} />}
+                          </span>
+                          エスたま投稿用（コピー＆貼り付け）
+                          {esutamaDone && <span className="text-green-600">投稿済み</span>}
+                        </span>
+                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+
+                      {isOpen && (
+                        <div className="mt-2 space-y-2 bg-muted/40 rounded-md p-2.5">
+                          {/* タイトル */}
+                          {post.title && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] text-muted-foreground w-10 shrink-0 pt-1">タイトル</span>
+                              <p className="flex-1 text-xs break-words">{post.title}</p>
+                              <Button size="sm" variant="outline" className="h-6 px-2 shrink-0"
+                                onClick={() => copyText(`t-${post.id}`, post.title || "")}>
+                                {copiedKey === `t-${post.id}` ? <Check size={11} /> : <Copy size={11} />}
+                              </Button>
+                            </div>
+                          )}
+                          {/* 本文 */}
+                          <div className="flex items-start gap-2">
+                            <span className="text-[10px] text-muted-foreground w-10 shrink-0 pt-1">本文</span>
+                            <p className="flex-1 text-xs whitespace-pre-wrap break-words">{post.body}</p>
+                            <Button size="sm" variant="outline" className="h-6 px-2 shrink-0"
+                              onClick={() => copyText(`b-${post.id}`, post.body)}>
+                              {copiedKey === `b-${post.id}` ? <Check size={11} /> : <Copy size={11} />}
+                            </Button>
+                          </div>
+                          {/* 画像 */}
+                          {post.image_urls && post.image_urls.length > 0 && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] text-muted-foreground w-10 shrink-0 pt-1">画像</span>
+                              <div className="flex-1 flex flex-wrap gap-1.5">
+                                {post.image_urls.map((url, i) => (
+                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] text-primary underline">
+                                    <ImageIcon size={11} />画像{i + 1}
+                                  </a>
+                                ))}
+                              </div>
+                              <Button size="sm" variant="outline" className="h-6 px-2 shrink-0"
+                                onClick={() => copyText(`i-${post.id}`, (post.image_urls || []).join("\n"))}>
+                                {copiedKey === `i-${post.id}` ? <Check size={11} /> : <Copy size={11} />}
+                              </Button>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <a
+                              href="https://estama.jp/admin/tamathera/therapist/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-primary underline"
+                            >
+                              エスたま管理画面を開く ↗
+                            </a>
+                            <span className="flex-1" />
+                            {esutamaDone ? (
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground"
+                                onClick={() => setEsutamaStatus(post, "pending")}>
+                                未投稿に戻す
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="h-7 text-xs"
+                                onClick={() => setEsutamaStatus(post, "posted")}>
+                                <Check size={12} className="mr-1" />エスたま投稿済みにする
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            ※「エスたま管理画面を開く」→対象セラピストの「本人の代わりにログイン」→写メ日記に上記を貼り付け。投稿できたら「投稿済みにする」を押してください。
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
