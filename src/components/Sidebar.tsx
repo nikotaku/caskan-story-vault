@@ -17,6 +17,7 @@ import {
   PhoneCall,
   Megaphone,
   Calculator,
+  CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -93,6 +94,11 @@ const menuItems: MenuItem[] = [
     href: "/marketing/media",
     label: "媒体攻略",
     icon: Megaphone,
+  },
+  {
+    href: "/tasks",
+    label: "タスクリスト",
+    icon: CheckSquare,
   },
   {
     href: "/inquiry-stats",
