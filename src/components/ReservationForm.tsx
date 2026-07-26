@@ -954,31 +954,24 @@ export function ReservationForm({
               <span className="text-sm">{d.name}（{d.discount_type === "percentage" ? `-${d.discount_value}%` : `-¥${d.discount_value.toLocaleString()}`}）</span>
             </label>
           ))}
-          {/* 自由入力の割引（クーポン等の任意金額） */}
-          <div className="flex items-center gap-3 p-2 border rounded-lg">
-            <span className="text-sm shrink-0">自由割引</span>
-            <div className="flex items-center gap-1.5 flex-1">
-              <span className="text-sm text-muted-foreground">-¥</span>
-              <Input
-                type="number"
-                min={0}
-                step={100}
-                value={customDiscount === 0 ? "" : customDiscount}
-                onChange={(e) => setCustomDiscount(Math.max(0, parseInt(e.target.value) || 0))}
-                placeholder="0"
-                className="h-8 max-w-[140px]"
-              />
-              {customDiscount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setCustomDiscount(0)}
-                  className="text-xs text-muted-foreground hover:text-destructive ml-1"
-                >
-                  クリア
-                </button>
-              )}
+          {/* 割引額（ラジオ選択：なし / ¥1,000〜¥5,000） */}
+          <div className="p-2 border rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm">割引額</span>
+              <span className="text-[10px] text-muted-foreground">クーポン等の値引き</span>
             </div>
-            <span className="text-xs text-muted-foreground shrink-0">クーポン等の任意金額</span>
+            <RadioGroup
+              value={String(customDiscount)}
+              onValueChange={(v) => setCustomDiscount(Number(v))}
+              className="flex flex-wrap gap-x-5 gap-y-2"
+            >
+              {[0, 1000, 2000, 3000, 4000, 5000].map((amt) => (
+                <label key={amt} htmlFor={`disc-${amt}`} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <RadioGroupItem value={String(amt)} id={`disc-${amt}`} />
+                  {amt === 0 ? "なし" : `-¥${amt.toLocaleString()}`}
+                </label>
+              ))}
+            </RadioGroup>
           </div>
         </div>
       </div>
