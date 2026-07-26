@@ -365,14 +365,12 @@ const CastDetail = () => {
 
             {/* ── CTA buttons ── */}
             <div className="px-5 py-4 flex flex-col gap-3 border-b border-[var(--pub-border,#3a2f1c)]">
-              {/* 電話で予約する → 写メ日記を見る（このセラピストの写メ日記へ） */}
-              {(cast.blog_url || cast.o2_url) && (
-                <a href={cast.blog_url || cast.o2_url || "#"} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 py-3.5 rounded-lg text-white font-bold text-base transition-opacity hover:opacity-90"
-                  style={{ background: "linear-gradient(135deg, var(--pub-accent,#c6a15b), var(--pub-accent-deep,#a87c2a))" }}>
-                  <Camera size={17} />写メ日記を見る
-                </a>
-              )}
+              {/* 電話で予約する → 写メ日記を見る（サイト内の写メ日記ページへ） */}
+              <Link to={`/casts/${cast.id}/diary`}
+                className="flex items-center justify-center gap-2 py-3.5 rounded-lg text-white font-bold text-base transition-opacity hover:opacity-90"
+                style={{ background: "linear-gradient(135deg, var(--pub-accent,#c6a15b), var(--pub-accent-deep,#a87c2a))" }}>
+                <Camera size={17} />写メ日記を見る
+              </Link>
               <Link to="/booking"
                 className="flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--pub-card2,#221b12)]"
                 style={{ borderColor: "var(--pub-accent,#c6a15b)", color: "var(--pub-text,#f0e6d2)" }}>
