@@ -46,6 +46,7 @@ import PublicSchedule from "./pages/public/Schedule";
 import StoreTop from "./pages/public/StoreTop";
 import PublicCasts from "./pages/public/Casts";
 import PublicCastDetail from "./pages/public/CastDetail";
+import PublicCastDiary from "./pages/public/CastDiary";
 import PublicPricing from "./pages/public/Pricing";
 import PublicSystem from "./pages/public/System";
 import PublicAccess from "./pages/public/Access";
@@ -158,6 +159,7 @@ const App = () => {
           <Route path="/schedule" element={<PublicSchedule />} />
           <Route path="/casts" element={<PublicCasts />} />
           <Route path="/casts/:id" element={<PublicCastDetail />} />
+          <Route path="/casts/:id/diary" element={<PublicCastDiary />} />
           <Route path="/pricing" element={<PublicPricing />} />
           <Route path="/system" element={<PublicSystem />} />
           <Route path="/access" element={<PublicAccess />} />

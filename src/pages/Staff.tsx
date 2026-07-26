@@ -168,6 +168,7 @@ interface Cast {
   celebrity_like: string | null;
   uses_sns: boolean | null;
   blog_url: string | null;
+  estama_profile_url?: string | null;
   skebiy_url: string | null;
   instagram_url: string | null;
   custom_fields: Record<string, string> | null;
@@ -383,6 +384,29 @@ export default function Staff() {
     if (error) {
       toast({ title: "エラー", description: "レベルの更新に失敗しました", variant: "destructive" });
       fetchCasts();
+    }
+  };
+
+  // エステ魂プロフィールURLから写メ日記を取り込む
+  const [importingDiary, setImportingDiary] = useState(false);
+  const handleImportDiary = async () => {
+    if (!editingCast) return;
+    if (!editingCast.estama_profile_url) {
+      toast({ title: "エステ魂プロフィールURLを入力してください", variant: "destructive" });
+      return;
+    }
+    setImportingDiary(true);
+    try {
+      // 先にURLを保存（未保存でも取り込めるようにDBを更新）
+      await supabase.from("casts").update({ estama_profile_url: editingCast.estama_profile_url }).eq("id", editingCast.id);
+      const { data, error } = await supabase.functions.invoke("import-estama-diary", { body: { cast_id: editingCast.id } });
+      if (error || (data as any)?.error) {
+        toast({ title: "取り込みに失敗しました", description: (data as any)?.error ?? error?.message, variant: "destructive" });
+      } else {
+        toast({ title: `写メ日記を${(data as any)?.count ?? 0}件取り込みました` });
+      }
+    } finally {
+      setImportingDiary(false);
     }
   };
 
@@ -665,6 +689,7 @@ export default function Staff() {
         celebrity_like: editingCast.celebrity_like || null,
         uses_sns: editingCast.uses_sns || false,
         blog_url: editingCast.blog_url || null,
+        estama_profile_url: editingCast.estama_profile_url || null,
         skebiy_url: editingCast.skebiy_url || null,
         instagram_url: editingCast.instagram_url || null,
         profile_format: editingCast.profile_format || null,
@@ -2084,6 +2109,23 @@ export default function Staff() {
                       <div>
                         <Label>口コミ（O2）URL</Label>
                         <Input placeholder="https://..." value={editingCast.o2_url || ""} onChange={(e) => setEditingCast({...editingCast, o2_url: e.target.value})} />
+                      </div>
+
+                      {/* エステ魂 写メ日記 取り込み */}
+                      <div className="border rounded-lg p-4 space-y-2">
+                        <Label className="font-semibold">エステ魂 写メ日記</Label>
+                        <p className="text-xs text-muted-foreground">
+                          エステ魂のプロフィールページURLを設定して取り込むと、HPの「写メ日記を見る」に写真と本文が表示されます。
+                        </p>
+                        <Input
+                          placeholder="https://estama.jp/shop/●●/cast/●●/"
+                          value={editingCast.estama_profile_url || ""}
+                          onChange={(e) => setEditingCast({ ...editingCast, estama_profile_url: e.target.value })}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={handleImportDiary} disabled={importingDiary}>
+                          {importingDiary ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Camera className="h-3.5 w-3.5 mr-1.5" />}
+                          {importingDiary ? "取り込み中..." : "写メ日記を取り込む"}
+                        </Button>
                       </div>
 
                       {/* 02アカウント情報（ワンクリック共有） */}
