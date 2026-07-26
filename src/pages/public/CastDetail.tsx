@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
-import { ArrowLeft, Phone, Calendar, Star } from "lucide-react";
+import { ArrowLeft, Phone, Calendar, Star, Camera } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { driveImgUrl } from "@/lib/drive";
 import { useStoreContact } from "@/hooks/useStoreContact";
@@ -126,13 +126,21 @@ const CastDetail = () => {
       setProfile(profileRes.data ?? null);
       document.title = `${castRes.data.name} | ${store?.name ?? "全力エステ"}`;
 
-      // 口コミは担当セラピスト（この人）宛のお客様投稿のみ表示
-      const { data: revData } = await supabase
+      // 口コミは担当セラピスト（この人）宛のお客様投稿のみ表示。
+      // 担当名は短縮名（例「かずは」）で投稿されることがあるため、
+      // キャスト名（フルネーム）と空白除去のうえ部分一致で照合する。
+      const castKey = (castRes.data.name ?? "").replace(/\s/g, "");
+      const { data: allRev } = await supabase
         .from("customer_reviews")
         .select("id, rating, therapist_name, review_text, created_at")
         .eq("is_published", true)
-        .eq("therapist_name", castRes.data.name)
+        .eq("store_id", storeId)
         .order("created_at", { ascending: false });
+      const revData = (allRev ?? []).filter((r: any) => {
+        const t = (r.therapist_name ?? "").replace(/\s/g, "");
+        if (!t) return false;
+        return castKey === t || castKey.includes(t) || t.includes(castKey);
+      });
       setReviews((revData ?? []).map((r: any) => ({
         id: r.id,
         reviewer_name: "お客様",
@@ -363,11 +371,14 @@ const CastDetail = () => {
 
             {/* ── CTA buttons ── */}
             <div className="px-5 py-4 flex flex-col gap-3 border-b border-[var(--pub-border,#3a2f1c)]">
-              <a href={telHref}
-                className="flex items-center justify-center gap-2 py-3.5 rounded-lg text-white font-bold text-base transition-opacity hover:opacity-90"
-                style={{ background: "linear-gradient(135deg, var(--pub-accent,#c6a15b), var(--pub-accent-deep,#a87c2a))" }}>
-                <Phone size={17} />電話で予約する
-              </a>
+              {/* 電話で予約する → 写メ日記を見る（このセラピストの写メ日記へ） */}
+              {(cast.blog_url || cast.o2_url) && (
+                <a href={cast.blog_url || cast.o2_url || "#"} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 py-3.5 rounded-lg text-white font-bold text-base transition-opacity hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, var(--pub-accent,#c6a15b), var(--pub-accent-deep,#a87c2a))" }}>
+                  <Camera size={17} />写メ日記を見る
+                </a>
+              )}
               <Link to="/booking"
                 className="flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--pub-card2,#221b12)]"
                 style={{ borderColor: "var(--pub-accent,#c6a15b)", color: "var(--pub-text,#f0e6d2)" }}>
