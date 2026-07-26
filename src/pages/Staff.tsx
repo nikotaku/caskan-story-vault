@@ -150,6 +150,8 @@ interface Cast {
   dispatch_status: string | null;
   repeat_scheduled: boolean | null;
   is_visible: boolean;
+  estama_listed?: boolean | null;
+  esuran_listed?: boolean | null;
   display_order?: number;
   blood_type: string | null;
   height: number | null;
@@ -380,6 +382,17 @@ export default function Staff() {
     const { error } = await supabase.from('casts').update({ tags: newTags }).eq('id', castId);
     if (error) {
       toast({ title: "エラー", description: "レベルの更新に失敗しました", variant: "destructive" });
+      fetchCasts();
+    }
+  };
+
+  // 媒体掲載フラグ（エスたま / エスラン）のトグル。一覧から即切り替え。
+  const toggleListing = async (castId: string, field: "estama_listed" | "esuran_listed", next: boolean) => {
+    setCasts(prev => prev.map(c => c.id === castId ? { ...c, [field]: next } : c));
+    setEditingCast(prev => prev && prev.id === castId ? { ...prev, [field]: next } : prev);
+    const { error } = await supabase.from("casts").update({ [field]: next } as any).eq("id", castId);
+    if (error) {
+      toast({ title: "エラー", description: "掲載状況の更新に失敗しました", variant: "destructive" });
       fetchCasts();
     }
   };
@@ -2351,6 +2364,27 @@ export default function Staff() {
                       )}
                     </div>
                   </div>
+
+                  {/* 媒体掲載チェック（タップで切替・一目で掲載状況が分かる） */}
+                  {([
+                    { field: "estama_listed" as const, label: "エスたま", on: !!cast.estama_listed },
+                    { field: "esuran_listed" as const, label: "エスラン", on: !!cast.esuran_listed },
+                  ]).map((m) => (
+                    <button
+                      key={m.field}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleListing(cast.id, m.field, !m.on); }}
+                      title={m.on ? `${m.label}に掲載済み（タップで解除）` : `${m.label}に未掲載（タップで掲載済みに）`}
+                      className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-full border font-semibold transition-colors ${
+                        m.on
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300"
+                          : "bg-muted text-muted-foreground border-transparent hover:border-border"
+                      }`}
+                    >
+                      <span className={m.on ? "" : "opacity-40"}>{m.on ? "✅" : "⬜️"}</span>
+                      <span className="hidden sm:inline">{m.label}</span>
+                    </button>
+                  ))}
 
                   {/* 詳細へ */}
                   <ChevronRight size={16} className="flex-shrink-0 text-muted-foreground" />
