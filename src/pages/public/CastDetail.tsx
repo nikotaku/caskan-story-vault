@@ -311,12 +311,6 @@ const CastDetail = () => {
                       <span className="text-sm font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{avgRating}</span>
                     </div>
                   )}
-                  {cast.status !== "offline" && (
-                    <span className="text-sm font-bold px-4 py-1.5 rounded-full text-white"
-                      style={{ background: status.color }}>
-                      {status.text}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
