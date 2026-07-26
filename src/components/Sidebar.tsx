@@ -18,6 +18,7 @@ import {
   Megaphone,
   Calculator,
   CheckSquare,
+  BookUser,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -99,6 +100,11 @@ const menuItems: MenuItem[] = [
     href: "/tasks",
     label: "タスクリスト",
     icon: CheckSquare,
+  },
+  {
+    href: "/bios",
+    label: "bio保存書",
+    icon: BookUser,
   },
   {
     href: "/inquiry-stats",
