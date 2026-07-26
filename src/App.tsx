@@ -107,6 +107,7 @@ import ImageStock from "./pages/ImageStock";
 import MediaStrategy from "./pages/MediaStrategy";
 import InquiryStats from "./pages/InquiryStats";
 import Tasks from "./pages/Tasks";
+import Bios from "./pages/Bios";
 import CtiCalls from "./pages/CtiCalls";
 import CustomerDetail from "./pages/CustomerDetail";
 import CastPostManagement from "./pages/CastPostManagement";
@@ -254,6 +255,7 @@ const App = () => {
           <Route path="/therapist/:token/posts" element={<TherapistPostPage />} />
           <Route path="/post-management" element={<CastPostManagement />} />
           <Route path="/tasks" element={<Tasks />} />
+          <Route path="/bios" element={<Bios />} />
           <Route path="/panel-manual" element={<PanelPhotoManual />} />
           <Route path="/service-manual" element={<CustomerServiceManual />} />
           <Route path="/zenryoku-book" element={<ZenryokuBookManual />} />
