@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy } from "lucide-react";
+import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import backRatesImage from "@/assets/back-rates-table.jpg";
@@ -54,6 +54,7 @@ interface ShiftRow {
 interface Room {
   id: string;
   name: string;
+  address: string | null;
   entry_flow: string | null;
   key_info: string | null;
   key_number: string | null;
@@ -249,7 +250,7 @@ export default function TherapistPortal() {
   }, [view, year, month, cast]);
 
   useEffect(() => {
-    supabase.from("rooms").select("id, name, entry_flow, key_info, key_number, entry_photos").eq("is_active", true).order("name")
+    supabase.from("rooms").select("id, name, address, entry_flow, key_info, key_number, entry_photos").eq("is_active", true).order("name")
       .then(({ data }) => { if (data) setRooms(data as Room[]); });
   }, []);
 
@@ -468,6 +469,40 @@ export default function TherapistPortal() {
         {/* ── MENU ── */}
         {view === "menu" && (
           <div className="space-y-4">
+
+          {/* 本日の出勤ルーム（女の子が今日どのルームか一目で分かるように） */}
+          {(() => {
+            const todayStr = format(now, "yyyy-MM-dd");
+            const todayShift = menuShiftRows.find(
+              (s) => s.shift_date === todayStr && s.approval_status !== "rejected" && s.room
+            );
+            if (!todayShift || !todayShift.room) return null;
+            const roomInfo = rooms.find((r) => r.name === todayShift.room);
+            const area = roomInfo?.address || null;
+            return (
+              <div className="rounded-xl border-2 border-primary/40 bg-primary/5 overflow-hidden">
+                <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+                  <DoorOpen size={16} className="text-primary" />
+                  <span className="font-bold text-sm">本日（{format(now, "M/d", { locale: ja })}）の出勤</span>
+                </div>
+                <div className="px-4 pb-3">
+                  <p className="text-xl font-bold text-primary leading-tight">
+                    {todayShift.room}
+                    {area && <span className="text-sm font-medium text-foreground ml-1">（{area}）</span>}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {toExtTime(todayShift.start_time)}〜{toExtTime(todayShift.end_time)}
+                  </p>
+                  <button
+                    onClick={() => setView("entry")}
+                    className="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-primary"
+                  >
+                    入室方法を見る <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 本日の予約タイムライン（ポータルの最上部・メイン） */}
           <div className="rounded-xl border-2 border-primary/30 bg-card overflow-hidden">
