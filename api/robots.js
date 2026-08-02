@@ -5,7 +5,7 @@ export default function handler(req, res) {
   const isEnka = site === "enka" || siteBrand === "enka" || host.includes("enka-salon.jp");
   const baseUrl = isEnka ? "https://enka-salon.jp" : "https://zenryokuesthe.com";
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
+  res.setHeader("Cache-Control", "private, no-store");
   res.status(200).send(`User-agent: *
 Allow: /
 
