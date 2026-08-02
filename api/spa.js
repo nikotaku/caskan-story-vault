@@ -6,9 +6,9 @@
  */
 
 const ENKA = {
-  title: "艶華 -えんか- | 仙台メンズエステ",
+  title: "艶華 -えんか-｜仙台・宮城のメンズエステ",
   description:
-    "仙台の完全個室プライベートサロン【艶華 -えんか-】公式サイト。選び抜かれたセラピストによる上質な癒しのひとときをご提供いたします。",
+    "仙台・宮城のメンズエステ、完全個室プライベートサロン【艶華 -えんか-】公式サイト。出勤情報、料金、キャンペーン、Web予約をご案内します。",
   author: "艶華",
   image:
     "https://imrxzkivwrkqbhqfbbes.supabase.co/storage/v1/object/public/cast-photos/image-stock/1784811500002_enka-hero-open.jpg",
@@ -24,6 +24,7 @@ export default async function handler(req, res) {
     const resp = await fetch(`${origin}/index.html`);
     let html = await resp.text();
 
+    const canonical = `https://enka-salon.jp/`;
     html = html
       .replace(/<html lang="[^"]*"/, '<html lang="ja"')
       .replace(/<title>[\s\S]*?<\/title>/, `<title>${ENKA.title}</title>`)
@@ -33,6 +34,9 @@ export default async function handler(req, res) {
       .replace(/(<meta name="twitter:title" content=")[^"]*(")/, `$1${esc(ENKA.title)}$2`)
       .replace(/(<meta property="og:description" content=")[^"]*(")/, `$1${esc(ENKA.description)}$2`)
       .replace(/(<meta name="twitter:description" content=")[^"]*(")/, `$1${esc(ENKA.description)}$2`)
+      .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${canonical}$2`)
+      .replace(/(<meta property="og:site_name" content=")[^"]*(")/, `$1${esc(ENKA.author)}$2`)
+      .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${canonical}$2`)
       .replace(/(<meta property="og:image" content=")[^"]*(")/, `$1${ENKA.image}$2`)
       .replace(/(<meta name="twitter:image" content=")[^"]*(")/, `$1${ENKA.image}$2`)
       .replace(/<meta name="twitter:site" content="[^"]*"\s*\/?>/, "")
