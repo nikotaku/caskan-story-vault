@@ -1,5 +1,15 @@
 {
   "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "has": [{ "type": "host", "value": "(www\\.)?enka-salon\\.jp" }],
+      "destination": "/api/sitemap?site=enka"
+    },
+    {
+      "source": "/robots.txt",
+      "has": [{ "type": "host", "value": "(www\\.)?enka-salon\\.jp" }],
+      "destination": "/api/robots?site=enka"
+    },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/robots.txt", "destination": "/api/robots" },
     {
