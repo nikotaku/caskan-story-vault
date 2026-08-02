@@ -15,8 +15,10 @@ const escapeXml = (value) => value.replace(/[<>&'\"]/g, (character) => ({
 }[character]));
 
 export default function handler(req, res) {
+  const site = String(req.query?.site || "").toLowerCase();
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").toLowerCase();
-  const baseUrl = host.includes("enka-salon.jp") ? "https://enka-salon.jp" : "https://zenryokuesthe.com";
+  const isEnka = site === "enka" || host.includes("enka-salon.jp");
+  const baseUrl = isEnka ? "https://enka-salon.jp" : "https://zenryokuesthe.com";
   const lastModified = new Date().toISOString().slice(0, 10);
   const urls = ROUTES.map(([path, changefreq, priority]) => `  <url>
     <loc>${escapeXml(`${baseUrl}${path}`)}</loc>
