@@ -176,6 +176,26 @@ const EMPTY_MEDIA: Omit<MediaSetting, "id"> = {
   sort_order: 0,
 };
 
+const COUPON_OPTIONS = ["事前予約割", "紹介割"] as const;
+const COUPON_META_PATTERN = /\n?<!-- media-coupons:(.*?) -->/;
+
+function parseCoupons(memo: string | null) {
+  const encoded = memo?.match(COUPON_META_PATTERN)?.[1];
+  if (encoded === undefined) return [...COUPON_OPTIONS];
+  if (!encoded) return [];
+  return encoded.split(",").filter((coupon) => COUPON_OPTIONS.includes(coupon as typeof COUPON_OPTIONS[number]));
+}
+
+function visibleMemo(memo: string | null) {
+  return (memo ?? "").replace(COUPON_META_PATTERN, "").trimEnd();
+}
+
+function memoWithCoupons(memo: string | null, coupons: string[]) {
+  const text = visibleMemo(memo);
+  const metadata = `<!-- media-coupons:${coupons.join(",")} -->`;
+  return text ? `${text}\n${metadata}` : metadata;
+}
+
 function SettingRow({ label, description, value, onChange, textarea, mono, placeholder, children }: {
   label: string;
   description?: string;
@@ -226,12 +246,21 @@ function MediaCard({ media, onSaved, onDeleted }: {
   onSaved: () => void;
   onDeleted: () => void;
 }) {
-  const [draft, setDraft] = useState<MediaSetting>(media);
+  const [draft, setDraft] = useState<MediaSetting>({ ...media, memo: visibleMemo(media.memo) });
+  const [selectedCoupons, setSelectedCoupons] = useState<string[]>(() => parseCoupons(media.memo));
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(media);
+  const originalCoupons = parseCoupons(media.memo);
+  const dirty = JSON.stringify(draft) !== JSON.stringify({ ...media, memo: visibleMemo(media.memo) })
+    || JSON.stringify(selectedCoupons) !== JSON.stringify(originalCoupons);
 
   const set = (k: keyof MediaSetting) => (v: string) => setDraft({ ...draft, [k]: v });
+
+  const toggleCoupon = (coupon: string) => {
+    setSelectedCoupons((current) => current.includes(coupon)
+      ? current.filter((item) => item !== coupon)
+      : [...current, coupon]);
+  };
 
   const handleSave = async () => {
     if (!draft.media_name.trim()) { toast.error("媒体名を入力してください"); return; }
@@ -239,7 +268,7 @@ function MediaCard({ media, onSaved, onDeleted }: {
     const { id, ...payload } = draft;
     const { error } = await supabase
       .from("media_settings" as any)
-      .update({ ...payload, updated_at: new Date().toISOString() })
+      .update({ ...payload, memo: memoWithCoupons(payload.memo, selectedCoupons), updated_at: new Date().toISOString() })
       .eq("id", id);
     setSaving(false);
     if (error) { console.error(error); toast.error("保存に失敗しました"); return; }
@@ -267,6 +296,16 @@ function MediaCard({ media, onSaved, onDeleted }: {
           {draft.catch_copy && (
             <span className="text-xs text-muted-foreground truncate hidden sm:inline">｜{draft.catch_copy}</span>
           )}
+          <div className="hidden md:flex items-center gap-1 ml-1">
+            {selectedCoupons.map((coupon) => (
+              <span key={coupon} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                {coupon}
+              </span>
+            ))}
+            {selectedCoupons.length === 0 && (
+              <span className="text-[10px] text-muted-foreground">クーポン未設定</span>
+            )}
+          </div>
         </div>
         {open ? <ChevronUp size={16} className="shrink-0" /> : <ChevronDown size={16} className="shrink-0" />}
       </button>
@@ -302,6 +341,30 @@ function MediaCard({ media, onSaved, onDeleted }: {
                 <SettingRow label="ログインPW" description="媒体管理画面のパスワード" value={draft.login_password ?? ""} onChange={set("login_password")} mono />
                 <SettingRow label="店舗名表記" description="媒体上に掲載する店名" value={draft.shop_name ?? ""} onChange={set("shop_name")} />
                 <SettingRow label="掲載プラン" description="無料掲載・PR枠など" value={draft.plan ?? ""} onChange={set("plan")} placeholder="無料掲載／PR枠 など" />
+                <SettingRow label="クーポン一覧" description="この媒体に設定している割引" value="" onChange={() => {}}>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {COUPON_OPTIONS.map((coupon) => {
+                      const checked = selectedCoupons.includes(coupon);
+                      return (
+                        <label
+                          key={coupon}
+                          className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${checked ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-muted/40"}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleCoupon(coupon)}
+                            className="h-4 w-4 rounded border-muted-foreground/40 accent-primary"
+                          />
+                          <span className="text-sm font-medium">{coupon}</span>
+                          <span className={`ml-auto text-[11px] ${checked ? "text-primary" : "text-muted-foreground"}`}>
+                            {checked ? "設定済み" : "未設定"}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </SettingRow>
                 <SettingRow label="メインカラー" description="ページの基調色" value={draft.main_color ?? ""} onChange={set("main_color")}>
                   <div className="flex items-center gap-2">
               <input
