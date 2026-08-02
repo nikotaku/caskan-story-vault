@@ -71,8 +71,9 @@ async function buildNewsGrounding(sb: any, storeId: string, ymd: string): Promis
       const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
       for (const shift of shifts.slice(0, 20)) {
         const cast = castMap.get(shift.cast_id)!;
-        const date = new Date(`${shift.shift_date}T00:00:00+09:00`);
-        const dateLabel = `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
+        const [year, month, day] = String(shift.shift_date).split("-").map(Number);
+        const weekday = weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+        const dateLabel = `${month}/${day}(${weekday})`;
         const time = shift.start_time && shift.end_time
           ? ` ${String(shift.start_time).slice(0, 5)}〜${String(shift.end_time).slice(0, 5)}`
           : "";
