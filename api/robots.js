@@ -1,7 +1,8 @@
 export default function handler(req, res) {
   const site = String(req.query?.site || "").toLowerCase();
+  const siteBrand = String(req.headers["x-site-brand"] || "").toLowerCase();
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").toLowerCase();
-  const isEnka = site === "enka" || host.includes("enka-salon.jp");
+  const isEnka = site === "enka" || siteBrand === "enka" || host.includes("enka-salon.jp");
   const baseUrl = isEnka ? "https://enka-salon.jp" : "https://zenryokuesthe.com";
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
