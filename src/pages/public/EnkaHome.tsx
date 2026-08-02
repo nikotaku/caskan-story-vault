@@ -8,7 +8,7 @@ import { useStore } from "@/hooks/useStore";
 import { useStoreContact } from "@/hooks/useStoreContact";
 import { driveImgUrl } from "@/lib/drive";
 import { format } from "date-fns";
-import { Phone, Calendar, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { Phone, Calendar, ChevronDown, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -32,6 +32,25 @@ interface ShiftRow {
   casts: { id: string; name: string; photo: string | null; age: number | null } | null;
 }
 
+interface HpArticle {
+  id: string;
+  title: string;
+  content: string | null;
+  category: string;
+  created_at: string;
+  image_urls: string[] | null;
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  news: "ニュース",
+  coupon: "クーポン",
+  schedule: "出勤情報",
+  newstaff: "新人入店",
+  campaign: "キャンペーン",
+  tips: "ノウハウ",
+  other: "お知らせ",
+};
+
 const hhmm = (t: string) => t?.slice(0, 5) ?? "";
 
 export default function EnkaHome() {
@@ -45,8 +64,10 @@ export default function EnkaHome() {
   const [slide, setSlide] = useState(0);
   const [todayShifts, setTodayShifts] = useState<ShiftRow[]>([]);
   const [newFaces, setNewFaces] = useState<CastRow[]>([]);
+  const [articles, setArticles] = useState<HpArticle[]>([]);
+  const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
 
-  useEffect(() => { document.title = `${storeName}｜仙台メンズエステ`; }, [storeName]);
+  useEffect(() => { document.title = `${storeName}｜仙台・宮城のメンズエステ`; }, [storeName]);
 
   useEffect(() => {
     if (banners.length < 2) return;
@@ -86,6 +107,15 @@ export default function EnkaHome() {
       .order("join_date", { ascending: false })
       .limit(8)
       .then(({ data }) => setNewFaces((data ?? []) as CastRow[]));
+
+    supabase
+      .from("hp_articles")
+      .select("id, title, content, category, created_at, image_urls")
+      .eq("store_id", storeId)
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .then(({ data }) => setArticles((data ?? []) as HpArticle[]));
   }, [storeId]);
 
   const Heading = ({ en, ja }: { en: string; ja: string }) => (
@@ -185,7 +215,7 @@ export default function EnkaHome() {
 
       {/* ブランドライン */}
       <div className="text-center py-8 px-4">
-        <p className="text-xs tracking-[0.5em]" style={{ color: "var(--pub-text-muted,#a98496)" }}>SENDAI MEN'S ESTHE</p>
+        <p className="text-xs tracking-[0.28em]" style={{ color: "var(--pub-text-muted,#a98496)" }}>仙台・宮城のメンズエステ</p>
         <h1
           className="text-3xl md:text-4xl font-bold mt-2"
           style={{ color: "var(--pub-accent,#d4547a)", fontFamily: "'Noto Serif JP', serif", letterSpacing: "0.2em" }}
@@ -194,6 +224,60 @@ export default function EnkaHome() {
         </h1>
         <p className="text-sm mt-2" style={{ color: "var(--pub-text-mid,#dfc0cf)", letterSpacing: "0.3em" }}>{tagline}</p>
       </div>
+
+      {/* 毎日自動更新される店舗ニュース */}
+      {articles.length > 0 && (
+        <section className="px-4 py-8" style={{ backgroundColor: "var(--pub-card,#211320)" }}>
+          <div className="container mx-auto max-w-3xl">
+            <Heading en="NEWS" ja="艶華からのお知らせ" />
+            <div className="divide-y overflow-hidden rounded-xl border" style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "var(--pub-bg,#150a11)" }}>
+              {articles.map((article) => {
+                const expanded = expandedArticle === article.id;
+                return (
+                  <article key={article.id} className="px-4 py-3" style={{ borderColor: "var(--pub-border,#4a2740)" }}>
+                    <button
+                      type="button"
+                      className="flex w-full items-start gap-3 text-left"
+                      onClick={() => setExpandedArticle(expanded ? null : article.id)}
+                      aria-expanded={expanded}
+                    >
+                      <time className="shrink-0 pt-0.5 text-xs" style={{ color: "var(--pub-text-muted,#a98496)" }} dateTime={article.created_at}>
+                        {new Date(article.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" })}
+                      </time>
+                      <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px]" style={{ backgroundColor: "var(--pub-accent-a10,#d4547a1a)", color: "var(--pub-accent-light,#f2a0bc)" }}>
+                        {CATEGORY_LABEL[article.category] ?? "お知らせ"}
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm font-medium">{article.title}</span>
+                      <ChevronDown size={16} className={`mt-0.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} style={{ color: "var(--pub-text-muted,#a98496)" }} />
+                    </button>
+                    {expanded && (
+                      <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--pub-border,#4a2740)" }}>
+                        {article.image_urls && article.image_urls.length > 0 && (
+                          <div className="mb-4 flex gap-2 overflow-x-auto">
+                            {article.image_urls.map((url, index) => (
+                              <img key={url} src={url} alt={`${article.title} ${index + 1}`} loading="lazy" className="h-36 w-auto shrink-0 rounded-lg object-cover" />
+                            ))}
+                          </div>
+                        )}
+                        {article.content && (
+                          <div className="space-y-2 text-sm leading-relaxed" style={{ color: "var(--pub-text-mid,#dfc0cf)" }}>
+                            {article.content
+                              .replace(/^#{1,6}\s+/gm, "")
+                              .replace(/\*\*/g, "")
+                              .split(/\n+/)
+                              .filter(Boolean)
+                              .map((paragraph, index) => <p key={index}>{paragraph.replace(/^[-*]\s+/, "・")}</p>)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* 2. 本日の出勤 */}
       <section className="py-8 px-4">

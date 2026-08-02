@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: "/", label: "TOP", sub: "トップ", external: false },
   { to: "/schedule", label: "SCHEDULE", sub: "出勤情報", external: false },
   { to: "/casts", label: "THERAPIST", sub: "セラピスト", external: false },
+  { to: "/campaigns", label: "CAMPAIGN", sub: "キャンペーン", external: false },
   { to: "/voice", label: "VOICE", sub: "口コミ", external: false },
   { to: "/system", label: "SYSTEM", sub: "料金システム", external: false },
   { to: "/access", label: "ACCESS", sub: "アクセス", external: false },
@@ -210,7 +211,7 @@ const Top = () => {
               <Link className="btn btn-line" to="/casts">セラピスト一覧</Link>
             </div>
           </div>
-          <div className="loc">SENDAI ・ MEN'S RELAXATION</div>
+          <div className="loc">仙台・宮城のメンズエステ</div>
         </section>
 
         {/* 2枚目：理念 */}

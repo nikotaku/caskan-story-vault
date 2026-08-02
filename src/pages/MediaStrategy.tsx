@@ -247,20 +247,11 @@ function MediaCard({ media, onSaved, onDeleted }: {
   onDeleted: () => void;
 }) {
   const [draft, setDraft] = useState<MediaSetting>({ ...media, memo: visibleMemo(media.memo) });
-  const [selectedCoupons, setSelectedCoupons] = useState<string[]>(() => parseCoupons(media.memo));
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const originalCoupons = parseCoupons(media.memo);
-  const dirty = JSON.stringify(draft) !== JSON.stringify({ ...media, memo: visibleMemo(media.memo) })
-    || JSON.stringify(selectedCoupons) !== JSON.stringify(originalCoupons);
+  const dirty = JSON.stringify(draft) !== JSON.stringify({ ...media, memo: visibleMemo(media.memo) });
 
   const set = (k: keyof MediaSetting) => (v: string) => setDraft({ ...draft, [k]: v });
-
-  const toggleCoupon = (coupon: string) => {
-    setSelectedCoupons((current) => current.includes(coupon)
-      ? current.filter((item) => item !== coupon)
-      : [...current, coupon]);
-  };
 
   const handleSave = async () => {
     if (!draft.media_name.trim()) { toast.error("媒体名を入力してください"); return; }
@@ -268,7 +259,7 @@ function MediaCard({ media, onSaved, onDeleted }: {
     const { id, ...payload } = draft;
     const { error } = await supabase
       .from("media_settings" as any)
-      .update({ ...payload, memo: memoWithCoupons(payload.memo, selectedCoupons), updated_at: new Date().toISOString() })
+      .update({ ...payload, memo: memoWithCoupons(payload.memo, parseCoupons(media.memo)), updated_at: new Date().toISOString() })
       .eq("id", id);
     setSaving(false);
     if (error) { console.error(error); toast.error("保存に失敗しました"); return; }
@@ -296,16 +287,6 @@ function MediaCard({ media, onSaved, onDeleted }: {
           {draft.catch_copy && (
             <span className="text-xs text-muted-foreground truncate hidden sm:inline">｜{draft.catch_copy}</span>
           )}
-          <div className="hidden md:flex items-center gap-1 ml-1">
-            {selectedCoupons.map((coupon) => (
-              <span key={coupon} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                {coupon}
-              </span>
-            ))}
-            {selectedCoupons.length === 0 && (
-              <span className="text-[10px] text-muted-foreground">クーポン未設定</span>
-            )}
-          </div>
         </div>
         {open ? <ChevronUp size={16} className="shrink-0" /> : <ChevronDown size={16} className="shrink-0" />}
       </button>
@@ -341,30 +322,6 @@ function MediaCard({ media, onSaved, onDeleted }: {
                 <SettingRow label="ログインPW" description="媒体管理画面のパスワード" value={draft.login_password ?? ""} onChange={set("login_password")} mono />
                 <SettingRow label="店舗名表記" description="媒体上に掲載する店名" value={draft.shop_name ?? ""} onChange={set("shop_name")} />
                 <SettingRow label="掲載プラン" description="無料掲載・PR枠など" value={draft.plan ?? ""} onChange={set("plan")} placeholder="無料掲載／PR枠 など" />
-                <SettingRow label="クーポン一覧" description="この媒体に設定している割引" value="" onChange={() => {}}>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {COUPON_OPTIONS.map((coupon) => {
-                      const checked = selectedCoupons.includes(coupon);
-                      return (
-                        <label
-                          key={coupon}
-                          className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${checked ? "border-primary/40 bg-primary/5" : "bg-background hover:bg-muted/40"}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleCoupon(coupon)}
-                            className="h-4 w-4 rounded border-muted-foreground/40 accent-primary"
-                          />
-                          <span className="text-sm font-medium">{coupon}</span>
-                          <span className={`ml-auto text-[11px] ${checked ? "text-primary" : "text-muted-foreground"}`}>
-                            {checked ? "設定済み" : "未設定"}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </SettingRow>
                 <SettingRow label="メインカラー" description="ページの基調色" value={draft.main_color ?? ""} onChange={set("main_color")}>
                   <div className="flex items-center gap-2">
               <input
@@ -409,11 +366,107 @@ function MediaCard({ media, onSaved, onDeleted }: {
   );
 }
 
+function CouponTable({ mediaList, onUpdated }: { mediaList: MediaSetting[]; onUpdated: () => void }) {
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const handleToggle = async (media: MediaSetting, coupon: string) => {
+    const current = parseCoupons(media.memo);
+    const next = current.includes(coupon)
+      ? current.filter((item) => item !== coupon)
+      : [...current, coupon];
+
+    setSavingId(media.id);
+    const { error } = await supabase
+      .from("media_settings" as any)
+      .update({ memo: memoWithCoupons(media.memo, next), updated_at: new Date().toISOString() })
+      .eq("id", media.id);
+    setSavingId(null);
+
+    if (error) {
+      console.error(error);
+      toast.error("クーポン設定の保存に失敗しました");
+      return;
+    }
+    toast.success(`${media.media_name}のクーポン設定を保存しました`);
+    onUpdated();
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-xs text-muted-foreground">
+        初期設定では、すべての媒体に「事前予約割」と「紹介割」が設定されています。チェックを外すと媒体ごとに除外できます。
+      </div>
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <table className="w-full min-w-[620px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b bg-muted/60">
+              <th className="px-4 py-3 text-left font-semibold">媒体名</th>
+              {COUPON_OPTIONS.map((coupon) => (
+                <th key={coupon} className="px-4 py-3 text-center font-semibold">{coupon}</th>
+              ))}
+              <th className="px-4 py-3 text-center font-semibold">設定状況</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mediaList.map((media) => {
+              const coupons = parseCoupons(media.memo);
+              const saving = savingId === media.id;
+              return (
+                <tr key={media.id} className="border-b last:border-b-0 hover:bg-muted/20">
+                  <th scope="row" className="px-4 py-3 text-left font-medium">
+                    {media.media_name || "（媒体名未設定）"}
+                  </th>
+                  {COUPON_OPTIONS.map((coupon) => {
+                    const checked = coupons.includes(coupon);
+                    return (
+                      <td key={coupon} className="px-4 py-3 text-center">
+                        <label className="inline-flex cursor-pointer items-center justify-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={saving}
+                            onChange={() => handleToggle(media, coupon)}
+                            className="h-4 w-4 rounded border-muted-foreground/40 accent-primary"
+                            aria-label={`${media.media_name}の${coupon}`}
+                          />
+                          <span className={checked ? "text-primary" : "text-muted-foreground"}>
+                            {checked ? "設定済み" : "未設定"}
+                          </span>
+                        </label>
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3 text-center">
+                    {saving ? (
+                      <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 size={13} className="animate-spin" />保存中</span>
+                    ) : (
+                      <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                        {coupons.length}/{COUPON_OPTIONS.length}件
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {mediaList.length === 0 && (
+              <tr>
+                <td colSpan={COUPON_OPTIONS.length + 2} className="px-4 py-12 text-center text-muted-foreground">
+                  媒体設定シートで媒体を追加すると、ここにクーポン設定が表示されます。
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- ページ本体 ---------------- */
 
 export default function MediaStrategy() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [tab, setTab] = useState<"guide" | "sheet">("guide");
+  const [tab, setTab] = useState<"guide" | "sheet" | "coupons">("guide");
   const [mediaList, setMediaList] = useState<MediaSetting[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -471,7 +524,7 @@ export default function MediaStrategy() {
 
           {/* タブ */}
           <div className="flex gap-1 border-b mb-5">
-            {([["guide", "エスたま攻略"], ["sheet", "媒体設定シート"]] as const).map(([key, label]) => (
+            {([["guide", "エスたま攻略"], ["sheet", "媒体設定シート"], ["coupons", "クーポン一覧"]] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
@@ -511,7 +564,7 @@ export default function MediaStrategy() {
                 ※ セクションは随時追加していきます。追加したい項目（上位表示・口コミ・写真・料金表示など）があれば伝えてください。
               </p>
             </div>
-          ) : (
+          ) : tab === "sheet" ? (
             <div className="space-y-3">
               {loading ? (
                 <div className="text-center py-12">
@@ -533,6 +586,12 @@ export default function MediaStrategy() {
                 </>
               )}
             </div>
+          ) : loading ? (
+            <div className="text-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+            </div>
+          ) : (
+            <CouponTable mediaList={mediaList} onUpdated={fetchMedia} />
           )}
         </div>
       </main>

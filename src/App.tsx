@@ -140,6 +140,8 @@ import CastBooking from "./pages/public/CastBooking";
 import KeikaBooking from "./pages/public/KeikaBooking";
 import SurveysAdmin from "./pages/SurveysAdmin";
 import ReviewsAdmin from "./pages/ReviewsAdmin";
+import Campaigns from "./pages/public/Campaigns";
+import { PublicSeo } from "@/components/public/PublicSeo";
 
 const queryClient = new QueryClient();
 
@@ -160,6 +162,7 @@ const App = () => {
           <Route path="/casts" element={<PublicCasts />} />
           <Route path="/casts/:id" element={<PublicCastDetail />} />
           <Route path="/casts/:id/diary" element={<PublicCastDiary />} />
+          <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/pricing" element={<PublicPricing />} />
           <Route path="/system" element={<PublicSystem />} />
           <Route path="/access" element={<PublicAccess />} />
@@ -277,6 +280,7 @@ const App = () => {
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <PublicSeo />
       </BrowserRouter>
     </TooltipProvider>
     </StoreProvider>
