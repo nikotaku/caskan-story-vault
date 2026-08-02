@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -176,34 +176,41 @@ const EMPTY_MEDIA: Omit<MediaSetting, "id"> = {
   sort_order: 0,
 };
 
-function Field({ label, value, onChange, textarea, mono, placeholder }: {
+function SettingRow({ label, description, value, onChange, textarea, mono, placeholder, children }: {
   label: string;
+  description?: string;
   value: string;
   onChange: (v: string) => void;
   textarea?: boolean;
   mono?: boolean;
   placeholder?: string;
+  children?: ReactNode;
 }) {
   return (
-    <div>
-      <label className="block text-xs text-muted-foreground mb-1">{label}</label>
-      {textarea ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={value.length > 200 ? 10 : 4}
-          placeholder={placeholder}
-          className="w-full px-2.5 py-2 border rounded-md text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 whitespace-pre-wrap"
-        />
-      ) : (
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={`w-full px-2.5 py-1.5 border rounded-md text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${mono ? "font-mono" : ""}`}
-        />
-      )}
-    </div>
+    <tr className="border-b last:border-b-0 align-top">
+      <th scope="row" className="w-[32%] min-w-32 bg-muted/35 px-3 py-3 text-left font-medium">
+        <span className="block text-sm text-foreground">{label}</span>
+        {description && <span className="mt-0.5 block text-[11px] font-normal leading-snug text-muted-foreground">{description}</span>}
+      </th>
+      <td className="px-3 py-2.5">
+        {children ?? (textarea ? (
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            rows={value.length > 200 ? 8 : 3}
+            placeholder={placeholder}
+            className="w-full resize-y rounded-md border bg-background px-2.5 py-2 text-sm whitespace-pre-wrap focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
+        ) : (
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className={`w-full rounded-md border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40 ${mono ? "font-mono" : ""}`}
+          />
+        ))}
+      </td>
+    </tr>
   );
 }
 
@@ -266,10 +273,17 @@ function MediaCard({ media, onSaved, onDeleted }: {
 
       {open && (
         <div className="px-4 pb-4 space-y-3 border-t pt-3">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="媒体名" value={draft.media_name} onChange={set("media_name")} placeholder="エスたま" />
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">URL</label>
+          <div className="overflow-hidden rounded-lg border">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b bg-muted/60">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">設定項目</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">現在の設定内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <SettingRow label="媒体名" description="管理画面での表示名" value={draft.media_name} onChange={set("media_name")} placeholder="エスたま" />
+                <SettingRow label="掲載ページURL" description="媒体の店舗ページ" value={draft.url ?? ""} onChange={set("url")}>
               <div className="flex gap-1.5">
                 <input
                   value={draft.url ?? ""}
@@ -283,37 +297,39 @@ function MediaCard({ media, onSaved, onDeleted }: {
                   </a>
                 )}
               </div>
-            </div>
-            <Field label="ログインID" value={draft.login_id ?? ""} onChange={set("login_id")} mono />
-            <Field label="ログインPW" value={draft.login_password ?? ""} onChange={set("login_password")} mono />
-            <Field label="店舗名表記" value={draft.shop_name ?? ""} onChange={set("shop_name")} />
-            <Field label="掲載プラン" value={draft.plan ?? ""} onChange={set("plan")} placeholder="無料掲載／PR枠 など" />
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">
-                メインカラー<ColorSwatch value={draft.main_color ?? ""} />
-              </label>
+                </SettingRow>
+                <SettingRow label="ログインID" description="媒体管理画面のID" value={draft.login_id ?? ""} onChange={set("login_id")} mono />
+                <SettingRow label="ログインPW" description="媒体管理画面のパスワード" value={draft.login_password ?? ""} onChange={set("login_password")} mono />
+                <SettingRow label="店舗名表記" description="媒体上に掲載する店名" value={draft.shop_name ?? ""} onChange={set("shop_name")} />
+                <SettingRow label="掲載プラン" description="無料掲載・PR枠など" value={draft.plan ?? ""} onChange={set("plan")} placeholder="無料掲載／PR枠 など" />
+                <SettingRow label="メインカラー" description="ページの基調色" value={draft.main_color ?? ""} onChange={set("main_color")}>
+                  <div className="flex items-center gap-2">
               <input
                 value={draft.main_color ?? ""}
                 onChange={(e) => setDraft({ ...draft, main_color: e.target.value })}
                 placeholder="#D4547A（R212 G84 B122）"
-                className="w-full px-2.5 py-1.5 border rounded-md text-sm bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        className="min-w-0 flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">
-                サブカラー<ColorSwatch value={draft.sub_color ?? ""} />
-              </label>
+                    <ColorSwatch value={draft.main_color ?? ""} />
+                  </div>
+                </SettingRow>
+                <SettingRow label="サブカラー" description="補助・アクセント色" value={draft.sub_color ?? ""} onChange={set("sub_color")}>
+                  <div className="flex items-center gap-2">
               <input
                 value={draft.sub_color ?? ""}
                 onChange={(e) => setDraft({ ...draft, sub_color: e.target.value })}
                 placeholder="#150A11（R21 G10 B17）"
-                className="w-full px-2.5 py-1.5 border rounded-md text-sm bg-background font-mono focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        className="min-w-0 flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
-            </div>
+                    <ColorSwatch value={draft.sub_color ?? ""} />
+                  </div>
+                </SettingRow>
+                <SettingRow label="キャッチコピー" description="検索一覧や店舗ページの訴求文" value={draft.catch_copy ?? ""} onChange={set("catch_copy")} />
+                <SettingRow label="お店の説明" description="媒体に掲載する紹介文" value={draft.description ?? ""} onChange={set("description")} textarea />
+                <SettingRow label="運用メモ" description="クーポン・特徴枠・注意事項など" value={draft.memo ?? ""} onChange={set("memo")} textarea />
+              </tbody>
+            </table>
           </div>
-          <Field label="キャッチコピー" value={draft.catch_copy ?? ""} onChange={set("catch_copy")} />
-          <Field label="お店の説明" value={draft.description ?? ""} onChange={set("description")} textarea />
-          <Field label="メモ（クーポン・特徴枠・注意事項など）" value={draft.memo ?? ""} onChange={set("memo")} textarea />
 
           <div className="flex justify-between pt-1">
             <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={handleDelete}>
