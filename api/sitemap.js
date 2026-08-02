@@ -16,8 +16,9 @@ const escapeXml = (value) => value.replace(/[<>&'\"]/g, (character) => ({
 
 export default function handler(req, res) {
   const site = String(req.query?.site || "").toLowerCase();
+  const siteBrand = String(req.headers["x-site-brand"] || "").toLowerCase();
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").toLowerCase();
-  const isEnka = site === "enka" || host.includes("enka-salon.jp");
+  const isEnka = site === "enka" || siteBrand === "enka" || host.includes("enka-salon.jp");
   const baseUrl = isEnka ? "https://enka-salon.jp" : "https://zenryokuesthe.com";
   const lastModified = new Date().toISOString().slice(0, 10);
   const urls = ROUTES.map(([path, changefreq, priority]) => `  <url>
