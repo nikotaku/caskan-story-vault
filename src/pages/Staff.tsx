@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, CalendarPlus, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
 import { ImportModal } from "@/components/ImportModal";
+import { EstamaImportModal, type EstamaProfileData } from "@/components/EstamaImportModal";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -194,6 +195,7 @@ export default function Staff() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isEstamaImportOpen, setIsEstamaImportOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCast, setEditingCast] = useState<Cast | null>(null);
   const [mgmtProps, setMgmtProps] = useState<{ key: string; value: string }[]>([]);
@@ -245,6 +247,7 @@ export default function Staff() {
     x_account: "",
     skebiy_url: "",
     instagram_url: "",
+    estama_profile_url: "",
     therapist_years: 0,
     follow_list: "",
     media_registration: [] as string[],
@@ -500,6 +503,7 @@ export default function Staff() {
           blog_url: formData.blog_url || null,
           skebiy_url: formData.skebiy_url || null,
           instagram_url: formData.instagram_url || null,
+          estama_profile_url: formData.estama_profile_url || null,
         }).eq('id', inserted.id);
       }
 
@@ -514,6 +518,50 @@ export default function Staff() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleEstamaProfileImported = (profile: EstamaProfileData) => {
+    const photos = (profile.photos || []).filter(Boolean).slice(0, 6);
+    const features = (profile.features || [])
+      .filter((feature) => THERAPIST_FEATURES.includes(feature))
+      .slice(0, MAX_FEATURES);
+    const therapistExperience = THERAPIST_EXPERIENCE_OPTIONS.includes(profile.therapist_experience)
+      ? profile.therapist_experience
+      : "";
+
+    setFormData({
+      ...emptyForm,
+      name: profile.name || "",
+      age: profile.age ?? "",
+      height: profile.height ?? "",
+      body_size: profile.body_size || "",
+      hometown: profile.hometown || "",
+      bust_size: profile.cup_size || "",
+      blood_type: profile.blood_type || "",
+      therapist_experience: therapistExperience,
+      favorite_techniques: profile.favorite_techniques || "",
+      favorite_food: profile.favorite_food || "",
+      ideal_type: profile.ideal_type || "",
+      celebrity_lookalike: profile.celebrity_lookalike || "",
+      day_off_activities: profile.day_off_activities || "",
+      hobbies: profile.hobbies || "",
+      therapist_comment: profile.therapist_comment || "",
+      profile: profile.therapist_comment || "",
+      shop_comment: profile.shop_comment || "",
+      features,
+      photos,
+      photo: photos[0] || "",
+      x_account: profile.x_account || "",
+      instagram_url: profile.instagram_url || "",
+      blog_url: profile.blog_url || "",
+      estama_profile_url: profile.source_url || "",
+    });
+    setShowProfileDetailAdd(true);
+    setIsAddDialogOpen(true);
+    toast({
+      title: "エスたまから情報を取り込みました",
+      description: "内容を確認・修正してから登録してください",
+    });
   };
 
   const handleEditCast = async (cast: Cast) => {
@@ -1353,13 +1401,23 @@ export default function Staff() {
               </div>
             )}
             <Tabs defaultValue="management" className="w-full">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:justify-between sm:items-center">
                 <div>
                   <h1 className="text-2xl font-bold">キャスト管理</h1>
                   <p className="text-muted-foreground">キャストの登録・管理</p>
                 </div>
                 
-                <div className="flex gap-2 items-center">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      className="col-span-2 border-pink-200 text-pink-700 hover:bg-pink-50 hover:text-pink-800 sm:col-auto"
+                      onClick={() => setIsEstamaImportOpen(true)}
+                    >
+                      <ExternalLink size={16} />
+                      エスたまからインポート
+                    </Button>
+                  )}
                   {isAdmin && (
                     <Button variant="outline" onClick={() => setIsImportOpen(true)}>
                       <FileUp size={16} />
@@ -2452,6 +2510,11 @@ export default function Staff() {
         onClose={() => setIsImportOpen(false)}
         type="casts"
         onSuccess={fetchCasts}
+      />
+      <EstamaImportModal
+        open={isEstamaImportOpen}
+        onOpenChange={setIsEstamaImportOpen}
+        onImported={handleEstamaProfileImported}
       />
 
       {/* エスたま転記ダイアログ */}
