@@ -12,6 +12,9 @@ verify_jwt = true
 [functions.sync-website-photos]
 verify_jwt = true
 
+[functions.import-estama-profile]
+verify_jwt = true
+
 
 
 [functions.auto-therapist-intro]
@@ -19,4 +22,3 @@ verify_jwt = false
 
 [functions.notify-line-booking]
 verify_jwt = false
-
