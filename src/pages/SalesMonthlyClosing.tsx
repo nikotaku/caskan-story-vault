@@ -13,6 +13,7 @@ import { ja } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, ChevronDown, Loader2, CheckCircle, AlertCircle, Users, Receipt, Wallet, TrendingUp, Plus, Trash2, Lock, Download, PieChart } from "lucide-react";
 import { toast } from "sonner";
 import { downloadMonthlyReport } from "@/lib/monthlyClosingReport";
+import { splitClearanceExtraItems, sumClearanceExtraItems } from "@/lib/clearanceExtraItems";
 
 /**
  * 月別清算：毎月の締め作業。
@@ -66,6 +67,7 @@ interface ClearanceRec {
   accommodation_fee: number;
   transportation_fee: number;
   other_expenses: number;
+  salary_adjustments: number;
 }
 
 const yen = (v: number) => `¥${v.toLocaleString()}`;
@@ -145,16 +147,19 @@ export default function SalesMonthlyClosing() {
       })));
     }
     if (!clrRes.error) {
-      setClearances((clrRes.data || []).map((r: any) => ({
-        cast_name: r.casts?.name ?? "不明",
-        total_sales: r.total_sales ?? 0,
-        therapist_back: r.therapist_back ?? 0,
-        misc_expenses: r.misc_expenses ?? 0,
-        accommodation_fee: r.accommodation_fee ?? 0,
-        transportation_fee: r.transportation_fee ?? 0,
-        other_expenses: (Array.isArray(r.other_expenses) ? r.other_expenses : [])
-          .reduce((s: number, o: any) => s + (o?.amount ?? 0), 0),
-      })));
+      setClearances((clrRes.data || []).map((r: any) => {
+        const { deductions, salaryAdditions } = splitClearanceExtraItems(r.other_expenses);
+        return {
+          cast_name: r.casts?.name ?? "不明",
+          total_sales: r.total_sales ?? 0,
+          therapist_back: r.therapist_back ?? 0,
+          misc_expenses: r.misc_expenses ?? 0,
+          accommodation_fee: r.accommodation_fee ?? 0,
+          transportation_fee: r.transportation_fee ?? 0,
+          other_expenses: sumClearanceExtraItems(deductions),
+          salary_adjustments: sumClearanceExtraItems(salaryAdditions),
+        };
+      }));
     }
     // 紹介広告費の推奨額 = Σ（紹介ルール紐付きキャストの完了予約数 × 1本単価）
     const rewardAmt = new Map<string, number>();
@@ -204,10 +209,11 @@ export default function SalesMonthlyClosing() {
   const totalAccom = clearances.reduce((s, c) => s + c.accommodation_fee, 0);
   const totalTransport = clearances.reduce((s, c) => s + c.transportation_fee, 0);
   const totalOther = clearances.reduce((s, c) => s + c.other_expenses, 0);
+  const totalSalaryAdjustments = clearances.reduce((s, c) => s + c.salary_adjustments, 0);
   // 回収＝セラピストのバックから差し引いた諸費（店側のプラス）
   const totalRecovered = totalMisc + totalAccom + totalOther;
-  // 実支払給与 = バック − 雑費 − 宿泊費 − その他 ＋ 交通費（日別精算の給与式と同一）
-  const totalSalaryPaid = totalBack - totalRecovered + totalTransport;
+  // 実支払給与 = バック − 雑費 − 宿泊費 − その他 ＋ 交通費 ＋ 給与調整（日別精算の給与式と同一）
+  const totalSalaryPaid = totalBack - totalRecovered + totalTransport + totalSalaryAdjustments;
 
   // ── 経費（固定費チェックリスト） ──
   const sumFor = (item: string) =>
@@ -522,6 +528,10 @@ export default function SalesMonthlyClosing() {
                           <span>交通費（追加支給）</span>
                           <span className="tabular-nums">＋{yen(totalTransport)}</span>
                         </div>
+                        <div className="px-4 py-2 flex items-center justify-between text-sm text-emerald-700">
+                          <span>給与調整（不足分・追加支給）</span>
+                          <span className="tabular-nums">＋{yen(totalSalaryAdjustments)}</span>
+                        </div>
                         <div className="px-4 py-3 flex items-center justify-between bg-primary/5 font-bold">
                           <span className="text-sm">実際に支払った給与合計</span>
                           <span className="tabular-nums text-primary">{yen(totalSalaryPaid)}</span>
@@ -532,13 +542,13 @@ export default function SalesMonthlyClosing() {
                 )}
               </Card>
 
-              {/* ── 雑費・宿泊費・交通費 ── */}
+              {/* ── 給与の控除・追加支給 ── */}
               <Card>
                 <SectionHeader
                   id="allowance"
                   icon={<Wallet size={16} />}
-                  title="雑費・宿泊費・交通費"
-                  sub={`回収 ${yen(totalRecovered)} ／ 交通費支払 ${yen(totalTransport)}`}
+                  title="給与の控除・追加支給"
+                  sub={`回収 ${yen(totalRecovered)} ／ 追加支給 ${yen(totalTransport + totalSalaryAdjustments)}`}
                   total={totalRecovered}
                 />
                 {openSections.has("allowance") && (
@@ -567,6 +577,10 @@ export default function SalesMonthlyClosing() {
                       <div className="px-4 py-3 flex items-center justify-between font-bold">
                         <span className="text-sm">交通費 合計</span>
                         <span className="tabular-nums text-rose-600">{yen(totalTransport)}</span>
+                      </div>
+                      <div className="px-4 py-3 flex items-center justify-between font-bold">
+                        <span className="text-sm">給与調整（不足分など）合計</span>
+                        <span className="tabular-nums text-emerald-700">{yen(totalSalaryAdjustments)}</span>
                       </div>
                     </div>
                   </CardContent>
