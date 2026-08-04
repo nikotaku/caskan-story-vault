@@ -17,6 +17,12 @@ import { ja } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, CheckCircle, Loader2, CreditCard, Download, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadClearanceReceipt } from "@/lib/clearanceReceipt";
+import {
+  type ClearanceExtraItem,
+  combineClearanceExtraItems,
+  splitClearanceExtraItems,
+  sumClearanceExtraItems,
+} from "@/lib/clearanceExtraItems";
 
 interface Reservation {
   id: string;
@@ -64,11 +70,7 @@ interface Clearance {
   payout_method: string | null;
   status: string;
   cleared_at: string | null;
-}
-
-interface OtherItem {
-  label: string;
-  amount: number;
+  other_expenses: unknown;
 }
 
 interface ClearanceInput {
@@ -76,12 +78,26 @@ interface ClearanceInput {
   miscExpenses: number;
   accommodationFee: number;
   transportationFee: number;
-  otherItems: OtherItem[];
+  otherItems: ClearanceExtraItem[];
+  salaryAdjustmentItems: ClearanceExtraItem[];
   payoutMethod: string;
   submitting: boolean;
 }
 
 const yen = (v: number) => v === 0 ? "¥0" : `¥${v.toLocaleString()}`;
+
+const getClearanceAmounts = (input: ClearanceInput) => {
+  const otherTotal = sumClearanceExtraItems(input.otherItems);
+  const salaryAdjustmentTotal = sumClearanceExtraItems(input.salaryAdjustmentItems);
+  const salary = input.therapistBack
+    - input.miscExpenses
+    - input.accommodationFee
+    + input.transportationFee
+    - otherTotal
+    + salaryAdjustmentTotal;
+
+  return { otherTotal, salaryAdjustmentTotal, salary };
+};
 
 export default function SalesDailySales() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -231,12 +247,14 @@ export default function SalesDailySales() {
       const inputs: Record<string, ClearanceInput> = {};
       for (const g of groupList) {
         const ex = clearMap[g.castId];
+        const { deductions, salaryAdditions } = splitClearanceExtraItems(ex?.other_expenses);
         inputs[g.castId] = {
           therapistBack: ex?.therapist_back ?? g.autoBack,
           miscExpenses: ex?.misc_expenses ?? 0,
           accommodationFee: ex?.accommodation_fee ?? 0,
           transportationFee: ex?.transportation_fee ?? 0,
-          otherItems: (ex as any)?.other_expenses ?? [],
+          otherItems: deductions,
+          salaryAdjustmentItems: salaryAdditions,
           payoutMethod: ex?.payout_method ?? "",
           submitting: false,
         };
@@ -256,8 +274,7 @@ export default function SalesDailySales() {
   const handleDownloadReceipt = (group: CastGroup) => {
     const input = clearanceInputs[group.castId];
     if (!input) return;
-    const otherTotal = input.otherItems.reduce((s, i) => s + i.amount, 0);
-    const salary = input.therapistBack - input.miscExpenses - input.accommodationFee + input.transportationFee - otherTotal;
+    const { salary } = getClearanceAmounts(input);
     const payout = group.totalSales - salary;
     downloadClearanceReceipt({
       date: selectedDate,
@@ -275,6 +292,8 @@ export default function SalesDailySales() {
       miscExpenses: input.miscExpenses,
       accommodationFee: input.accommodationFee,
       transportationFee: input.transportationFee,
+      deductionItems: input.otherItems,
+      salaryAdjustmentItems: input.salaryAdjustmentItems,
       salary,
       payout,
       payoutMethod: input.payoutMethod,
@@ -287,9 +306,8 @@ export default function SalesDailySales() {
     if (!input) return;
     updateInput(group.castId, "submitting", true);
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const otherTotal = input.otherItems.reduce((s, i) => s + i.amount, 0);
-    // セラピスト給与 = バック - 雑費 - 宿泊費 + 交通費 - その他合計
-    const salary = input.therapistBack - input.miscExpenses - input.accommodationFee + input.transportationFee - otherTotal;
+    // セラピスト給与 = バック - 雑費 - 宿泊費 + 交通費 - その他控除 + 給与調整
+    const { salary } = getClearanceAmounts(input);
     // 投函金額 = 店舗取り分 = 売上 - セラピスト給与
     const payout = group.totalSales - salary;
     try {
@@ -302,7 +320,7 @@ export default function SalesDailySales() {
           misc_expenses: input.miscExpenses,
           accommodation_fee: input.accommodationFee,
           transportation_fee: input.transportationFee,
-          other_expenses: input.otherItems,
+          other_expenses: combineClearanceExtraItems(input.otherItems, input.salaryAdjustmentItems),
           payout_amount: payout,
           payout_method: input.payoutMethod || null,
           status: "pending",
@@ -362,7 +380,11 @@ export default function SalesDailySales() {
   const dayTotalMisc = castGroups.reduce((s, g) => s + (clearanceInputs[g.castId]?.miscExpenses ?? 0), 0);
   const dayTotalAccom = castGroups.reduce((s, g) => s + (clearanceInputs[g.castId]?.accommodationFee ?? 0), 0);
   const dayTotalTransport = castGroups.reduce((s, g) => s + (clearanceInputs[g.castId]?.transportationFee ?? 0), 0);
-  const dayTotalOther = castGroups.reduce((s, g) => (clearanceInputs[g.castId]?.otherItems ?? []).reduce((os, i) => os + i.amount, 0) + s, 0);
+  const dayTotalOther = castGroups.reduce((s, g) => s + sumClearanceExtraItems(clearanceInputs[g.castId]?.otherItems ?? []), 0);
+  const dayTotalSalaryAdjustments = castGroups.reduce(
+    (s, g) => s + sumClearanceExtraItems(clearanceInputs[g.castId]?.salaryAdjustmentItems ?? []),
+    0
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -397,7 +419,7 @@ export default function SalesDailySales() {
           {!loading && castGroups.length > 0 && (
             <Card className="mb-4">
               <CardContent className="py-3 px-4">
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+                <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 text-center">
                   {[
                     { label: "売上", value: dayTotalSales, className: "font-bold" },
                     { label: "報酬", value: dayTotalBack, className: "font-bold text-blue-700" },
@@ -405,6 +427,7 @@ export default function SalesDailySales() {
                     { label: "宿泊費", value: dayTotalAccom, className: "font-bold text-orange-600" },
                     { label: "交通費", value: dayTotalTransport, className: "font-bold text-green-700" },
                     { label: "その他", value: dayTotalOther, className: "font-bold text-rose-600" },
+                    { label: "給与調整", value: dayTotalSalaryAdjustments, className: "font-bold text-emerald-700" },
                   ].map(({ label, value, className }) => (
                     <div key={label}>
                       <p className="text-[11px] text-muted-foreground mb-0.5">{label}</p>
@@ -449,10 +472,9 @@ export default function SalesDailySales() {
                       </thead>
                       <tbody className="divide-y">
                         {castGroups.map((g) => {
-                          const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], payoutMethod: "", submitting: false };
+                          const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], salaryAdjustmentItems: [], payoutMethod: "", submitting: false };
                           const cleared = clearances[g.castId];
-                          const otherTotal = input.otherItems.reduce((s, i) => s + i.amount, 0);
-                const salary = input.therapistBack - input.miscExpenses - input.accommodationFee + input.transportationFee - otherTotal;
+                          const { salary } = getClearanceAmounts(input);
                           const storeShare = g.totalSales - salary;
                           return (
                             <tr key={g.castId} className="hover:bg-muted/20 transition-colors">
@@ -479,15 +501,13 @@ export default function SalesDailySales() {
                             {yen(castGroups.reduce((s, g) => {
                               const inp = clearanceInputs[g.castId];
                               if (!inp) return s;
-                              const ot = inp.otherItems.reduce((a, i) => a + i.amount, 0);
-                              return s + inp.therapistBack - inp.miscExpenses - inp.accommodationFee + inp.transportationFee - ot;
+                              return s + getClearanceAmounts(inp).salary;
                             }, 0))}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-xs text-green-700">
                             {yen(castGroups.reduce((s, g) => {
                               const inp = clearanceInputs[g.castId];
-                              const ot = inp ? inp.otherItems.reduce((a, i) => a + i.amount, 0) : 0;
-                              const salary = inp ? inp.therapistBack - inp.miscExpenses - inp.accommodationFee + inp.transportationFee - ot : 0;
+                              const salary = inp ? getClearanceAmounts(inp).salary : 0;
                               return s + g.totalSales - salary;
                             }, 0))}
                           </td>
@@ -501,11 +521,9 @@ export default function SalesDailySales() {
 
               {/* ── 個別清算フォーム ── */}
               {castGroups.map((g) => {
-                const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], payoutMethod: "", submitting: false };
+                const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], salaryAdjustmentItems: [], payoutMethod: "", submitting: false };
                 const cleared = clearances[g.castId];
-                // セラピスト給与 = バック - 雑費 - 宿泊費 + 交通費
-                const otherTotal = input.otherItems.reduce((s, i) => s + i.amount, 0);
-                const salary = input.therapistBack - input.miscExpenses - input.accommodationFee + input.transportationFee - otherTotal;
+                const { otherTotal, salaryAdjustmentTotal, salary } = getClearanceAmounts(input);
                 // 店落ち（店舗取り分）= 売上 - セラピスト給与
                 const payout = g.totalSales - salary;
                 // 投函する現金 = 現金預かり額 - セラピスト給与（クレカ分は店舗が別途回収）
@@ -666,7 +684,7 @@ export default function SalesDailySales() {
                               variant="ghost"
                               size="sm"
                               className="h-6 px-2 text-xs"
-                              onClick={() => updateInput(g.castId, "otherItems", [...input.otherItems, { label: "", amount: 0 }])}
+                              onClick={() => updateInput(g.castId, "otherItems", [...input.otherItems, { label: "", amount: 0, kind: "deduction" }])}
                             >
                               <Plus size={12} className="mr-1" />追加
                             </Button>
@@ -702,11 +720,77 @@ export default function SalesDailySales() {
                                     type="button"
                                     variant="ghost"
                                     size="icon"
+                                    aria-label={`その他控除 ${idx + 1} を削除`}
                                     className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                                     onClick={() => {
                                       const next = input.otherItems.filter((_, i) => i !== idx);
                                       updateInput(g.castId, "otherItems", next);
                                     }}
+                                  >
+                                    <Trash2 size={12} />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-span-2 rounded-md border border-emerald-200 bg-emerald-50/40 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <Label className="text-xs text-emerald-900">給与の不足分・追加支給</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50"
+                              onClick={() => updateInput(g.castId, "salaryAdjustmentItems", [
+                                ...input.salaryAdjustmentItems,
+                                { label: "給与不足分", amount: 0, kind: "salary_addition" },
+                              ])}
+                            >
+                              <Plus size={12} className="mr-1" />項目を追加
+                            </Button>
+                          </div>
+                          <p className="text-[10px] text-emerald-800/70 mb-2">前回の不足分など、今回の給与に上乗せする金額を入力します</p>
+                          {input.salaryAdjustmentItems.length > 0 && (
+                            <div className="space-y-1.5">
+                              {input.salaryAdjustmentItems.map((item, idx) => (
+                                <div key={idx} className="flex gap-1.5 items-center">
+                                  <Input
+                                    className="h-8 text-xs flex-1 bg-white"
+                                    aria-label={`追加支給項目 ${idx + 1} の項目名`}
+                                    placeholder="例：前回給与の不足分"
+                                    value={item.label}
+                                    onChange={(e) => {
+                                      const next = [...input.salaryAdjustmentItems];
+                                      next[idx] = { ...next[idx], label: e.target.value };
+                                      updateInput(g.castId, "salaryAdjustmentItems", next);
+                                    }}
+                                  />
+                                  <Input
+                                    className="h-8 text-xs w-28 bg-white"
+                                    aria-label={`追加支給項目 ${idx + 1} の金額`}
+                                    type="number"
+                                    min="0"
+                                    inputMode="numeric"
+                                    placeholder="0"
+                                    value={item.amount === 0 ? "" : item.amount}
+                                    onChange={(e) => {
+                                      const next = [...input.salaryAdjustmentItems];
+                                      next[idx] = { ...next[idx], amount: Number(e.target.value) || 0 };
+                                      updateInput(g.castId, "salaryAdjustmentItems", next);
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`追加支給項目 ${idx + 1} を削除`}
+                                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => updateInput(
+                                      g.castId,
+                                      "salaryAdjustmentItems",
+                                      input.salaryAdjustmentItems.filter((_, i) => i !== idx)
+                                    )}
                                   >
                                     <Trash2 size={12} />
                                   </Button>
@@ -742,10 +826,16 @@ export default function SalesDailySales() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">
-                            − セラピスト給与（バック {yen(input.therapistBack)} − 雑費 {yen(input.miscExpenses)} − 宿泊費 {yen(input.accommodationFee)}{input.transportationFee > 0 && ` + 交通費 ${yen(input.transportationFee)}`}{otherTotal > 0 && ` − その他 ${yen(otherTotal)}`}）
+                            − セラピスト給与（バック {yen(input.therapistBack)} − 雑費 {yen(input.miscExpenses)} − 宿泊費 {yen(input.accommodationFee)}{input.transportationFee > 0 && ` + 交通費 ${yen(input.transportationFee)}`}{otherTotal > 0 && ` − その他 ${yen(otherTotal)}`}{salaryAdjustmentTotal > 0 && ` + 給与調整 ${yen(salaryAdjustmentTotal)}`}）
                           </span>
                           <span className="tabular-nums text-blue-700">{yen(salary)}</span>
                         </div>
+                        {salaryAdjustmentTotal > 0 && (
+                          <div className="flex justify-between text-emerald-700">
+                            <span>給与調整（不足分・追加支給）</span>
+                            <span className="tabular-nums">＋{yen(salaryAdjustmentTotal)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between font-semibold border-t pt-1">
                           <span>＝ 店落ち（店舗取り分）</span>
                           <span className="tabular-nums text-primary">{yen(payout)}</span>

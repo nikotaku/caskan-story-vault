@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toExtTime } from "./timeFormat";
+import type { ClearanceExtraItem } from "./clearanceExtraItems";
 
 export interface ReceiptReservation {
   start_time: string;
@@ -20,6 +21,8 @@ export interface ClearanceReceiptData {
   miscExpenses: number;
   accommodationFee: number;
   transportationFee: number;
+  deductionItems: ClearanceExtraItem[];
+  salaryAdjustmentItems: ClearanceExtraItem[];
   salary: number;
   payout: number;
   payoutMethod: string;
@@ -85,6 +88,12 @@ export function downloadClearanceReceipt(data: ClearanceReceiptData): void {
   const methodLines = data.payoutMethod.trim()
     ? wrapText(mctx, data.payoutMethod.trim(), contentW)
     : [];
+  const deductionItems = data.deductionItems.filter((item) => item.amount > 0);
+  const salaryAdjustmentItems = data.salaryAdjustmentItems.filter((item) => item.amount > 0);
+  const summaryRowCount = 5
+    + (data.transportationFee > 0 ? 1 : 0)
+    + deductionItems.length
+    + salaryAdjustmentItems.length;
 
   // 高さ計算
   let H = pad;
@@ -95,7 +104,7 @@ export function downloadClearanceReceipt(data: ClearanceReceiptData): void {
   H += 24; // テーブルヘッダ
   H += data.reservations.length * 46; // 予約行
   H += 16; // 区切り
-  H += 6 * 26; // 売上・バック・雑費・宿泊費・交通費・給与
+  H += summaryRowCount * 26;
   H += 12; // 区切り
   H += 16 + 3 * 32 + 8; // ❶現金預かり・❷店落ち・❸投函（3行）
   if (methodLines.length > 0) {
@@ -222,6 +231,12 @@ export function downloadClearanceReceipt(data: ClearanceReceiptData): void {
   summaryRow("宿泊費", `- ${yen(data.accommodationFee)}`);
   if (data.transportationFee > 0) {
     summaryRow("交通費", `+ ${yen(data.transportationFee)}`);
+  }
+  for (const item of deductionItems) {
+    summaryRow(item.label || "その他控除", `- ${yen(item.amount)}`);
+  }
+  for (const item of salaryAdjustmentItems) {
+    summaryRow(item.label || "給与不足分", `+ ${yen(item.amount)}`, { color: "#047857" });
   }
   summaryRow("セラピスト給与", yen(data.salary), { color: primary, bold: true });
 
