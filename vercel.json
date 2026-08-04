@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/cron/estama-reconcile", "schedule": "10 18 * * *" }
+  ],
   "rewrites": [
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/robots.txt", "destination": "/api/robots" },

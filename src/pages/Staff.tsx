@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, CalendarPlus, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, CalendarPlus, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
 import { ImportModal } from "@/components/ImportModal";
 import { EstamaImportModal, type EstamaProfileData } from "@/components/EstamaImportModal";
+import { EstamaAutomationModal } from "@/components/EstamaAutomationModal";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { runEstamaCastAutomation } from "@/lib/estamaAutomation";
 
 const THERAPIST_FEATURES = [
   "新人", "経験豊富", "業界未経験", "施術上手", "上品", "甘えん坊", "おとなしい", "おっとり",
@@ -248,6 +250,9 @@ export default function Staff() {
     skebiy_url: "",
     instagram_url: "",
     estama_profile_url: "",
+    estama_auto_register: true,
+    estama_account_email: "",
+    estama_account_password: "",
     therapist_years: 0,
     follow_list: "",
     media_registration: [] as string[],
@@ -270,6 +275,8 @@ export default function Staff() {
   const [estamaCastName, setEstamaCastName] = useState("");
   const [estamaCopied, setEstamaCopied] = useState(false);
   const [estamaShowConsole, setEstamaShowConsole] = useState(false);
+  const [estamaAutomationOpen, setEstamaAutomationOpen] = useState(false);
+  const [addingCast, setAddingCast] = useState(false);
   const [newPhotoUrl, setNewPhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   // AIメモ登録
@@ -440,6 +447,16 @@ export default function Staff() {
       return;
     }
 
+    if (!!formData.estama_account_email !== !!formData.estama_account_password) {
+      toast({
+        title: "魂セラピスト設定を確認してください",
+        description: "メールアドレスと初期パスワードは両方入力するか、両方空欄にしてください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAddingCast(true);
     try {
       // Step 1: insert base fields
       const { data: inserted, error } = await supabase
@@ -467,15 +484,16 @@ export default function Staff() {
           memo: formData.memo || null,
           dispatch_status: formData.dispatch_status || 'none',
           repeat_scheduled: formData.repeat_scheduled || false,
-        }])
-        .select('id')
+          estama_auto_register: formData.estama_auto_register,
+        } as never])
+        .select('id, store_id')
         .single();
 
       if (error) throw error;
 
       // Step 2: update new profile fields (silent fail if migration not run)
       if (inserted?.id) {
-        await supabase.from('casts').update({
+        const { error: profileError } = await supabase.from('casts').update({
           name_kana: formData.name_kana || null,
           real_name: formData.real_name || null,
           name_en: formData.name_en || null,
@@ -505,18 +523,41 @@ export default function Staff() {
           instagram_url: formData.instagram_url || null,
           estama_profile_url: formData.estama_profile_url || null,
         }).eq('id', inserted.id);
+        if (profileError) throw profileError;
       }
 
       toast({ title: "追加しました", description: "新しいセラピストが登録されました" });
       setIsAddDialogOpen(false);
+      if (inserted?.id && formData.estama_auto_register) {
+        try {
+          const soulCredentials = formData.estama_account_email && formData.estama_account_password
+            ? { email: formData.estama_account_email, password: formData.estama_account_password }
+            : undefined;
+          const result = await runEstamaCastAutomation({
+            storeId: inserted.store_id,
+            castId: inserted.id,
+            soulCredentials,
+          });
+          const completed = (result.results || []).some((item) => item.status === "completed");
+          if (completed) toast({ title: "エスたまへ自動登録しました" });
+          else toast({ title: "エスたま登録を待機中です", description: (result.results || [])[0]?.error || "自動化設定を確認してください" });
+        } catch (automationError) {
+          toast({
+            title: "キャスカンへの追加は完了しました",
+            description: `エスたま登録は待機中です：${automationError instanceof Error ? automationError.message : String(automationError)}`,
+          });
+        }
+      }
       setFormData({ ...emptyForm });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding cast:', error);
       toast({
         title: "エラー",
-        description: error?.message || "キャストの追加に失敗しました",
+        description: error instanceof Error ? error.message : "キャストの追加に失敗しました",
         variant: "destructive",
       });
+    } finally {
+      setAddingCast(false);
     }
   };
 
@@ -555,6 +596,9 @@ export default function Staff() {
       instagram_url: profile.instagram_url || "",
       blog_url: profile.blog_url || "",
       estama_profile_url: profile.source_url || "",
+      estama_auto_register: false,
+      estama_account_email: "",
+      estama_account_password: "",
     });
     setShowProfileDetailAdd(true);
     setIsAddDialogOpen(true);
@@ -1411,6 +1455,16 @@ export default function Staff() {
                   {isAdmin && (
                     <Button
                       variant="outline"
+                      className="col-span-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 sm:col-auto"
+                      onClick={() => setEstamaAutomationOpen(true)}
+                    >
+                      <Bot size={16} />
+                      エスたま自動化
+                    </Button>
+                  )}
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
                       className="col-span-2 border-pink-200 text-pink-700 hover:bg-pink-50 hover:text-pink-800 sm:col-auto"
                       onClick={() => setIsEstamaImportOpen(true)}
                     >
@@ -1642,9 +1696,51 @@ export default function Staff() {
                         </div>
                       </div>
 
+                      <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4"
+                            checked={formData.estama_auto_register}
+                            onChange={(e) => setFormData({ ...formData, estama_auto_register: e.target.checked })}
+                          />
+                          <span>
+                            <span className="block text-sm font-semibold text-blue-800">追加後、エスたまへ自動登録</span>
+                            <span className="block text-xs text-muted-foreground">写真・プロフィールを転記し、登録処理まで自動で行います。</span>
+                          </span>
+                        </label>
+                        {formData.estama_auto_register && (
+                          <div className="grid grid-cols-1 gap-3 border-t border-blue-100 pt-3 sm:grid-cols-2">
+                            <div>
+                              <Label htmlFor="add-estama-email" className="text-xs">魂セラピスト用メール（任意）</Label>
+                              <Input
+                                id="add-estama-email"
+                                type="email"
+                                autoComplete="off"
+                                placeholder="therapist@example.jp"
+                                value={formData.estama_account_email}
+                                onChange={(e) => setFormData({ ...formData, estama_account_email: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="add-estama-password" className="text-xs">初期パスワード（任意）</Label>
+                              <Input
+                                id="add-estama-password"
+                                type="password"
+                                autoComplete="new-password"
+                                value={formData.estama_account_password}
+                                onChange={(e) => setFormData({ ...formData, estama_account_password: e.target.value })}
+                              />
+                            </div>
+                            <p className="text-[11px] text-muted-foreground sm:col-span-2">魂セラピスト初期設定に一度だけ使用し、パスワードは保存しません。</p>
+                          </div>
+                        )}
+                      </div>
 
-                      <Button onClick={handleAddCast} className="w-full">
-                        追加する
+
+                      <Button onClick={handleAddCast} className="w-full" disabled={addingCast}>
+                        {addingCast && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {addingCast ? "登録処理中..." : "追加する"}
                       </Button>
                     </div>
                   </DialogContent>
@@ -2516,6 +2612,7 @@ export default function Staff() {
         onOpenChange={setIsEstamaImportOpen}
         onImported={handleEstamaProfileImported}
       />
+      <EstamaAutomationModal open={estamaAutomationOpen} onOpenChange={setEstamaAutomationOpen} />
 
       {/* エスたま転記ダイアログ */}
       <Dialog open={estamaDialogOpen} onOpenChange={setEstamaDialogOpen}>

@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useStore } from "@/hooks/useStore";
+import { runQueuedEstamaAutomation } from "@/lib/estamaAutomation";
 
 interface Cast {
   id: string;
@@ -50,6 +52,11 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
   
   const { toast } = useToast();
   const { isAdmin, user } = useAuth();
+  const { storeId } = useStore();
+
+  const triggerEstamaSync = () => {
+    void runQueuedEstamaAutomation(storeId).catch((error) => console.warn("Estama shift sync queued", error));
+  };
 
   const getShiftForCastAndDate = (castId: string, date: string) => {
     return shifts.find(shift => shift.castId === castId && shift.date === date);
@@ -128,6 +135,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
 
       setIsDialogOpen(false);
       onShiftUpdate();
+      triggerEstamaSync();
     } catch (error) {
       console.error('Error saving shift:', error);
       toast({
@@ -159,6 +167,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
 
       setIsDialogOpen(false);
       onShiftUpdate();
+      triggerEstamaSync();
     } catch (error) {
       console.error('Error deleting shift:', error);
       toast({
