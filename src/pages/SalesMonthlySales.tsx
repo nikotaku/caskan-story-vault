@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { splitClearanceExtraItems, sumClearanceExtraItems } from "@/lib/clearanceExtraItems";
 
 interface TherapistRow {
   castName: string;
@@ -16,6 +17,7 @@ interface TherapistRow {
   accommodationFee: number;
   transportationFee: number;
   otherExpenses: number;
+  salaryAdjustments: number;
   payoutAmount: number;
 }
 
@@ -38,6 +40,7 @@ const COLS: { key: AmountKey; label: string; cls: string }[] = [
   { key: "accommodationFee", label: "宿泊費", cls: "text-orange-600" },
   { key: "transportationFee", label: "交通費", cls: "text-green-700" },
   { key: "otherExpenses", label: "その他", cls: "text-rose-600" },
+  { key: "salaryAdjustments", label: "追加支給", cls: "text-emerald-700" },
   { key: "payoutAmount", label: "投函額", cls: "text-primary font-semibold" },
 ];
 
@@ -52,9 +55,10 @@ function totalize(rows: TherapistRow[]): Omit<TherapistRow, "castName"> {
       accommodationFee: acc.accommodationFee + r.accommodationFee,
       transportationFee: acc.transportationFee + r.transportationFee,
       otherExpenses: acc.otherExpenses + r.otherExpenses,
+      salaryAdjustments: acc.salaryAdjustments + r.salaryAdjustments,
       payoutAmount: acc.payoutAmount + r.payoutAmount,
     }),
-    { totalSales: 0, therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherExpenses: 0, payoutAmount: 0 }
+    { totalSales: 0, therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherExpenses: 0, salaryAdjustments: 0, payoutAmount: 0 }
   );
 }
 
@@ -105,8 +109,7 @@ export default function SalesMonthlySales() {
         const date = row.date;
         if (!byMonth[month]) byMonth[month] = {};
         if (!byMonth[month][date]) byMonth[month][date] = [];
-        const otherTotal = (Array.isArray(row.other_expenses) ? row.other_expenses : [])
-          .reduce((s: number, o: any) => s + (o?.amount ?? 0), 0);
+        const { deductions, salaryAdditions } = splitClearanceExtraItems(row.other_expenses);
         byMonth[month][date].push({
           castName: row.casts?.name ?? "不明",
           totalSales: row.total_sales ?? 0,
@@ -114,7 +117,8 @@ export default function SalesMonthlySales() {
           miscExpenses: row.misc_expenses ?? 0,
           accommodationFee: row.accommodation_fee ?? 0,
           transportationFee: row.transportation_fee ?? 0,
-          otherExpenses: otherTotal,
+          otherExpenses: sumClearanceExtraItems(deductions),
+          salaryAdjustments: sumClearanceExtraItems(salaryAdditions),
           payoutAmount: row.payout_amount ?? 0,
         });
       }
