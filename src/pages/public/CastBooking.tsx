@@ -6,11 +6,17 @@ import { Heart, Sparkles, Check, Loader2, CalendarDays, Star } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/hooks/useStore";
 import { driveImgUrl } from "@/lib/drive";
+import {
+  getBookingKey,
+  getCastBookingUrl,
+  getCustomDomainBaseUrl,
+  isBookingKey,
+} from "@/lib/bookingUrl";
 
 /**
  * セラピスト専用の予約リクエストフォーム（可愛いデザイン）。
- * /book/:castId で対象セラピストを特定。各セラピストがマイページから
- * 自分のリンクを発行して使う。送信された予約は status="pending" /
+ * /r/:castKey（旧URLは /book/:castId）で対象セラピストを特定。
+ * 各セラピストがマイページから自分のリンクを発行して使う。送信された予約は status="pending" /
  * referral_source="<名前>専用フォーム" で reservations に登録され、
  * 管理画面の予約ボードにリクエストとしてストックされる。
  */
@@ -31,6 +37,11 @@ interface Cast {
   id: string;
   name: string;
   photo: string | null;
+}
+
+interface CastLookup extends Cast {
+  store_id: string;
+  stores?: { custom_domain?: string | null } | { custom_domain?: string | null }[] | null;
 }
 
 // 30分刻みの希望時間候補（13:00〜25:00）。深夜は24:00・24:30・25:00表記で表示し、
@@ -71,8 +82,8 @@ const optionSortKey = (name: string) => {
 };
 
 export default function CastBooking() {
-  const { castId } = useParams<{ castId: string }>();
-  const { storeId } = useStore();
+  const { castId, castKey } = useParams<{ castId?: string; castKey?: string }>();
+  const { storeId, loading: storeLoading } = useStore();
   const [cast, setCast] = useState<Cast | null>(null);
   const [castLoading, setCastLoading] = useState(true);
   const [backRates, setBackRates] = useState<BackRate[]>([]);
@@ -96,20 +107,69 @@ export default function CastBooking() {
   const isPairCast = !!cast?.name?.includes("&");
 
   useEffect(() => {
-    if (!castId) { setCastLoading(false); return; }
-    supabase.from("casts").select("id, name, photo").eq("id", castId).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setCast(data as Cast);
-          document.title = `${(data as Cast).name}｜専用予約ページ`;
-        }
+    const routeValue = castId ?? castKey;
+    if (!routeValue) { setCastLoading(false); return; }
+
+    let cancelled = false;
+    const loadCast = async () => {
+      setCastLoading(true);
+      let matchedCast: CastLookup | null = null;
+
+      if (castId) {
+        const { data } = await supabase
+          .from("casts")
+          .select("id, name, photo, store_id, stores(custom_domain)")
+          .eq("id", castId)
+          .maybeSingle();
+        matchedCast = data as CastLookup | null;
+      } else if (castKey && isBookingKey(castKey)) {
+        // UUID型には前方一致を直接かけられないため、公開キャストの最小項目だけ取得して照合する。
+        const { data } = await supabase
+          .from("casts")
+          .select("id, name, photo, store_id, stores(custom_domain)");
+        const matches = ((data || []) as CastLookup[]).filter(
+          (row) => getBookingKey(row.id) === castKey.toLowerCase(),
+        );
+        if (matches.length === 1) matchedCast = matches[0];
+      }
+
+      if (cancelled) return;
+      if (!matchedCast) {
+        setCast(null);
         setCastLoading(false);
-      });
-  }, [castId]);
+        return;
+      }
+
+      const storeRelation = Array.isArray(matchedCast.stores)
+        ? matchedCast.stores[0]
+        : matchedCast.stores;
+      const fallbackBaseUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin;
+      const bookingBaseUrl = getCustomDomainBaseUrl(storeRelation?.custom_domain) || fallbackBaseUrl;
+      const canonicalUrl = getCastBookingUrl(bookingBaseUrl, matchedCast.id);
+      const currentUrl = `${window.location.origin}${window.location.pathname}`;
+      const currentHost = window.location.hostname;
+      const isPreviewHost = currentHost === "localhost"
+        || currentHost === "127.0.0.1"
+        || currentHost.endsWith(".vercel.app");
+
+      // 旧URLで開いた場合も、正しい店舗ドメインの短縮URLへ自動で統一する。
+      if (!isPreviewHost && currentUrl !== canonicalUrl) {
+        window.location.replace(canonicalUrl);
+        return;
+      }
+
+      setCast(matchedCast);
+      document.title = `${matchedCast.name}｜専用予約ページ`;
+      setCastLoading(false);
+    };
+
+    void loadCast();
+    return () => { cancelled = true; };
+  }, [castId, castKey]);
 
   // 料金データはキャスト判明後に取得（ペア名義はWコースのみ／通常キャストは既存コースのみ）
   useEffect(() => {
-    if (!cast) return;
+    if (!cast || storeLoading) return;
     const pair = cast.name.includes("&");
     if (pair) {
       // Wコースは is_visible=false のため RPC には載らず、直接参照する
@@ -147,10 +207,10 @@ export default function CastBooking() {
     }
     supabase.from("nomination_rates").select("nomination_type, customer_price").eq("store_id", storeId).then(({ data }) => {
       // 専用予約ページは指名前提のため、本指名料（2,000円）を最初から含める
-      const hon = (data || []).find((n: any) => n.nomination_type === "本指名");
+      const hon = (data || []).find((n) => n.nomination_type === "本指名");
       if (hon) setNominationFee(hon.customer_price ?? 0);
     });
-  }, [cast, storeId]);
+  }, [cast, storeId, storeLoading]);
 
   const courseTypes = [...new Set(backRates.map((r) => r.course_type))];
   const durationsFor = (ct: string) =>

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import backRatesImage from "@/assets/back-rates-table.jpg";
 import { format, startOfMonth, endOfMonth, isSameDay, addDays } from "date-fns";
 import { toExtTime } from "@/lib/timeFormat";
+import { getCastBookingUrl, getCustomDomainBaseUrl } from "@/lib/bookingUrl";
 import { ja } from "date-fns/locale";
 
 
@@ -179,9 +180,7 @@ export default function TherapistPortal() {
 
   // 専用予約ページリンク
   const [bookingLinkCopied, setBookingLinkCopied] = useState(false);
-  const [bookingBaseUrl, setBookingBaseUrl] = useState(
-    import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin,
-  );
+  const [bookingBaseUrl, setBookingBaseUrl] = useState("");
   // 投稿ネタ
   const [copiedIdeaIdx, setCopiedIdeaIdx] = useState<number | null>(null);
   const [ideasOpen, setIdeasOpen] = useState(false);
@@ -209,21 +208,26 @@ export default function TherapistPortal() {
       if (!row) { toast.error("無効なアクセスリンクです"); navigate("/"); return; }
       const castRow = row as Cast;
 
-      // 環境変数は全力エステのURLを指すため、所属店舗の独自ドメインを優先する。
-      // これにより艶華のセラピストは enka-salon.jp の予約リンクを共有できる。
+      // 所属店舗を先に特定し、その店舗の独自ドメインを予約リンクに使う。
+      // casts→stores の埋め込み取得に依存させず、2段階で確実に解決する。
+      let resolvedBookingBaseUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin;
       const { data: castStoreData } = await supabase
         .from("casts")
-        .select("stores(custom_domain)")
+        .select("store_id")
         .eq("id", castRow.id)
         .maybeSingle();
-      const customDomain = castStoreData?.stores?.custom_domain
-        ?.trim()
-        .replace(/^https?:\/\//i, "")
-        .replace(/\/+$/, "");
-      if (customDomain) {
-        setBookingBaseUrl(`https://${customDomain}`);
+
+      if (castStoreData?.store_id) {
+        const { data: storeData } = await supabase
+          .from("stores")
+          .select("custom_domain")
+          .eq("id", castStoreData.store_id)
+          .maybeSingle();
+        const customBaseUrl = getCustomDomainBaseUrl(storeData?.custom_domain);
+        if (customBaseUrl) resolvedBookingBaseUrl = customBaseUrl;
       }
 
+      setBookingBaseUrl(resolvedBookingBaseUrl);
       setCast(castRow);
       setLoading(false);
       // Load current month shifts for menu top display
@@ -703,7 +707,7 @@ export default function TherapistPortal() {
 
           {/* あなた専用の予約ページ */}
           {(() => {
-            const bookingUrl = `${bookingBaseUrl}/book/${cast.id}`;
+            const bookingUrl = getCastBookingUrl(bookingBaseUrl, cast.id);
             return (
               <div className="rounded-xl border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 overflow-hidden">
                 <div className="px-4 py-3 flex items-center gap-2 border-b border-pink-100">
