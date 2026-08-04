@@ -57,11 +57,28 @@ export default function EnkaHome() {
   const { store, storeId } = useStore();
   const { telHref, phoneDisplay, lineUrl, hours } = useStoreContact();
   const storeName = store?.name ?? "艶華";
-  const tagline = ((store?.settings as any)?.tagline as string | undefined) ?? "艶やかに、咲き誇る。";
-  const banners = (((store?.settings as any)?.hero_banners as string[] | undefined) ?? []).filter(Boolean);
+  const storeSettings = store?.settings ?? {};
+  const tagline = typeof storeSettings.tagline === "string" ? storeSettings.tagline : "艶やかに、咲き誇る。";
+  const banners = Array.isArray(storeSettings.hero_banners)
+    ? storeSettings.hero_banners.filter(
+        (value): value is string => typeof value === "string" && value.trim().length > 0,
+      )
+    : [];
+
+  // 動画受領後は stores.settings.hero_video に
+  // { enabled: true, url: "...", poster_url: "..." } を設定するとスライドから切り替わる。
+  const heroVideoSettings =
+    typeof storeSettings.hero_video === "object" && storeSettings.hero_video !== null
+      ? (storeSettings.hero_video as Record<string, unknown>)
+      : {};
+  const heroVideoEnabled = heroVideoSettings.enabled === true;
+  const heroVideoUrl = typeof heroVideoSettings.url === "string" ? heroVideoSettings.url.trim() : "";
+  const heroVideoPosterUrl =
+    typeof heroVideoSettings.poster_url === "string" ? heroVideoSettings.poster_url.trim() : "";
   const siteUrl = store?.custom_domain ? `https://${store.custom_domain}` : window.location.origin;
 
   const [slide, setSlide] = useState(0);
+  const [failedHeroVideoUrl, setFailedHeroVideoUrl] = useState<string | null>(null);
   const [todayShifts, setTodayShifts] = useState<ShiftRow[]>([]);
   const [newFaces, setNewFaces] = useState<CastRow[]>([]);
   const [articles, setArticles] = useState<HpArticle[]>([]);
@@ -69,11 +86,14 @@ export default function EnkaHome() {
 
   useEffect(() => { document.title = `${storeName}｜仙台・宮城のメンズエステ`; }, [storeName]);
 
+  const showHeroVideo =
+    heroVideoEnabled && heroVideoUrl.length > 0 && failedHeroVideoUrl !== heroVideoUrl;
+
   useEffect(() => {
-    if (banners.length < 2) return;
+    if (showHeroVideo || banners.length < 2) return;
     const t = setInterval(() => setSlide((p) => (p + 1) % banners.length), 4500);
     return () => clearInterval(t);
-  }, [banners.length]);
+  }, [banners.length, showHeroVideo]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -164,8 +184,26 @@ export default function EnkaHome() {
     <div className="min-h-screen pb-14 md:pb-0" style={{ backgroundColor: "var(--pub-bg,#150a11)" }}>
       <PublicNavigation />
 
-      {/* 1. 大型プランバナー */}
-      {banners.length > 0 && (
+      {/* 1. トップ広告：動画を有効化するとスライドを停止して差し替える */}
+      {showHeroVideo ? (
+        <div className="relative w-full" style={{ aspectRatio: "2 / 1", backgroundColor: "var(--pub-bg,#150a11)" }}>
+          <video
+            key={heroVideoUrl}
+            src={heroVideoUrl}
+            poster={heroVideoPosterUrl || undefined}
+            className="h-full w-full object-contain"
+            aria-label={`${storeName} 8月13日から15日のイベント動画広告`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onError={() => setFailedHeroVideoUrl(heroVideoUrl)}
+          >
+            お使いのブラウザは動画再生に対応していません。
+          </video>
+        </div>
+      ) : banners.length > 0 ? (
         <div className="relative" style={{ backgroundColor: "var(--pub-bg,#150a11)" }}>
           <Link to="/system">
             <div className="relative w-full" style={{ aspectRatio: "2 / 1" }}>
@@ -211,7 +249,7 @@ export default function EnkaHome() {
             </>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* ブランドライン */}
       <div className="text-center py-8 px-4">
