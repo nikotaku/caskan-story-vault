@@ -174,7 +174,8 @@ const App = () => {
           <Route path="/review-maker" element={<ReviewMaker />} />
           <Route path="/book/keika" element={<KeikaBooking />} />
           <Route path="/book/:castId" element={<CastBooking />} />
-          <Route path="/haru" element={<Navigate to="/book/4b2fc0c8-ccad-48a6-9a32-f7898381f68b" replace />} />
+          <Route path="/r/:castKey" element={<CastBooking />} />
+          <Route path="/haru" element={<Navigate to="/r/4b2fc0c8" replace />} />
           <Route path="/voice" element={<Voice />} />
           
           {/* Admin/Staff Pages */}
