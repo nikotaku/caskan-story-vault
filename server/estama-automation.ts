@@ -84,13 +84,25 @@ const requiredEnv = (name: string) => {
   return value;
 };
 
-export const getAdminClient = () => {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://imrxzkivwrkqbhqfbbes.supabase.co";
-  if (!url) throw new Error("SUPABASE_URL がVercelに設定されていません");
-  return createClient(url, requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+const supabaseUrl = () =>
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  "https://imrxzkivwrkqbhqfbbes.supabase.co";
+
+const supabasePublishableKey = () =>
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  "sb_publishable_T0a9mtOIbupU5n_VAe9caw_xlnbbWfB";
+
+export const getAdminClient = () =>
+  createClient(supabaseUrl(), requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-};
+
+const getAuthenticatedClient = (token: string) =>
+  createClient(supabaseUrl(), supabasePublishableKey(), {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
 export const getBrowserbase = () => new Browserbase({
   apiKey: requiredEnv("BROWSERBASE_API_KEY"),
@@ -105,7 +117,7 @@ export async function authenticateUser(req: { headers?: Record<string, string | 
   const authorization = Array.isArray(header) ? header[0] : header;
   const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) throw new Error("認証が必要です");
-  const admin = getAdminClient();
+  const admin = getAuthenticatedClient(token);
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data.user) throw new Error("ログインが期限切れです");
   return { admin, user: data.user };
