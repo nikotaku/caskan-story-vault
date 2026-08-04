@@ -85,7 +85,7 @@ const requiredEnv = (name: string) => {
 };
 
 export const getAdminClient = () => {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://imrxzkivwrkqbhqfbbes.supabase.co";
   if (!url) throw new Error("SUPABASE_URL がVercelに設定されていません");
   return createClient(url, requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
