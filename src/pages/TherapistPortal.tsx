@@ -179,6 +179,9 @@ export default function TherapistPortal() {
 
   // 専用予約ページリンク
   const [bookingLinkCopied, setBookingLinkCopied] = useState(false);
+  const [bookingBaseUrl, setBookingBaseUrl] = useState(
+    import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin,
+  );
   // 投稿ネタ
   const [copiedIdeaIdx, setCopiedIdeaIdx] = useState<number | null>(null);
   const [ideasOpen, setIdeasOpen] = useState(false);
@@ -196,7 +199,7 @@ export default function TherapistPortal() {
 
   useEffect(() => {
     if (!token) { navigate("/"); return; }
-    supabase.rpc("get_cast_by_access_token", { p_token: token }).then(({ data, error }) => {
+    supabase.rpc("get_cast_by_access_token", { p_token: token }).then(async ({ data, error }) => {
       if (error || !data) {
         toast.error("無効なアクセスリンクです");
         navigate("/");
@@ -205,6 +208,22 @@ export default function TherapistPortal() {
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) { toast.error("無効なアクセスリンクです"); navigate("/"); return; }
       const castRow = row as Cast;
+
+      // 環境変数は全力エステのURLを指すため、所属店舗の独自ドメインを優先する。
+      // これにより艶華のセラピストは enka-salon.jp の予約リンクを共有できる。
+      const { data: castStoreData } = await supabase
+        .from("casts")
+        .select("stores(custom_domain)")
+        .eq("id", castRow.id)
+        .maybeSingle();
+      const customDomain = castStoreData?.stores?.custom_domain
+        ?.trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/+$/, "");
+      if (customDomain) {
+        setBookingBaseUrl(`https://${customDomain}`);
+      }
+
       setCast(castRow);
       setLoading(false);
       // Load current month shifts for menu top display
@@ -684,7 +703,7 @@ export default function TherapistPortal() {
 
           {/* あなた専用の予約ページ */}
           {(() => {
-            const bookingUrl = `${import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin}/book/${cast.id}`;
+            const bookingUrl = `${bookingBaseUrl}/book/${cast.id}`;
             return (
               <div className="rounded-xl border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-rose-50 overflow-hidden">
                 <div className="px-4 py-3 flex items-center gap-2 border-b border-pink-100">
