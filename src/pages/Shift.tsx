@@ -23,6 +23,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useStore } from "@/hooks/useStore";
+import { runQueuedEstamaAutomation } from "@/lib/estamaAutomation";
 
 interface Cast {
   id: string;
@@ -101,6 +103,7 @@ const Shift = () => {
 
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
+  const { storeId } = useStore();
   const { loaded: settingsLoaded, businessToday } = useShopSettings();
   const navigate = useNavigate();
 
@@ -267,6 +270,7 @@ const Shift = () => {
         room: "インルーム",
         notes: "",
       });
+      void runQueuedEstamaAutomation(storeId).catch((automationError) => console.warn("Estama shift sync queued", automationError));
     } catch (error: any) {
       console.error('Error adding shift:', error);
       if (error.code === '23505') {

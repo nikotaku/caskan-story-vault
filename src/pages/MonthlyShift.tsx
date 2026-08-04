@@ -15,6 +15,8 @@ import { ja } from "date-fns/locale";
 import { Plus, ChevronLeft, ChevronRight, Trash2, LayoutGrid, Table2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useStore } from "@/hooks/useStore";
+import { runQueuedEstamaAutomation } from "@/lib/estamaAutomation";
 
 interface Shift {
   id: string;
@@ -114,7 +116,12 @@ export default function MonthlyShift() {
   };
 
   const { user, loading: authLoading } = useAuth();
+  const { storeId } = useStore();
   const navigate = useNavigate();
+
+  const triggerEstamaSync = () => {
+    void runQueuedEstamaAutomation(storeId).catch((error) => console.warn("Estama shift sync queued", error));
+  };
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -187,6 +194,7 @@ export default function MonthlyShift() {
       toast.success(`${dates.length}日分のシフトを追加しました`);
       setShowDialog(false);
       fetchMonthlyShifts();
+      triggerEstamaSync();
       return;
     }
 
@@ -209,11 +217,13 @@ export default function MonthlyShift() {
     setShowDialog(false);
     setEditingId(null);
     fetchMonthlyShifts();
+    triggerEstamaSync();
   };
 
   const handleDelete = async (id: string) => {
     await supabase.from("shifts").delete().eq("id", id);
     setShifts(prev => prev.filter(s => s.id !== id));
+    triggerEstamaSync();
   };
 
   const updateStatus = async (id: string, approval_status: "approved" | "rejected", room?: string | null, comment?: string) => {
@@ -224,6 +234,7 @@ export default function MonthlyShift() {
     if (error) { toast.error("更新に失敗しました"); return; }
     toast.success(approval_status === "approved" ? "承認しました" : "却下しました");
     setShifts(prev => prev.map(s => (s.id === id ? { ...s, approval_status, approval_comment: comment || null, ...(room !== undefined ? { room } : {}) } : s)));
+    triggerEstamaSync();
   };
 
   const assignRoom = async (id: string, room: string) => {
