@@ -53,6 +53,12 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const hhmm = (t: string) => t?.slice(0, 5) ?? "";
 
+const ENKA_EVENT_HERO_VIDEO = {
+  enabled: true,
+  url: "https://enka-w-videos.saito-crow.chatgpt.site/videos/teaser.mp4",
+  poster_url: "https://enka-w-videos.saito-crow.chatgpt.site/posters/teaser.jpg",
+} as const;
+
 export default function EnkaHome() {
   const { store, storeId } = useStore();
   const { telHref, phoneDisplay, lineUrl, hours } = useStoreContact();
@@ -65,12 +71,13 @@ export default function EnkaHome() {
       )
     : [];
 
-  // 動画受領後は stores.settings.hero_video に
-  // { enabled: true, url: "...", poster_url: "..." } を設定するとスライドから切り替わる。
-  const heroVideoSettings =
+  // イベント動画を既定表示し、stores.settings.hero_video でURLや表示可否を上書きできる。
+  // イベント終了後は { enabled: false } にするだけで通常のバナーへ戻せる。
+  const configuredHeroVideo =
     typeof storeSettings.hero_video === "object" && storeSettings.hero_video !== null
       ? (storeSettings.hero_video as Record<string, unknown>)
       : {};
+  const heroVideoSettings = { ...ENKA_EVENT_HERO_VIDEO, ...configuredHeroVideo };
   const heroVideoEnabled = heroVideoSettings.enabled === true;
   const heroVideoUrl = typeof heroVideoSettings.url === "string" ? heroVideoSettings.url.trim() : "";
   const heroVideoPosterUrl =
