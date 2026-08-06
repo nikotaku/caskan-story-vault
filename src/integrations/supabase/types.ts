@@ -2599,6 +2599,54 @@ export type Database = {
           },
         ]
       }
+      referral_fee_adjustments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          month_date: string
+          reason: string
+          referral_reward_id: string
+          store_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month_date: string
+          reason: string
+          referral_reward_id: string
+          store_id?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month_date?: string
+          reason?: string
+          referral_reward_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_fee_adjustments_referral_reward_id_fkey"
+            columns: ["referral_reward_id"]
+            isOneToOne: false
+            referencedRelation: "referral_rewards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_fee_adjustments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referral_rewards: {
         Row: {
           amount: number
