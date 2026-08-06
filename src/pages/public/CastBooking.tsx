@@ -64,9 +64,16 @@ const TIME_OPTIONS: { label: string; value: string; dayOffset: number }[] = (() 
 // オプションの内容説明（空文字の間は表示しない）
 const OPTION_DESCRIPTIONS: Record<string, string> = {
   "全力PKG": "極液・DR30分・マイクロビキニが全てセットになったお得なパッケージ。\n迷ったらこれを入れておけば間違いナシです‼︎",
-  "全力PKG1W": "極液・マイクロビキニ・Wハンドリンパが全てセットになった\nW施術ならではのスペシャルパッケージ‼︎",
-  "全力PKG2W": "極液・カルバンクラインがセットになったお得なパッケージ✨",
+  "全力PKG1W": "極液・マイクロ・Wハンドリンパ",
+  "全力PKG2W": "極液・カルバンクライン",
 };
+
+const W_OPTION_DISPLAY_NAMES: Record<string, string> = {
+  "全力PKG1W": "双艶 -そうえん-",
+  "全力PKG2W": "艶結 -えんむすび-",
+};
+
+const getOptionDisplayName = (name: string) => W_OPTION_DISPLAY_NAMES[name] ?? name;
 
 // Wセラピスト（2人同時施術）専用の料金体系。
 // ペア名義のキャスト（名前に「&」を含む）の専用フォームだけに表示し、
@@ -104,7 +111,7 @@ export default function CastBooking() {
   const [error, setError] = useState("");
 
   // ペア名義（Wセラピスト）のフォームかどうか
-  const isPairCast = !!cast?.name?.includes("&");
+  const isPairCast = !!cast?.name && /[&＆]/.test(cast.name);
 
   useEffect(() => {
     const routeValue = castId ?? castKey;
@@ -170,7 +177,7 @@ export default function CastBooking() {
   // 料金データはキャスト判明後に取得（ペア名義はWコースのみ／通常キャストは既存コースのみ）
   useEffect(() => {
     if (!cast || storeLoading) return;
-    const pair = cast.name.includes("&");
+    const pair = /[&＆]/.test(cast.name);
     if (pair) {
       // Wコースは is_visible=false のため RPC には載らず、直接参照する
       supabase.from("back_rates").select("course_type, duration, customer_price")
@@ -279,7 +286,7 @@ export default function CastBooking() {
             reservation_date: dateStr,
             start_time: selectedTime?.label ?? time,
             course_name: courseName,
-            options: selectedOptions.length > 0 ? selectedOptions : null,
+            options: selectedOptions.length > 0 ? selectedOptions.map(getOptionDisplayName) : null,
             nomination_type: "本指名",
             price: total,
             payment_method: "現金",
@@ -332,7 +339,7 @@ export default function CastBooking() {
           <div className="bg-pink-50 rounded-2xl p-4 text-sm text-left space-y-1 text-gray-700">
             <p>📅 {format(new Date(`${date}T00:00:00`), "M月d日(E)", { locale: ja })} {selectedTime?.label ?? time}〜</p>
             <p>💆 {courseType} {duration}分</p>
-            {selectedOptions.length > 0 && <p>✨ {selectedOptions.join("・")}</p>}
+            {selectedOptions.length > 0 && <p>✨ {selectedOptions.map(getOptionDisplayName).join("・")}</p>}
             {total > 0 && <p>💰 ¥{total.toLocaleString()}（目安）</p>}
           </div>
           <p className="text-xs text-gray-400">※ この時点ではまだ予約は確定していません。返信をもって確定となります。</p>
@@ -456,10 +463,11 @@ export default function CastBooking() {
                 })}
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${isPairCast ? "grid-cols-2" : "grid-cols-3"}`}>
               {durationsFor(courseType).map((r) => {
                 const on = duration === r.duration;
                 const recommended = (courseType === "全力" && r.duration === 80) || (isPairCast && r.duration === 100);
+                const displayedPrice = r.customer_price + (isPairCast ? 0 : nominationFee);
                 return (
                   <button
                     key={r.duration}
@@ -478,12 +486,16 @@ export default function CastBooking() {
                         ⭐おすすめ
                       </span>
                     )}
-                    {r.duration}分<br />¥{(r.customer_price + nominationFee).toLocaleString()}
+                    {r.duration}分<br />¥{displayedPrice.toLocaleString()}
                   </button>
                 );
               })}
             </div>
-            <p className="text-[11px] text-gray-400 mt-1.5">※ 料金はすべて指名料込みです</p>
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              {isPairCast
+                ? `※ 別途、特別指名料${nominationFee.toLocaleString()}円を頂戴します`
+                : "※ 料金はすべて指名料込みです"}
+            </p>
           </div>
 
           {/* オプション（延長含む） */}
@@ -517,7 +529,7 @@ export default function CastBooking() {
                         </span>
                       )}
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`text-lg font-bold ${on ? "text-white" : "text-rose-600"}`}>{fname}</span>
+                        <span className={`text-lg font-bold ${on ? "text-white" : "text-rose-600"}`}>{getOptionDisplayName(fname)}</span>
                         <span className={`text-lg font-bold ${on ? "text-white" : "text-rose-500"}`}>+¥{pkg.customer_price.toLocaleString()}</span>
                       </div>
                       {OPTION_DESCRIPTIONS[fname] && (
