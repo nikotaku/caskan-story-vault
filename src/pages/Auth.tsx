@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import caskanLogo from "@/assets/caskan-logo.png";
+import { ENKA_STORE_ID, ZENRYOKU_STORE_ID } from "@/lib/storeSwitch";
 
 // 共通パスワードを入力後、どちらの店舗の管理画面に入るかを選ぶ。
 // 各店舗の管理アカウント（同一パスワード）へサインインする。
 const STORE_OPTIONS = [
-  { key: "zenryoku", label: "全力エステ 仙台", email: "saito.crow@gmail.com" },
-  { key: "enka", label: "艶華", email: "saito.crow+enka@gmail.com" },
+  { key: "zenryoku", label: "全力エステ 仙台", email: "saito.crow@gmail.com", storeId: ZENRYOKU_STORE_ID },
+  { key: "enka", label: "艶華", email: "saito.crow+enka@gmail.com", storeId: ENKA_STORE_ID },
 ];
 
 export default function Auth() {
@@ -40,7 +41,7 @@ export default function Auth() {
   };
 
   // 選んだ店舗のアカウントでサインイン
-  const handleSelectStore = async (email: string) => {
+  const handleSelectStore = async (email: string, storeId: string) => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -52,6 +53,7 @@ export default function Auth() {
       }
       // 店舗切替トグル用にパスワードを一時保持（タブを閉じると消える）
       try { sessionStorage.setItem("admin_pw", password); } catch { /* noop */ }
+      try { localStorage.setItem("current_store_id", storeId); } catch { /* noop */ }
       toast({ title: "ログイン成功" });
     } catch (error) {
       toast({
@@ -113,7 +115,7 @@ export default function Auth() {
               {STORE_OPTIONS.map((s) => (
                 <button
                   key={s.key}
-                  onClick={() => handleSelectStore(s.email)}
+                  onClick={() => handleSelectStore(s.email, s.storeId)}
                   disabled={loading}
                   className="w-full py-3 rounded border border-gray-300 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
