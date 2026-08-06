@@ -9,14 +9,20 @@ export interface ReferralReceiptRow {
   fee: number;
 }
 
+export interface ReferralReceiptAdjustment {
+  reason: string;
+  amount: number;
+}
+
 export interface ReferralReceiptData {
   month: Date;      // 対象月
   ruleLabel: string; // 紹介元ルール名（"すべて" の場合は全紹介元）
   rows: ReferralReceiptRow[];
+  adjustments: ReferralReceiptAdjustment[];
 }
 
 const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif';
-const yen = (v: number) => `¥${v.toLocaleString()}`;
+const yen = (v: number) => `${v < 0 ? "−" : ""}¥${Math.abs(v).toLocaleString()}`;
 
 /**
  * 紹介費の明細をPNG画像として生成し、共有／ダウンロードする。
@@ -35,7 +41,7 @@ export function downloadReferralReceipt(data: ReferralReceiptData): void {
   H += 22; // 期間
   H += 20; // 区切り
   H += 26; // テーブルヘッダ
-  H += data.rows.length * rowH;
+  H += (data.rows.length + data.adjustments.length) * rowH;
   H += 16; // 区切り
   H += 60; // 合計ブロック
   H += 30; // フッター
@@ -121,6 +127,29 @@ export function downloadReferralReceipt(data: ReferralReceiptData): void {
     y += rowH;
   }
 
+  for (const adjustment of data.adjustments) {
+    totalFee -= adjustment.amount;
+    ctx.fillStyle = "#b91c1c";
+    ctx.font = `bold 14px ${FONT}`;
+    ctx.textAlign = "left";
+    ctx.fillText(`相殺：${adjustment.reason}`, colCast, y + 20, colCount - colCast - 12);
+    ctx.fillStyle = muted;
+    ctx.font = `13px ${FONT}`;
+    ctx.textAlign = "right";
+    ctx.fillText("—", colCount, y + 20);
+    ctx.fillText("—", colUnit, y + 20);
+    ctx.fillStyle = "#dc2626";
+    ctx.font = `bold 14px ${FONT}`;
+    ctx.fillText(`−${yen(adjustment.amount)}`, colFee, y + 20);
+    ctx.textAlign = "left";
+    ctx.strokeStyle = "#fee2e2";
+    ctx.beginPath();
+    ctx.moveTo(pad, y + rowH - 4);
+    ctx.lineTo(right, y + rowH - 4);
+    ctx.stroke();
+    y += rowH;
+  }
+
   // 区切り
   ctx.strokeStyle = line;
   ctx.beginPath();
@@ -140,7 +169,7 @@ export function downloadReferralReceipt(data: ReferralReceiptData): void {
   ctx.font = `13px ${FONT}`;
   ctx.textAlign = "right";
   ctx.fillText("広告費合計", right - 150, y + 30);
-  ctx.fillStyle = primary;
+  ctx.fillStyle = totalFee < 0 ? "#dc2626" : primary;
   ctx.font = `bold 22px ${FONT}`;
   ctx.fillText(yen(totalFee), right - 12, y + 32);
   ctx.textAlign = "left";
