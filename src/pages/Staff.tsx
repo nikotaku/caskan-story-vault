@@ -155,6 +155,12 @@ interface Cast {
   is_visible: boolean;
   estama_listed?: boolean | null;
   esuran_listed?: boolean | null;
+  o2_created?: boolean | null;
+  o2_linkage_requested?: boolean | null;
+  x_created?: boolean | null;
+  x_list_added?: boolean | null;
+  x_ff_completed?: boolean | null;
+  self_intro_tweeted?: boolean | null;
   display_order?: number;
   blood_type: string | null;
   height: number | null;
@@ -183,6 +189,27 @@ interface Cast {
   profile_format: string | null;
   management_photos: string[] | null;
 }
+
+type CastChecklistField =
+  | "estama_listed"
+  | "esuran_listed"
+  | "o2_created"
+  | "o2_linkage_requested"
+  | "x_created"
+  | "x_list_added"
+  | "x_ff_completed"
+  | "self_intro_tweeted";
+
+const CAST_CHECKLIST_ITEMS: readonly { field: CastChecklistField; label: string }[] = [
+  { field: "estama_listed", label: "エスたまに登録" },
+  { field: "esuran_listed", label: "エスランに登録" },
+  { field: "o2_created", label: "02の作成" },
+  { field: "o2_linkage_requested", label: "02の連携申請" },
+  { field: "x_created", label: "Xの作成" },
+  { field: "x_list_added", label: "Xのリスト入り" },
+  { field: "x_ff_completed", label: "XのFF" },
+  { field: "self_intro_tweeted", label: "自己紹介ツイート" },
+];
 
 interface ReferralReward {
   id: string;
@@ -420,13 +447,13 @@ export default function Staff() {
     }
   };
 
-  // 媒体掲載フラグ（エスたま / エスラン）のトグル。一覧から即切り替え。
-  const toggleListing = async (castId: string, field: "estama_listed" | "esuran_listed", next: boolean) => {
+  // セラピスト登録・SNS準備のチェック状況を一覧から即切り替え。
+  const toggleChecklist = async (castId: string, field: CastChecklistField, next: boolean) => {
     setCasts(prev => prev.map(c => c.id === castId ? { ...c, [field]: next } : c));
     setEditingCast(prev => prev && prev.id === castId ? { ...prev, [field]: next } : prev);
     const { error } = await supabase.from("casts").update({ [field]: next } as any).eq("id", castId);
     if (error) {
-      toast({ title: "エラー", description: "掲載状況の更新に失敗しました", variant: "destructive" });
+      toast({ title: "エラー", description: "チェック状況の更新に失敗しました", variant: "destructive" });
       fetchCasts();
     }
   };
@@ -2520,70 +2547,75 @@ export default function Staff() {
                   onDragStart={() => { dragCastId.current = cast.id; }}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDropCast(cast.id)}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
+                  className="rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
                   onClick={() => handleEditCast(cast)}
                 >
-                  {isAdmin && (
-                    <div
-                      className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
-                      onClick={(e) => e.stopPropagation()}
-                      title="ドラッグして並び替え"
-                    >
-                      <GripVertical size={16} />
-                    </div>
-                  )}
-                  {/* Photo */}
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
-                    {cast.photo ? (
-                      <img src={cast.photo} alt={cast.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Camera size={16} className="text-muted-foreground" />
+                  <div className="flex items-center gap-3 p-3 pb-2">
+                    {isAdmin && (
+                      <div
+                        className="flex-shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                        onClick={(e) => e.stopPropagation()}
+                        title="ドラッグして並び替え"
+                      >
+                        <GripVertical size={16} />
                       </div>
                     )}
-                  </div>
-
-                  {/* Name */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm truncate">{cast.name}</span>
-                      {getCastLevel(cast) && (
-                        <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${LEVEL_BADGES[getCastLevel(cast)!].className}`}>
-                          <span>{LEVEL_BADGES[getCastLevel(cast)!].icon}</span>
-                          {getCastLevel(cast)}
-                        </span>
-                      )}
-                      {!cast.is_visible && (
-                        <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                          <EyeOff size={10} className="mr-0.5" />非表示
-                        </Badge>
+                    {/* Photo */}
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
+                      {cast.photo ? (
+                        <img src={cast.photo} alt={cast.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Camera size={16} className="text-muted-foreground" />
+                        </div>
                       )}
                     </div>
+
+                    {/* Name */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm truncate">{cast.name}</span>
+                        {getCastLevel(cast) && (
+                          <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${LEVEL_BADGES[getCastLevel(cast)!].className}`}>
+                            <span>{LEVEL_BADGES[getCastLevel(cast)!].icon}</span>
+                            {getCastLevel(cast)}
+                          </span>
+                        )}
+                        {!cast.is_visible && (
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                            <EyeOff size={10} className="mr-0.5" />非表示
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 詳細へ */}
+                    <ChevronRight size={16} className="flex-shrink-0 text-muted-foreground" />
                   </div>
 
-                  {/* 媒体掲載チェック（タップで切替・一目で掲載状況が分かる） */}
-                  {([
-                    { field: "estama_listed" as const, label: "エスたま", on: !!cast.estama_listed },
-                    { field: "esuran_listed" as const, label: "エスラン", on: !!cast.esuran_listed },
-                  ]).map((m) => (
-                    <button
-                      key={m.field}
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); toggleListing(cast.id, m.field, !m.on); }}
-                      title={m.on ? `${m.label}に掲載済み（タップで解除）` : `${m.label}に未掲載（タップで掲載済みに）`}
-                      className={`flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-1 rounded-full border font-semibold transition-colors ${
-                        m.on
+                  {/* 登録・SNS準備チェック（タップで切替） */}
+                  <div className="flex flex-wrap gap-1.5 px-3 pb-3">
+                    {CAST_CHECKLIST_ITEMS.map((item) => {
+                      const on = !!cast[item.field];
+                      return (
+                        <button
+                          key={item.field}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleChecklist(cast.id, item.field, !on); }}
+                          title={on ? `${item.label}済み（タップで解除）` : `${item.label}未完了（タップで完了）`}
+                          aria-pressed={on}
+                          className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border font-semibold transition-colors ${
+                            on
                           ? "bg-emerald-100 text-emerald-700 border-emerald-300"
                           : "bg-muted text-muted-foreground border-transparent hover:border-border"
-                      }`}
-                    >
-                      <span className={m.on ? "" : "opacity-40"}>{m.on ? "✅" : "⬜️"}</span>
-                      <span className="hidden sm:inline">{m.label}</span>
-                    </button>
-                  ))}
-
-                  {/* 詳細へ */}
-                  <ChevronRight size={16} className="flex-shrink-0 text-muted-foreground" />
+                          }`}
+                        >
+                          <span className={on ? "" : "opacity-40"}>{on ? "✅" : "⬜️"}</span>
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
