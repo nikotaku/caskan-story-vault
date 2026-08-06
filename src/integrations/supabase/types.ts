@@ -934,6 +934,8 @@ export type Database = {
           dispatch_status: string | null
           display_order: number | null
           enrollment_period: string | null
+          esuran_listed: boolean
+          estama_listed: boolean
           execution_date_end: string | null
           execution_date_start: string | null
           favorite_food: string | null
@@ -968,6 +970,8 @@ export type Database = {
           name_en: string | null
           name_kana: string | null
           o2_url: string | null
+          o2_created: boolean
+          o2_linkage_requested: boolean
           photo: string | null
           photos: string[] | null
           profile: string | null
@@ -981,6 +985,7 @@ export type Database = {
           repeat_scheduled: boolean | null
           romaji_name: string | null
           room: string | null
+          self_intro_tweeted: boolean
           shop_comment: string | null
           skebiy_url: string | null
           status: string
@@ -997,6 +1002,9 @@ export type Database = {
           waist: number | null
           weight: number | null
           x_account: string | null
+          x_created: boolean
+          x_ff_completed: boolean
+          x_list_added: boolean
         }
         Insert: {
           access_token?: string | null
@@ -1017,6 +1025,8 @@ export type Database = {
           dispatch_status?: string | null
           display_order?: number | null
           enrollment_period?: string | null
+          esuran_listed?: boolean
+          estama_listed?: boolean
           execution_date_end?: string | null
           execution_date_start?: string | null
           favorite_food?: string | null
@@ -1051,6 +1061,8 @@ export type Database = {
           name_en?: string | null
           name_kana?: string | null
           o2_url?: string | null
+          o2_created?: boolean
+          o2_linkage_requested?: boolean
           photo?: string | null
           photos?: string[] | null
           profile?: string | null
@@ -1064,6 +1076,7 @@ export type Database = {
           repeat_scheduled?: boolean | null
           romaji_name?: string | null
           room?: string | null
+          self_intro_tweeted?: boolean
           shop_comment?: string | null
           skebiy_url?: string | null
           status?: string
@@ -1080,6 +1093,9 @@ export type Database = {
           waist?: number | null
           weight?: number | null
           x_account?: string | null
+          x_created?: boolean
+          x_ff_completed?: boolean
+          x_list_added?: boolean
         }
         Update: {
           access_token?: string | null
@@ -1100,6 +1116,8 @@ export type Database = {
           dispatch_status?: string | null
           display_order?: number | null
           enrollment_period?: string | null
+          esuran_listed?: boolean
+          estama_listed?: boolean
           execution_date_end?: string | null
           execution_date_start?: string | null
           favorite_food?: string | null
@@ -1134,6 +1152,8 @@ export type Database = {
           name_en?: string | null
           name_kana?: string | null
           o2_url?: string | null
+          o2_created?: boolean
+          o2_linkage_requested?: boolean
           photo?: string | null
           photos?: string[] | null
           profile?: string | null
@@ -1147,6 +1167,7 @@ export type Database = {
           repeat_scheduled?: boolean | null
           romaji_name?: string | null
           room?: string | null
+          self_intro_tweeted?: boolean
           shop_comment?: string | null
           skebiy_url?: string | null
           status?: string
@@ -1163,6 +1184,9 @@ export type Database = {
           waist?: number | null
           weight?: number | null
           x_account?: string | null
+          x_created?: boolean
+          x_ff_completed?: boolean
+          x_list_added?: boolean
         }
         Relationships: [
           {
