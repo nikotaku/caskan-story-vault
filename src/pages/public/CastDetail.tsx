@@ -9,6 +9,7 @@ import useEmblaCarousel from "embla-carousel-react";
 import { driveImgUrl } from "@/lib/drive";
 import { useStoreContact } from "@/hooks/useStoreContact";
 import { useStore } from "@/hooks/useStore";
+import { getBookingKey } from "@/lib/bookingUrl";
 
 interface Cast {
   id: string;
@@ -166,6 +167,9 @@ const CastDetail = () => {
   }
 
   if (!cast) return null;
+
+  const isPairCast = /[&＆]/.test(cast.name);
+  const bookingPath = isPairCast ? `/r/${getBookingKey(cast.id)}` : "/booking";
 
   // Parse profile JSON if stored as JSON in the profile field
   let profileJson: Record<string, any> | null = null;
@@ -371,10 +375,10 @@ const CastDetail = () => {
                 style={{ background: "linear-gradient(135deg, var(--pub-accent,#c6a15b), var(--pub-accent-deep,#a87c2a))" }}>
                 <Camera size={17} />写メ日記を見る
               </Link>
-              <Link to="/booking"
+              <Link to={bookingPath}
                 className="flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border transition-colors hover:bg-[var(--pub-card2,#221b12)]"
                 style={{ borderColor: "var(--pub-accent,#c6a15b)", color: "var(--pub-text,#f0e6d2)" }}>
-                <Calendar size={15} />Web予約はこちら
+                <Calendar size={15} />{isPairCast ? "Wセラピスト専用予約はこちら" : "Web予約はこちら"}
               </Link>
             </div>
 
