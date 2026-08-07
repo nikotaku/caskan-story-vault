@@ -12,6 +12,7 @@ interface Diary {
   title: string | null;
   category: string | null;
   image_url: string | null;
+  image_urls?: string[] | null;
   body: string | null;
   posted_at: string | null;
   external_url: string | null;
@@ -69,8 +70,12 @@ export default function CastDiary() {
             <div className="space-y-4">
               {diaries.map((d) => (
                 <article key={d.id} className="rounded-lg overflow-hidden border" style={{ background: "var(--pub-card,#1a150f)", borderColor: "var(--pub-border,#3a2f1c)" }}>
-                  {d.image_url && (
-                    <img src={d.image_url} alt={d.title ?? ""} className="w-full object-cover" style={{ maxHeight: 460 }} loading="lazy" />
+                  {(d.image_urls?.length || d.image_url) && (
+                    <div className={`grid gap-0.5 ${d.image_urls && d.image_urls.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                      {(d.image_urls?.length ? d.image_urls : [d.image_url]).filter(Boolean).map((url, index) => (
+                        <img key={`${url}-${index}`} src={url!} alt={`${d.title ?? "写メ日記"} ${index + 1}`} className="w-full h-full object-cover aspect-square" loading="lazy" />
+                      ))}
+                    </div>
                   )}
                   <div className="p-4">
                     <div className="flex items-center gap-2 mb-1.5">

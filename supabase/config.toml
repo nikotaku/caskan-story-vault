@@ -15,6 +15,10 @@ verify_jwt = true
 [functions.import-estama-profile]
 verify_jwt = true
 
+[functions.post-to-sites]
+# ブラウザからは直接呼ばず、ポータルトークンを検証したVercel APIだけが呼び出す。
+verify_jwt = true
+
 
 
 [functions.auto-therapist-intro]
