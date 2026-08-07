@@ -134,9 +134,6 @@ export default function TherapistPortal() {
   const [view, setView] = useState<View>("menu");
   const [showBackRates, setShowBackRates] = useState(false);
   const [guideSite, setGuideSite] = useState<"o2" | "x" | "esutama" | "ranking" | null>(null);
-  const [linkSite, setLinkSite] = useState<"o2" | "x" | "esutama" | "ranking" | null>(null);
-  const [linkForm, setLinkForm] = useState({ login_id: "", password: "" });
-  const [linkSaving, setLinkSaving] = useState(false);
 
   // Upcoming reservations（事前予約）
   const [upcoming, setUpcoming] = useState<UpcomingReservation[]>([]);
@@ -419,7 +416,7 @@ export default function TherapistPortal() {
     { title: "シフト提出", description: "希望シフトをカレンダーから提出", icon: CalendarPlus, action: () => navigate(`/therapist/${token}/shift`) },
     { title: "シフト確認", description: "確定したシフトと出勤ルームを確認", icon: Calendar, action: () => setView("shift") },
     { title: "事前予約", description: "今日以降に入っている予約を確認", icon: CalendarPlus, action: () => setView("upcoming") },
-    { title: "投稿管理", description: "O2・エスたまの魂への投稿", icon: Edit, action: () => navigate(`/therapist/${token}/posts`) },
+    { title: "3媒体投稿", description: "HP写メ日記・O2・エスたまへ同時投稿", icon: Edit, action: () => navigate(`/therapist/${token}/posts`) },
     { title: "バック表", description: "コース別・オプション別のバック率を確認", icon: Receipt, action: () => setShowBackRates(true) },
     { title: "交通費申請", description: "交通費の申請・申請履歴を確認", icon: Plane, action: () => setView("transport") },
     { title: "退勤フォーム", description: "売上入力・清掃チェック・フィードバック", icon: LogOut, action: () => navigate(`/therapist/${token}/checkout`) },
@@ -431,7 +428,7 @@ export default function TherapistPortal() {
   const REGISTER_URLS: Record<"o2" | "x" | "esutama" | "ranking", string> = {
     o2: "https://m-sns.net/cast-register/",
     x: "https://x.com/i/flow/signup",
-    esutama: "https://s-tama.jp/cast/register",
+    esutama: "https://estama.jp/",
     ranking: "https://mensesthe-ranking.com/cast-register/",
   };
   const SITE_LABEL: Record<"o2" | "x" | "esutama" | "ranking", string> = {
@@ -439,30 +436,6 @@ export default function TherapistPortal() {
     x: "X（旧Twitter）",
     esutama: "エスたまの魂",
     ranking: "メンズエステランキング",
-  };
-
-  const openLink = (site: "o2" | "x" | "esutama" | "ranking") => {
-    setLinkSite(site);
-    setLinkForm({ login_id: "", password: "" });
-  };
-
-  const saveLink = async () => {
-    if (!cast || !linkSite) return;
-    if (!linkForm.login_id || !linkForm.password) { toast.error("IDとパスワードを入力してください"); return; }
-    setLinkSaving(true);
-    try {
-      const { error } = await supabase
-        .from("cast_site_credentials")
-        .upsert({ cast_id: cast.id, site: linkSite, login_id: linkForm.login_id, password: linkForm.password }, { onConflict: "cast_id,site" });
-      if (error) throw error;
-      toast.success(`${SITE_LABEL[linkSite]}のログイン情報を登録しました`);
-      setLinkSite(null);
-    } catch (e) {
-      console.error(e);
-      toast.error("登録に失敗しました");
-    } finally {
-      setLinkSaving(false);
-    }
   };
 
   return (
@@ -800,14 +773,17 @@ export default function TherapistPortal() {
                     <Button variant="outline" className="flex-1" onClick={() => setGuideSite(site)}>
                       <FileText size={15} className="mr-1.5" />登録URLはこちら
                     </Button>
-                    <Button variant="outline" className="flex-1" onClick={() => openLink(site)}>
-                      <Send size={15} className="mr-1.5" />既に登録済みで連携
-                    </Button>
+                    {site === "o2" && (
+                      <Button variant="outline" className="flex-1" onClick={() => navigate(`/therapist/${token}/posts`)}>
+                        <Send size={15} className="mr-1.5" />本人用O2接続設定
+                      </Button>
+                    )}
                   </div>
+                  {site === "esutama" && <p className="text-[11px] text-muted-foreground mt-1.5">エスたまの連携は店舗管理者が一括設定します。</p>}
                 </div>
               ))}
               <p className="text-xs text-muted-foreground">
-                「登録URLはこちら」で新規登録方法を確認、「連携」でログイン情報を登録すると自動投稿が使えます。
+                O2のログイン情報は本人用ポータルだけで設定します。管理画面やスタッフへパスワードは表示されません。
               </p>
             </div>
           </div>
@@ -1314,31 +1290,6 @@ export default function TherapistPortal() {
         </DialogContent>
       </Dialog>
 
-      {/* 連携（ログイン情報登録）ダイアログ */}
-      <Dialog open={!!linkSite} onOpenChange={(o) => !o && setLinkSite(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{linkSite ? `${SITE_LABEL[linkSite]} と連携` : ""}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 mt-1">
-            <p className="text-xs text-muted-foreground">
-              登録済みのアカウントのログイン情報を入力してください。投稿時に自動でログインして投稿します。
-            </p>
-            <div>
-              <Label className="text-xs">ログインID</Label>
-              <Input value={linkForm.login_id} onChange={(e) => setLinkForm({ ...linkForm, login_id: e.target.value })} placeholder="ID" />
-            </div>
-            <div>
-              <Label className="text-xs">パスワード</Label>
-              <Input type="password" value={linkForm.password} onChange={(e) => setLinkForm({ ...linkForm, password: e.target.value })} placeholder="password" />
-            </div>
-            <Button className="w-full" onClick={saveLink} disabled={linkSaving}>
-              {linkSaving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Send size={14} className="mr-1.5" />}
-              連携する
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

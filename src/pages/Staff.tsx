@@ -129,7 +129,6 @@ interface Cast {
   o2_login_url?: string | null;
   o2_login_email?: string | null;
   o2_login_id?: string | null;
-  o2_login_password?: string | null;
   join_date: string;
   access_token?: string | null;
   therapist_years: number | null;
@@ -673,7 +672,7 @@ export default function Staff() {
     setMgmtProps((p) => p.map((x, idx) => (idx === i ? { ...x, [field]: val } : x)));
   const removeMgmtProp = (i: number) => setMgmtProps((p) => p.filter((_, idx) => idx !== i));
 
-  // 02アカウント情報の共有文面をクリップボードへコピー
+  // 02アカウントの案内文をコピー（パスワードは管理画面から共有しない）
   const handleCopyO2Account = (cast: Cast) => {
     const text = [
       `【${cast.name} 02アカウント】`,
@@ -683,8 +682,8 @@ export default function Staff() {
       cast.o2_login_email || "（未登録）",
       "■ID",
       cast.o2_login_id || "（未登録）",
-      "■PW",
-      cast.o2_login_password || "（未登録）",
+      "■パスワード",
+      "セラピスト本人がO2接続設定へ直接入力してください（共有禁止）",
     ].join("\n");
     navigator.clipboard.writeText(text).then(
       () => toast({ title: "コピーしました", description: "02アカウント情報をクリップボードにコピーしました" }),
@@ -746,7 +745,6 @@ export default function Staff() {
         o2_login_url: editingCast.o2_login_url || 'https://m-sns.net/cast/login/',
         o2_login_email: editingCast.o2_login_email || null,
         o2_login_id: editingCast.o2_login_id || null,
-        o2_login_password: editingCast.o2_login_password || null,
         hp_notice: editingCast.hp_notice || null,
         therapist_years: editingCast.therapist_years || null,
         favorite_techniques: editingCast.favorite_techniques || null,
@@ -2309,16 +2307,16 @@ export default function Staff() {
                         </Button>
                       </div>
 
-                      {/* 02アカウント情報（ワンクリック共有） */}
+                      {/* 02アカウント情報（パスワードは本人だけがポータルで設定） */}
                       <div className="border rounded-lg p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <Label className="font-semibold">02アカウント情報</Label>
+                          <Label className="font-semibold">02アカウント案内</Label>
                           <Button type="button" variant="outline" size="sm" onClick={() => handleCopyO2Account(editingCast)}>
                             <Copy className="h-3.5 w-3.5 mr-1.5" />共有用にコピー
                           </Button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          「【名前 02アカウント】■管理画面URL…」形式でコピーされます。セラピストへそのまま送れます。
+                          URL・登録メール・IDだけを共有します。パスワードは管理画面に保存せず、セラピスト本人がポータルのO2接続設定へ入力します。
                         </p>
                         <div>
                           <Label className="text-xs">管理画面URL</Label>
@@ -2328,16 +2326,11 @@ export default function Staff() {
                           <Label className="text-xs">登録メールアドレス</Label>
                           <Input className="mt-1" placeholder="info@example.com" value={editingCast.o2_login_email || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_email: e.target.value})} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <Label className="text-xs">ID</Label>
-                            <Input className="mt-1" placeholder="hana_sendai" value={editingCast.o2_login_id || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_id: e.target.value})} />
-                          </div>
-                          <div>
-                            <Label className="text-xs">PW</Label>
-                            <Input className="mt-1" placeholder="********" value={editingCast.o2_login_password || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_password: e.target.value})} />
-                          </div>
+                        <div>
+                          <Label className="text-xs">ID</Label>
+                          <Input className="mt-1" placeholder="hana_sendai" value={editingCast.o2_login_id || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_id: e.target.value})} />
                         </div>
+                        <a href="/marketing/o2" className="inline-flex text-xs text-primary hover:underline">O2連携管理を開く</a>
                       </div>
 
                       <div className="border rounded-lg p-4 space-y-3">
