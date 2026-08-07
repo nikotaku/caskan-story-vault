@@ -2,6 +2,16 @@
   "crons": [
     { "path": "/api/cron/estama-reconcile", "schedule": "10 18 * * *" }
   ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        { "type": "host", "value": "(www\\.)?zenryokuesthe\\.com" }
+      ],
+      "destination": "https://enka-salon.jp/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/robots.txt", "destination": "/api/robots" },
