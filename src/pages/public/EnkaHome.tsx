@@ -53,6 +53,33 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const hhmm = (t: string) => t?.slice(0, 5) ?? "";
 
+const isVideoUrl = (url: string) => /\.(?:mp4|webm|ogg)(?:[?#].*)?$/i.test(url);
+
+const LinkedParagraph = ({ text }: { text: string }) => {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+
+  return (
+    <p>
+      {parts.map((part, index) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={`${part}-${index}`}
+            href={part}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all underline underline-offset-2"
+            style={{ color: "var(--pub-accent-light,#f2a0bc)" }}
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </p>
+  );
+};
+
 const ENKA_EVENT_HERO_VIDEO = {
   enabled: true,
   url: "https://enka-w-videos.saito-crow.chatgpt.site/videos/teaser.mp4",
@@ -278,6 +305,9 @@ export default function EnkaHome() {
             <div className="divide-y overflow-hidden rounded-xl border" style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "var(--pub-bg,#150a11)" }}>
               {articles.map((article) => {
                 const expanded = expandedArticle === article.id;
+                const mediaUrls = article.image_urls ?? [];
+                const videoUrls = mediaUrls.filter(isVideoUrl);
+                const imageUrls = mediaUrls.filter((url) => !isVideoUrl(url));
                 return (
                   <article key={article.id} className="px-4 py-3" style={{ borderColor: "var(--pub-border,#4a2740)" }}>
                     <button
@@ -297,9 +327,26 @@ export default function EnkaHome() {
                     </button>
                     {expanded && (
                       <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--pub-border,#4a2740)" }}>
-                        {article.image_urls && article.image_urls.length > 0 && (
+                        {videoUrls.length > 0 && (
+                          <div className="mb-4 space-y-3">
+                            {videoUrls.map((url) => (
+                              <video
+                                key={url}
+                                src={url}
+                                controls
+                                playsInline
+                                preload="metadata"
+                                className="aspect-video w-full rounded-lg border object-contain"
+                                style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "#000" }}
+                              >
+                                お使いのブラウザは動画再生に対応していません。
+                              </video>
+                            ))}
+                          </div>
+                        )}
+                        {imageUrls.length > 0 && (
                           <div className="mb-4 flex gap-2 overflow-x-auto">
-                            {article.image_urls.map((url, index) => (
+                            {imageUrls.map((url, index) => (
                               <img key={url} src={url} alt={`${article.title} ${index + 1}`} loading="lazy" className="h-36 w-auto shrink-0 rounded-lg object-cover" />
                             ))}
                           </div>
@@ -311,7 +358,9 @@ export default function EnkaHome() {
                               .replace(/\*\*/g, "")
                               .split(/\n+/)
                               .filter(Boolean)
-                              .map((paragraph, index) => <p key={index}>{paragraph.replace(/^[-*]\s+/, "・")}</p>)}
+                              .map((paragraph, index) => (
+                                <LinkedParagraph key={index} text={paragraph.replace(/^[-*]\s+/, "・")} />
+                              ))}
                           </div>
                         )}
                       </div>
