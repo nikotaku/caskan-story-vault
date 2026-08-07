@@ -4,6 +4,14 @@
   ],
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        { "type": "host", "value": "(www\\.)?zenryokuesthe\\.com" }
+      ],
+      "destination": "https://enka-salon.jp/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         { "type": "host", "value": "(www\\.)?zenryokuesthe\\.com" }
