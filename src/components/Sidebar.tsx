@@ -19,6 +19,7 @@ import {
   Calculator,
   CheckSquare,
   BookUser,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -95,6 +96,11 @@ const menuItems: MenuItem[] = [
     href: "/marketing/media",
     label: "媒体攻略",
     icon: Megaphone,
+  },
+  {
+    href: "/marketing/o2",
+    label: "O2連携管理",
+    icon: Link2,
   },
   {
     href: "/tasks",
@@ -427,3 +433,4 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     </>
   );
 };
+
