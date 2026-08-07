@@ -562,6 +562,60 @@ export default function Schedule() {
       return !!disc && disc.name.includes("総額10,000円クーポン");
     });
 
+    // 艶華の予約確認SMSは、来店に必要な情報だけを短く表示する。
+    // ルームの sms_text に含まれる店舗情報・口コミ案内は除外し、
+    // 住所・目印・地図・入室時刻だけを再構成する。
+    if (adminStore?.custom_domain === "enka-salon.jp") {
+      const roomGuideText = roomSmsText?.split("【注意事項】")[0] ?? "";
+      const rawRoomNote = roomGuideText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.startsWith("※"));
+      const roomNote = rawRoomNote
+        ?.replace(
+          "※1階にある炭火焼き鳥四代目『はしもとや』が目印です。",
+          "目印：1階「はしもとや」"
+        )
+        .replace(
+          "※11階にお部屋がございます。1階とお間違い無いようにご注意ください。",
+          "※11階です（1階とお間違いないようご注意ください）"
+        );
+      const embeddedMapUrl = roomSmsText?.match(/https?:\/\/[^\s]+/)?.[0] ?? null;
+      const effectiveMapUrl = roomMapUrl ?? embeddedMapUrl;
+      const therapistLabel = !castName || castName === "フリー"
+        ? "フリー"
+        : `${castName}（${nominationLabel}）`;
+
+      return [
+        `${d.customer_name} 様`,
+        "ご予約ありがとうございます。",
+        "",
+        "【予約内容】",
+        `${dateStr} ${timeStr}〜`,
+        d.course_name,
+        (d.options ?? []).length > 0 ? `オプション：${(d.options ?? []).join("、")}` : null,
+        `担当：${therapistLabel}`,
+        `合計：${grandTotal.toLocaleString()}円`,
+        d.notes?.trim() ? `ご要望：${d.notes.trim()}` : null,
+        ...(payLink ? ["", `${paySetting?.payment_method ?? "カード"}決済：${payLink}`] : []),
+        ...(needsLineCouponNote && storeLineUrl
+          ? ["", `クーポン受取LINE：${storeLineUrl}`]
+          : []),
+        d.room || roomAddress || effectiveMapUrl
+          ? [
+              "",
+              d.room ? `【ルーム案内｜${d.room}】` : "【ルーム案内】",
+              roomAddress,
+              roomNote,
+              effectiveMapUrl ? `地図：${effectiveMapUrl}` : null,
+              "",
+              "※予約時間ちょうどにインターホンを押してください。",
+              "開始前は応答できません。",
+            ].filter((line) => line !== null).join("\n")
+          : null,
+      ].filter((line) => line !== null).join("\n");
+    }
+
     return [
       `${d.customer_name} 様`,
       `ご予約ありがとうございます。`,
