@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#fff8f9" />
+  <title>ご予約コースのご案内｜艶華</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;background:linear-gradient(180deg,#fff8f9 0%,#fff 45%);color:#2d2326}.wrap{max-width:720px;margin:0 auto;padding:24px 16px 56px}.brand{font-family:serif;color:#9d234d;letter-spacing:.18em;font-size:24px;font-weight:700}.eyebrow{margin-top:4px;color:#8d6f78;font-size:12px}.card{margin-top:20px;background:#fff;border:1px solid #efd7df;border-radius:22px;box-shadow:0 12px 34px rgba(86,36,52,.08);overflow:hidden}.videoBox{position:relative;aspect-ratio:9/16;max-height:70vh;background:#181214;display:flex;align-items:center;justify-content:center}.videoBox video{width:100%;height:100%;object-fit:cover}.placeholder{padding:28px;text-align:center;color:#f9e9ee}.placeholder strong{display:block;font-size:20px;margin-bottom:10px}.play{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.28);border:0;color:#fff;font-size:18px;font-weight:700}.play span{background:rgba(157,35,77,.92);padding:16px 24px;border-radius:999px}.body{padding:22px}.title{font-size:22px;font-weight:800;margin:0 0 8px}.sub{color:#846b72;font-size:14px;line-height:1.7}.summary{margin-top:20px;border-top:1px solid #f2e4e8;padding-top:18px}.row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #f6edf0}.label{width:84px;flex:0 0 84px;color:#9d234d;font-weight:700}.value{line-height:1.7}.note{margin-top:18px;background:#fff5f7;border-radius:14px;padding:14px 16px;color:#6f535c;font-size:13px;line-height:1.7}.scripts{margin-top:16px;font-size:15px;line-height:1.9}.scripts p{margin:.5em 0}.hidden{display:none}.footer{text-align:center;color:#ab8d96;font-size:12px;margin-top:24px}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="brand">艶華</div>
+    <div class="eyebrow">ENKA COURSE GUIDE</div>
+
+    <section class="card">
+      <div class="videoBox" id="videoBox">
+        <video id="guideVideo" playsinline controls preload="metadata"></video>
+        <div class="placeholder hidden" id="placeholder">
+          <strong>コース説明動画を準備中です</strong>
+          下の説明で、ご予約内容をご確認いただけます。
+        </div>
+        <button class="play" id="playButton" type="button"><span>説明動画を再生</span></button>
+      </div>
+      <div class="body">
+        <h1 class="title">ご予約内容のご案内</h1>
+        <div class="sub">ご予約いただいたコース・オプションの内容を、来店前に分かりやすくご案内します。</div>
+
+        <div class="summary">
+          <div class="row"><div class="label">コース</div><div class="value" id="courseText">—</div></div>
+          <div class="row"><div class="label">オプション</div><div class="value" id="optionText">なし</div></div>
+        </div>
+
+        <div class="scripts" id="scriptText"></div>
+        <div class="note">当日のコース・オプション変更も可能です。内容について分からない点があれば、ご来店時にセラピストへお申し付けください。</div>
+      </div>
+    </section>
+    <div class="footer">艶華｜ご予約内容確認ページ</div>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const course = (params.get('course') || '').trim();
+    const options = (params.get('options') || '').split('|').map(v => v.trim()).filter(Boolean);
+
+    const courseText = document.getElementById('courseText');
+    const optionText = document.getElementById('optionText');
+    const scriptText = document.getElementById('scriptText');
+    const video = document.getElementById('guideVideo');
+    const placeholder = document.getElementById('placeholder');
+    const playButton = document.getElementById('playButton');
+
+    courseText.textContent = course || 'ご予約コース';
+    optionText.textContent = options.length ? options.join('、') : 'なし';
+
+    const normalize = (s) => s.replace(/\s+/g,'');
+    const c = normalize(course);
+    const all = normalize([course, ...options].join(' '));
+
+    let lines = [];
+    let videoKey = 'basic';
+
+    if (c.includes('70分お試し')) {
+      videoKey = 'trial70';
+      lines.push('こちらの70分お試しプランは、60分の施術に10分延長が付き、マイクロビキニでの施術が含まれています。');
+    } else if (c.includes('110分リラックス')) {
+      videoKey = 'relax110';
+      lines.push('こちらの110分リラックスプランは、100分の施術に加え、マイクロビキニと深層リンパドレナージュが含まれています。');
+    } else {
+      lines.push(`こちらは「${course || 'ご予約のコース'}」です。ご予約内容に沿って施術をご案内します。`);
+    }
+
+    if (all.includes('桜')) {
+      videoKey = 'sakura';
+      lines.push('オプションパック「桜」には、マイクロビキニと深層リンパドレナージュが含まれています。');
+    }
+    if (all.includes('牡丹')) {
+      videoKey = 'botan';
+      lines.push('オプションパック「牡丹」には、マイクロビキニ、深層リンパドレナージュ、極液が含まれています。');
+    }
+
+    lines.push('ご来店後に内容を確認してから、コースやオプションを変更していただくことも可能です。');
+    scriptText.innerHTML = lines.map(t => `<p>${t}</p>`).join('');
+
+    const videoSources = {
+      basic: '/course-guides/basic.mp4',
+      trial70: '/course-guides/trial70.mp4',
+      relax110: '/course-guides/relax110.mp4',
+      sakura: '/course-guides/sakura.mp4',
+      botan: '/course-guides/botan.mp4'
+    };
+
+    const src = videoSources[videoKey];
+    video.src = src;
+
+    const tryPlay = async () => {
+      try {
+        await video.play();
+        playButton.style.display = 'none';
+      } catch (_) {
+        playButton.style.display = 'flex';
+      }
+    };
+
+    video.addEventListener('loadeddata', tryPlay, { once:true });
+    video.addEventListener('error', () => {
+      video.classList.add('hidden');
+      playButton.style.display = 'none';
+      placeholder.classList.remove('hidden');
+    });
+    playButton.addEventListener('click', async () => {
+      try { await video.play(); playButton.style.display = 'none'; } catch (_) {}
+    });
+  </script>
+</body>
+</html>
