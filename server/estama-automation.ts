@@ -1,6 +1,6 @@
 import Browserbase from "@browserbasehq/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { chromium, type Browser, type Locator, type Page } from "playwright-core";
 import { createHash } from "node:crypto";
 
 export const ESTAMA_CAST_EDIT_URL = "https://estama.jp/admin/cast_edit/";
@@ -60,7 +60,7 @@ type Connection = {
 type AutomationJob = {
   id: string;
   store_id: string;
-  job_type: "estama_register_cast" | "estama_sync_shift" | "estama_reconcile_shifts";
+  job_type: "estama_register_cast" | "estama_sync_shift" | "estama_reconcile_shifts" | "estama_post_diary";
   status: string;
   cast_id: string | null;
   shift_id: string | null;
@@ -70,6 +70,22 @@ type AutomationJob = {
 };
 
 export type SoulCredentials = { email: string; password: string };
+
+const ESTAMA_SHIFT_DAYS = 14;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1_000;
+
+const jstDate = (value = new Date()) => new Date(value.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+
+const addDays = (date: string, days: number) => {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+};
+
+const estamaShiftWindow = () => {
+  const startDate = jstDate();
+  return { startDate, endDate: addDays(startDate, ESTAMA_SHIFT_DAYS - 1) };
+};
 
 export class LoginRequiredError extends Error {
   constructor(message = "エステ魂への再ログインが必要です") {
@@ -358,9 +374,9 @@ function normalizePhotoUrl(raw: string) {
   return url.toString();
 }
 
-async function uploadPhotos(page: Page, urls: string[]) {
+async function uploadPhotos(page: Page, urls: string[], maxPhotos = 6) {
   const inputs = page.locator('input[type="file"]');
-  const count = Math.min(await inputs.count(), urls.length, 6);
+  const count = Math.min(await inputs.count(), urls.length, maxPhotos);
   let uploaded = 0;
   for (let index = 0; index < count; index += 1) {
     try {
@@ -387,7 +403,7 @@ async function uploadPhotos(page: Page, urls: string[]) {
 
 async function clickSave(page: Page) {
   const submit = page.locator('button, input[type="submit"], a').filter({
-    hasText: /保存する|登録する|更新する|保存|登録|更新/,
+    hasText: /保存する|登録する|更新する|投稿する|保存|登録|更新|投稿/,
   }).last();
   if (!await submit.count()) throw new Error("エステ魂の保存ボタンが見つかりません");
   await Promise.all([
@@ -395,141 +411,60 @@ async function clickSave(page: Page) {
     submit.click(),
   ]);
   const confirm = page.locator('button, input[type="submit"], a').filter({
-    hasText: /確定|はい|登録する|保存する/,
+    hasText: /確定|はい|登録する|保存する|投稿する/,
   }).last();
   if (await confirm.count()) await confirm.click().catch(() => undefined);
   await page.waitForTimeout(800);
 }
 
-async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, soul?: SoulCredentials) {
-  if (!job.cast_id) throw new Error("登録対象のセラピストがありません");
-  const { data: cast, error: castError } = await admin.from("casts").select("*").eq("id", job.cast_id).single();
-  if (castError || !cast) throw castError || new Error("セラピストが見つかりません");
-  const { data: current } = await admin.from("external_cast_profiles").select("*")
-    .eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle();
-  const editUrl = current?.admin_edit_url || ESTAMA_CAST_EDIT_URL;
+const normalizeEstamaName = (value: string) => value
+  .normalize("NFKC")
+  .toLocaleLowerCase("ja-JP")
+  .replace(/[\s\u3000・･·_＿―—–-]+/g, "")
+  .replace(/[()（）\u005b\u005d【】「」『』]/g, "")
+  .trim();
 
-  await admin.from("external_cast_profiles").upsert({
-    store_id: job.store_id, cast_id: job.cast_id, provider: "estama",
-    sync_status: "syncing", last_error: null,
-  }, { onConflict: "cast_id,provider" });
+async function findEstamaCastRow(
+  page: Page,
+  options: { externalId?: string | null; remoteName?: string | null; localName: string },
+): Promise<Locator> {
+  const rows = page.locator("tr, .cast-row, .schedule-row, .therapist-row, .list-group-item, li");
+  const count = await rows.count();
 
-  await page.goto(editUrl, { waitUntil: "domcontentloaded" });
-  await ensureAdminLogin(page, "#Name");
-  const data = castToEstama(cast as CastRecord);
-  const fields: Array<[string, unknown]> = [
-    ["#Name", data.name], ["#Description", data.description], ["#CastPr", data.cast_pr],
-    ['[name="experience"]', data.experience], ['[name="age"]', data.age], ['[name="tall"]', data.tall],
-    ['[name="size_b"]', data.size_b], ['[name="size_cup"]', data.size_cup],
-    ['[name="size_w"]', data.size_w], ['[name="size_h"]', data.size_h], ['[name="blood"]', data.blood],
-    ["#ForteProcedure", data.forte_procedure], ["#Food", data.food], ["#ManLikeType", data.man_like_type],
-    ["#LikeTalent", data.like_talent], ["#Holiday", data.holiday], ["#Vogue", data.vogue],
-    ["#Blog", data.blog], ["#Twitter", data.twitter], ["#Instagram", data.instagram],
-  ];
-  for (const [selector, value] of fields) await setField(page, selector, value);
-  for (const type of data.types) {
-    const checkbox = page.locator(`#type_${type}`);
-    if (await checkbox.count() && !await checkbox.isChecked()) await checkbox.check();
-  }
-  const uploadedPhotos = await uploadPhotos(page, data.photos);
-  await clickSave(page);
-
-  const savedEditUrl = page.url();
-  const publicHref = await page.locator('a[href*="/shop/"][href*="/cast/"]').first().getAttribute("href").catch(() => null);
-  const publicUrl = publicHref ? new URL(publicHref, page.url()).toString() : cast.estama_profile_url || null;
-  const externalId = publicUrl?.match(/\/cast\/(\d+)\//)?.[1]
-    || page.url().match(/(?:cast_id=|\/cast_edit\/)(\d+)/)?.[1]
-    || current?.external_cast_id || null;
-  let soulResult: Json = {};
-  if (soul) {
-    try { soulResult = await setupSoulTherapist(page, data.name, soul); }
-    catch (error) { soulResult = { status: "error", error: error instanceof Error ? error.message : String(error) }; }
-  }
-
-  const profilePatch = {
-    store_id: job.store_id, cast_id: job.cast_id, provider: "estama",
-    external_cast_id: externalId, admin_edit_url: savedEditUrl, public_profile_url: publicUrl,
-    remote_name: data.name, sync_status: "synced", last_profile_sync_at: new Date().toISOString(), last_error: null,
-    ...(soul ? {
-      soul_status: soulResult.status === "configured" ? "configured" : soulResult.status === "issued" ? "issued" : "error",
-      soul_login_url: soulResult.loginUrl || null,
-      soul_account_email: soul.email,
-    } : {}),
-  };
-  const { error: profileError } = await admin.from("external_cast_profiles").upsert(profilePatch, { onConflict: "cast_id,provider" });
-  if (profileError) throw profileError;
-  await admin.from("casts").update({ estama_profile_url: publicUrl, estama_listed: true }).eq("id", job.cast_id);
-  return { externalId, publicUrl, uploadedPhotos, soul: soulResult };
-}
-
-async function setupSoulTherapist(page: Page, castName: string, credentials: SoulCredentials) {
-  await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
-  await ensureAdminLogin(page);
-  const row = page.locator("tr, li, .card, .list-group-item").filter({ hasText: castName }).first();
-  if (!await row.count()) throw new Error(`魂セラピスト一覧に「${castName}」が見つかりません`);
-  const start = row.getByText(/魂セラピストを始める/, { exact: false }).first();
-  if (await start.count()) {
-    await start.click();
-    const confirm = page.getByText(/確定|はい|開始する/, { exact: false }).last();
-    if (await confirm.count()) await confirm.click();
-    await page.waitForTimeout(800);
-  }
-  const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
-  if (!await login.count()) return { status: "issued" };
-  const context = page.context();
-  const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-  await login.click();
-  const popup = await popupPromise;
-  const accountPage = popup || page;
-  await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
-  const loginUrl = accountPage.url();
-  const email = accountPage.locator('input[type="email"], input[name*="mail" i]').first();
-  const passwords = accountPage.locator('input[type="password"]');
-  if (await email.count()) await email.fill(credentials.email);
-  if (await passwords.count()) await passwords.nth(0).fill(credentials.password);
-  if (await passwords.count() > 1) await passwords.nth(1).fill(credentials.password);
-  if (await email.count() || await passwords.count()) await clickSave(accountPage);
-  return { status: "configured", loginUrl };
-}
-
-async function discoverShiftAdminUrl(page: Page, configuration: Json | null) {
-  const configured = typeof configuration?.shift_admin_url === "string" ? configuration.shift_admin_url : null;
-  if (configured) return configured;
-  await page.goto("https://estama.jp/admin/", { waitUntil: "domcontentloaded" });
-  await ensureAdminLogin(page);
-  const link = page.locator("a").filter({ hasText: /出勤|シフト|スケジュール/ }).first();
-  const href = await link.getAttribute("href").catch(() => null);
-  return href ? new URL(href, page.url()).toString() : "https://estama.jp/admin/schedule/";
-}
-
-async function setTimeInRow(row: ReturnType<Page["locator"]>, kind: "start" | "end", value: string) {
-  const pattern = kind === "start" ? /start|from|open|開始/i : /end|to|close|終了/i;
-  const input = row.locator("input, select");
-  const total = await input.count();
-  let target = row.locator(`input[name*="${kind}" i], select[name*="${kind}" i]`).first();
-  if (!await target.count()) {
-    for (let i = 0; i < total; i += 1) {
-      const name = await input.nth(i).getAttribute("name") || "";
-      if (pattern.test(name)) { target = input.nth(i); break; }
+  if (options.externalId) {
+    const idPattern = new RegExp(`(^|\\D)${options.externalId}(\\D|$)`);
+    const matches: Locator[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const row = rows.nth(index);
+      const identity = await row.locator("a, input, button, [data-id]").evaluateAll((elements) =>
+        elements.map((element) => [
+          element.getAttribute("href"), element.getAttribute("value"), element.getAttribute("data-id"),
+          element.getAttribute("name"), element.getAttribute("id"),
+        ].filter(Boolean).join(" ")).join(" "),
+      ).catch(() => "");
+      if (idPattern.test(identity)) matches.push(row);
     }
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) throw new Error(`エステ魂ID ${options.externalId} に一致する行が複数あります`);
   }
-  if (!await target.count()) {
-    const candidates = row.locator('input[type="time"], select');
-    target = candidates.nth(kind === "start" ? 0 : 1);
+
+  const expected = [...new Set([options.remoteName, options.localName].filter(Boolean).map((name) => normalizeEstamaName(String(name))))];
+  const matches: Locator[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const row = rows.nth(index);
+    const values = await row.locator("td, th, .name, .cast-name, .therapist-name, strong, b, span, a").allTextContents().catch(() => []);
+    const rowText = await row.innerText().catch(() => "");
+    const candidates = [...values, ...rowText.split(/\r?\n/)];
+    if (candidates.some((candidate) => expected.includes(normalizeEstamaName(candidate)))) matches.push(row);
   }
-  if (!await target.count()) throw new Error(`エステ魂の${kind === "start" ? "開始" : "終了"}時刻欄が見つかりません`);
-  const tag = await target.evaluate((element) => element.tagName.toLowerCase());
-  if (tag === "select") {
-    const alternatives = [value.slice(0, 5), value.slice(0, 2), String(Number(value.slice(0, 2)))];
-    let selected = false;
-    for (const option of alternatives) {
-      try { await target.selectOption(option); selected = true; break; } catch { /* 次候補 */ }
-    }
-    if (!selected) throw new Error(`時刻 ${value} を選択できません`);
-  } else await target.fill(value.slice(0, 5));
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    throw new Error(`「${options.remoteName || options.localName}」と同名のセラピストが複数います。エステ魂IDを確認してください`);
+  }
+  throw new Error(`エステ魂に「${options.remoteName || options.localName}」の完全一致が見つかりません`);
 }
 
-async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, connection: Connection) {
+asyn…1860 tokens truncated…, connection: Connection) {
   const payload = job.payload || {};
   let shift: ShiftRecord | null = null;
   if (job.shift_id) {
@@ -548,16 +483,28 @@ async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, con
   const action = payload.action || (shift?.approval_status === "approved" && shift?.status !== "cancelled" ? "upsert" : "delete");
   const date = String(desired.shift_date || "").slice(0, 10);
   if (!date) throw new Error("シフト日がありません");
+  const window = estamaShiftWindow();
+  if (date < window.startDate || date > window.endDate) {
+    if (job.shift_id) await admin.from("shifts").update({ estama_registered: false }).eq("id", job.shift_id);
+    return {
+      skipped: true,
+      reason: "outside_estama_window",
+      message: `エステ魂の同期対象（${window.startDate}〜${window.endDate}）外のため保留しました`,
+      date,
+      range: window,
+    };
+  }
   const shiftUrl = await discoverShiftAdminUrl(page, connection.configuration);
   await page.goto(shiftUrl, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
   await setField(page, 'input[type="date"], input[name*="date" i], select[name*="date" i]', date);
   await page.waitForTimeout(500);
 
-  const row = page.locator("tr, .cast-row, .schedule-row, li").filter({
-    hasText: external.remote_name || cast.name,
-  }).first();
-  if (!await row.count()) throw new Error(`出勤管理に「${external.remote_name || cast.name}」が見つかりません`);
+  const row = await findEstamaCastRow(page, {
+    externalId: external.external_cast_id,
+    remoteName: external.remote_name,
+    localName: cast.name,
+  });
   if (action === "delete") {
     const off = row.getByText(/休み|非出勤|削除/, { exact: false }).first();
     if (await off.count()) await off.click();
@@ -582,11 +529,7 @@ async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, con
 }
 
 async function reconcileShifts(admin: AdminClient, page: Page, job: AutomationJob, connection: Connection) {
-  const today = new Date(Date.now() + 9 * 60 * 60 * 1_000);
-  const startDate = today.toISOString().slice(0, 10);
-  const end = new Date(today);
-  end.setUTCDate(end.getUTCDate() + 6);
-  const endDate = end.toISOString().slice(0, 10);
+  const { startDate, endDate } = estamaShiftWindow();
   let remoteSnapshot: Json = { available: false };
   if (connection.shop_id) {
     const publicUrl = `https://estama.jp/shop/${connection.shop_id}/schedule/`;
@@ -619,10 +562,8 @@ async function reconcileShifts(admin: AdminClient, page: Page, job: AutomationJo
   }));
   let queued = 0;
   for (const profile of profiles || []) {
-    for (let offset = 0; offset <= 6; offset += 1) {
-      const date = new Date(today);
-      date.setUTCDate(date.getUTCDate() + offset);
-      const day = date.toISOString().slice(0, 10);
+    for (let offset = 0; offset < ESTAMA_SHIFT_DAYS; offset += 1) {
+      const day = addDays(startDate, offset);
       const desired = byKey.get(`${profile.cast_id}:${day}`);
       await admin.rpc("enqueue_estama_job", {
         p_store_id: job.store_id,
@@ -644,12 +585,115 @@ async function reconcileShifts(admin: AdminClient, page: Page, job: AutomationJo
   return { range: { startDate, endDate }, remoteSnapshot, queued };
 }
 
-async function claimNextJob(admin: AdminClient, storeId?: string, castId?: string) {
+async function skipOutsideShiftWindow(admin: AdminClient, job: AutomationJob): Promise<Json | null> {
+  if (job.job_type !== "estama_sync_shift") return null;
+  let date = typeof job.payload?.shift_date === "string" ? job.payload.shift_date.slice(0, 10) : "";
+  if (!date && job.shift_id) {
+    const { data } = await admin.from("shifts").select("shift_date").eq("id", job.shift_id).maybeSingle();
+    date = String(data?.shift_date || "").slice(0, 10);
+  }
+  if (!date) return null;
+  const window = estamaShiftWindow();
+  if (date >= window.startDate && date <= window.endDate) return null;
+  if (job.shift_id) await admin.from("shifts").update({ estama_registered: false }).eq("id", job.shift_id);
+  return {
+    skipped: true,
+    reason: "outside_estama_window",
+    message: `エステ魂の同期対象（${window.startDate}〜${window.endDate}）外のため保留しました`,
+    date,
+    range: window,
+  };
+}
+
+async function updatePostOverallStatus(admin: AdminClient, postId: string) {
+  const { data } = await admin.from("cast_posts").select("hp_status,o2_status,esutama_status").eq("id", postId).single();
+  if (!data) return;
+  const statuses = [data.hp_status, data.o2_status, data.esutama_status];
+  const complete = statuses.every((status) => status === "posted");
+  const failed = statuses.some((status) => status === "failed" || status === "skipped");
+  await admin.from("cast_posts").update({
+    status: complete ? "posted" : failed ? "failed" : "pending",
+    posted_at: complete ? new Date().toISOString() : null,
+  }).eq("id", postId);
+}
+
+async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJob) {
+  const postId = typeof job.payload?.post_id === "string" ? job.payload.post_id : "";
+  if (!job.cast_id || !postId) throw new Error("写メ日記の投稿情報がありません");
+  const [{ data: post, error: postError }, { data: cast, error: castError }, { data: external }] = await Promise.all([
+    admin.from("cast_posts").select("id,title,body,image_urls,esutama_status,esutama_attempts").eq("id", postId).eq("cast_id", job.cast_id).single(),
+    admin.from("casts").select("id,name").eq("id", job.cast_id).single(),
+    admin.from("external_cast_profiles").select("*").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
+  ]);
+  if (postError || !post) throw postError || new Error("投稿が見つかりません");
+  if (castError || !cast) throw castError || new Error("セラピストが見つかりません");
+  if (!external || external.sync_status !== "synced") throw new Error("先にセラピストをエステ魂へ登録してください");
+  if (post.esutama_status === "posted") return { posted: true, skipped: true, reason: "already_posted" };
+
+  await admin.from("cast_posts").update({
+    esutama_status: "posting",
+    esutama_error: null,
+    esutama_attempts: Number(post.esutama_attempts || 0) + 1,
+    last_attempt_at: new Date().toISOString(),
+  }).eq("id", postId);
+
+  await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page);
+  const row = await findEstamaCastRow(page, {
+    externalId: external.external_cast_id,
+    remoteName: external.remote_name,
+    localName: cast.name,
+  });
+  const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+  if (!await login.count()) throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
+
+  const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
+  await login.click();
+  const popup = await popupPromise;
+  const accountPage = popup || page;
+  await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+  if (await accountPage.locator('input[type="password"]').count()) {
+    throw new LoginRequiredError("エステ魂のセラピスト側ログインが切れています");
+  }
+
+  const diaryLink = accountPage.locator("a, button").filter({ hasText: /写メ日記|写メブログ|日記/ }).first();
+  if (!/diary|blog|photo/i.test(accountPage.url())) {
+    if (!await diaryLink.count()) throw new Error("エステ魂の写メ日記メニューが見つかりません");
+    await diaryLink.click();
+    await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+  }
+  const newPost = accountPage.locator("a, button").filter({ hasText: /新規投稿|日記を書く|投稿する|新規作成/ }).first();
+  if (await newPost.count()) {
+    await newPost.click();
+    await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+  }
+
+  await setField(accountPage, 'input[name*="title" i], input[id*="title" i], input[name*="subject" i]', post.title || "写メ日記");
+  await setField(accountPage, 'textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea', post.body);
+  const bodyField = accountPage.locator('textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea').first();
+  if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
+  const imageUrls = Array.isArray(post.image_urls) ? post.image_urls.filter((url): url is string => typeof url === "string") : [];
+  const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, 3);
+  await clickSave(accountPage);
+  const visibleError = await accountPage.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible').allTextContents().catch(() => []);
+  if (visibleError.some((value) => value.trim())) throw new Error(`エステ魂: ${visibleError.join(" / ").slice(0, 300)}`);
+
+  await admin.from("cast_posts").update({
+    esutama_status: "posted",
+    esutama_error: null,
+    posted_at: new Date().toISOString(),
+  }).eq("id", postId);
+  await updatePostOverallStatus(admin, postId);
+  return { posted: true, uploadedPhotos, url: accountPage.url() };
+}
+
+async function claimNextJob(admin: AdminClient, storeId?: string, castId?: string, jobId?: string) {
   let query = admin.from("automation_jobs").select("*")
     .eq("provider", "estama").eq("status", "queued").lte("available_at", new Date().toISOString())
     .order("created_at", { ascending: true }).limit(1);
   if (storeId) query = query.eq("store_id", storeId);
   if (castId) query = query.eq("cast_id", castId);
+  if (jobId) query = query.eq("id", jobId);
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -667,11 +711,16 @@ async function completeJob(admin: AdminClient, job: AutomationJob, result: Json)
 
 async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  const postId = job.job_type === "estama_post_diary" && typeof job.payload?.post_id === "string"
+    ? job.payload.post_id
+    : null;
   if (error instanceof LoginRequiredError) {
     await Promise.all([
       admin.from("automation_jobs").update({ status: "waiting_for_login", error_message: message }).eq("id", job.id),
       admin.from("automation_connections").update({ status: "expired", last_error: message }).eq("store_id", job.store_id).eq("provider", "estama"),
+      ...(postId ? [admin.from("cast_posts").update({ esutama_status: "pending", esutama_error: message }).eq("id", postId)] : []),
     ]);
+    if (postId) await updatePostOverallStatus(admin, postId);
     return;
   }
   const retry = job.attempts < job.max_attempts;
@@ -683,6 +732,13 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
     available_at: availableAt,
     finished_at: retry ? null : new Date().toISOString(),
   }).eq("id", job.id);
+  if (postId) {
+    await admin.from("cast_posts").update({
+      esutama_status: retry ? "pending" : "failed",
+      esutama_error: message,
+    }).eq("id", postId);
+    await updatePostOverallStatus(admin, postId);
+  }
   if (job.cast_id) {
     await admin.from("external_cast_profiles").update({
       ...(job.job_type === "estama_register_cast" ? { sync_status: "error" } : {}),
@@ -693,7 +749,7 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
 
 export async function processAvailableJobs(
   admin: AdminClient,
-  options: { storeId?: string; castId?: string; limit?: number; soulCredentials?: SoulCredentials } = {},
+  options: { storeId?: string; castId?: string; jobId?: string; limit?: number; soulCredentials?: SoulCredentials } = {},
 ) {
   const limit = Math.max(1, Math.min(options.limit || 20, 60));
   const results: Array<{ id: string; status: string; result?: Json; error?: string }> = [];
@@ -706,9 +762,15 @@ export async function processAvailableJobs(
 
   try {
     for (let index = 0; index < limit; index += 1) {
-      const job = await claimNextJob(admin, options.storeId, options.castId);
+      const job = await claimNextJob(admin, options.storeId, options.castId, options.jobId);
       if (!job) break;
       try {
+        const skippedShift = await skipOutsideShiftWindow(admin, job);
+        if (skippedShift) {
+          await completeJob(admin, job, skippedShift);
+          results.push({ id: job.id, status: "completed", result: skippedShift });
+          continue;
+        }
         if (!connection || activeStore !== job.store_id) {
           if (browser) await disconnect(browser);
           if (bb && sessionId) await releaseSession(bb, sessionId);
@@ -727,6 +789,7 @@ export async function processAvailableJobs(
         let result: Json;
         if (job.job_type === "estama_register_cast") result = await registerCast(admin, page, job, options.soulCredentials);
         else if (job.job_type === "estama_sync_shift") result = await syncShift(admin, page, job, connection);
+        else if (job.job_type === "estama_post_diary") result = await postEstamaDiary(admin, page, job);
         else result = await reconcileShifts(admin, page, job, connection);
         await completeJob(admin, job, result);
         results.push({ id: job.id, status: "completed", result });
@@ -752,6 +815,31 @@ export async function enqueueCastJob(admin: AdminClient, storeId: string, castId
   return data as string;
 }
 
+export async function enqueueEstamaDiaryJob(admin: AdminClient, storeId: string, castId: string, postId: string) {
+  const { data: active } = await admin.from("automation_jobs").select("id")
+    .eq("store_id", storeId)
+    .eq("cast_id", castId)
+    .eq("job_type", "estama_post_diary")
+    .in("status", ["queued", "running", "waiting_for_login"])
+    .contains("payload", { post_id: postId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (active?.id) return active.id as string;
+  const { data: post } = await admin.from("cast_posts").select("esutama_attempts").eq("id", postId).single();
+  const attempt = Number(post?.esutama_attempts || 0) + 1;
+  const { data, error } = await admin.rpc("enqueue_estama_job", {
+    p_store_id: storeId,
+    p_job_type: "estama_post_diary",
+    p_cast_id: castId,
+    p_shift_id: null,
+    p_dedupe_key: `estama:diary:${postId}:${attempt}`,
+    p_payload: { source: "therapist_portal", post_id: postId, attempt },
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 export async function enqueueReconcileJobs(admin: AdminClient) {
   const { data: connections, error } = await admin.from("automation_connections").select("store_id")
     .eq("provider", "estama").eq("status", "ready");
@@ -769,3 +857,4 @@ export async function enqueueReconcileJobs(admin: AdminClient) {
   }
   return connections?.length || 0;
 }
+
