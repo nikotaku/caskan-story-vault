@@ -9,3 +9,18 @@ export const toExtTime = (timeStr: string): string => {
   if (h < 6) return `${24 + h}:${String(m).padStart(2, "0")}`;
   return s;
 };
+
+/**
+ * 24:00 以降の営業日時を、DBに保存できる暦日＋24時間未満の時刻へ変換する。
+ * 例: 8/8 24:40 → 8/9 00:40
+ */
+export const toStoredTime = (timeStr: string): { dayOffset: number; time: string } => {
+  const [rawHour, rawMinute] = timeStr.slice(0, 5).split(":").map(Number);
+  const hour = Number.isFinite(rawHour) ? Math.max(0, rawHour) : 0;
+  const minute = Number.isFinite(rawMinute) ? Math.min(59, Math.max(0, rawMinute)) : 0;
+
+  return {
+    dayOffset: Math.floor(hour / 24),
+    time: `${String(hour % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  };
+};
