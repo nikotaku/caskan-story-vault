@@ -22,9 +22,43 @@ type O2Row = {
   profile_url: string | null;
   credential_configured: boolean;
   login_id: string | null;
+  x_profile_url: string | null;
+  x_credential_configured: boolean;
+  x_login_id: string | null;
   last_o2_status: string | null;
   last_o2_error: string | null;
   last_posted_at: string | null;
+};
+
+type EditForm = {
+  created: boolean;
+  linkageRequested: boolean;
+  o2LoginId: string;
+  o2Password: string;
+  xLoginId: string;
+  xPassword: string;
+};
+
+const normalizeO2Id = (value: string) => value
+  .trim()
+  .replace(/^https?:\/\/(?:www\.)?m-sns\.net\/profile\//i, "")
+  .replace(/^@/, "")
+  .split(/[/?#]/, 1)[0];
+
+const normalizeXId = (value: string) => value
+  .trim()
+  .replace(/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\//i, "")
+  .replace(/^@/, "")
+  .split(/[/?#]/, 1)[0];
+
+const buildO2ProfileUrl = (value: string) => {
+  const id = normalizeO2Id(value);
+  return id ? `https://m-sns.net/profile/@${id}` : "";
+};
+
+const buildXProfileUrl = (value: string) => {
+  const id = normalizeXId(value);
+  return id ? `https://x.com/${id}` : "";
 };
 
 const rpc = (name: string, args: Record<string, unknown>) =>
@@ -44,8 +78,9 @@ export default function O2Management() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<O2Row | null>(null);
-  const [editForm, setEditForm] = useState({ created: false, linkageRequested: false, loginId: "", password: "", profileUrl: "" });
-  const [showPassword, setShowPassword] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2LoginId: "", o2Password: "", xLoginId: "", xPassword: "" });
+  const [showO2Password, setShowO2Password] = useState(false);
+  const [showXPassword, setShowXPassword] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const { storeId, store, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
@@ -57,7 +92,7 @@ export default function O2Management() {
   const load = useCallback(async () => {
     if (!user || storeLoading) return;
     setLoading(true);
-    const { data, error } = await rpc("get_sns_connection_overview", { p_store_id: storeId });
+    const { data, error } = await rpc("get_sns_connection_overview_v2", { p_store_id: storeId });
     if (error) toast.error(error.message);
     setRows((data || []) as O2Row[]);
     setLoading(false);
@@ -68,6 +103,7 @@ export default function O2Management() {
   const summary = useMemo(() => ({
     total: rows.length,
     credentials: rows.filter((row) => row.credential_configured).length,
+    xCredentials: rows.filter((row) => row.x_credential_configured).length,
     created: rows.filter((row) => row.o2_created).length,
     linked: rows.filter((row) => row.o2_linkage_requested).length,
     errors: rows.filter((row) => row.last_o2_status === "failed").length,
@@ -75,6 +111,7 @@ export default function O2Management() {
   const cards = [
     { label: "在籍", value: summary.total, icon: Users },
     { label: "連携設定済み", value: summary.credentials, icon: ShieldCheck },
+    { label: "X連携済み", value: summary.xCredentials, icon: ShieldCheck },
     { label: "O2作成済み", value: summary.created, icon: CheckCircle },
     { label: "店舗連携申請", value: summary.linked, icon: Link2 },
     { label: "投稿エラー", value: summary.errors, icon: XCircle },
@@ -82,39 +119,56 @@ export default function O2Management() {
 
   const openEdit = (row: O2Row) => {
     setEditing(row);
-    setShowPassword(false);
+    setShowO2Password(false);
+    setShowXPassword(false);
     setEditForm({
       created: row.o2_created,
       linkageRequested: row.o2_linkage_requested,
-      loginId: row.login_id || "",
-      password: "",
-      profileUrl: row.profile_url || "",
+      o2LoginId: row.login_id || normalizeO2Id(row.profile_url || ""),
+      o2Password: "",
+      xLoginId: row.x_login_id || normalizeXId(row.x_profile_url || ""),
+      xPassword: "",
     });
   };
 
   const save = async () => {
     if (!editing) return;
-    if (editForm.profileUrl && !/^https:\/\//i.test(editForm.profileUrl)) {
-      toast.error("プロフィールURLはhttps://から入力してください");
+    const o2LoginId = normalizeO2Id(editForm.o2LoginId);
+    const xLoginId = normalizeXId(editForm.xLoginId);
+    if (o2LoginId && !/^[A-Za-z0-9_]+$/.test(o2LoginId)) {
+      toast.error("O2のIDは半角英数字とアンダーバーで入力してください");
       return;
     }
-    if (editForm.password && !editForm.loginId.trim()) {
-      toast.error("IDを入力してください");
+    if (xLoginId && !/^[A-Za-z0-9_]+$/.test(xLoginId)) {
+      toast.error("XのIDは半角英数字とアンダーバーで入力してください");
       return;
     }
-    if (!editing.credential_configured && editForm.loginId.trim() && !editForm.password) {
-      toast.error("初回設定ではパスワードも入力してください");
+    if (editForm.o2Password && !o2LoginId) {
+      toast.error("O2のIDを入力してください");
+      return;
+    }
+    if (!editing.credential_configured && o2LoginId && !editForm.o2Password) {
+      toast.error("O2の初回設定ではパスワードも入力してください");
+      return;
+    }
+    if (editForm.xPassword && !xLoginId) {
+      toast.error("XのIDを入力してください");
+      return;
+    }
+    if (!editing.x_credential_configured && xLoginId && !editForm.xPassword) {
+      toast.error("Xの初回設定ではパスワードも入力してください");
       return;
     }
     setSaving(true);
-    const { error } = await rpc("save_sns_connection_admin", {
+    const { error } = await rpc("save_sns_connection_admin_v2", {
       p_store_id: storeId,
       p_cast_id: editing.cast_id,
       p_o2_created: editForm.created,
       p_o2_linkage_requested: editForm.linkageRequested,
-      p_login_id: editForm.loginId.trim() || null,
-      p_password: editForm.password || null,
-      p_profile_url: editForm.profileUrl.trim() || null,
+      p_login_id: o2LoginId || null,
+      p_password: editForm.o2Password || null,
+      p_x_login_id: xLoginId || null,
+      p_x_password: editForm.xPassword || null,
     });
     setSaving(false);
     if (error) {
@@ -140,14 +194,14 @@ export default function O2Management() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
             {cards.map(({ label, value, icon: Icon }) => (
               <div key={label} className="rounded-xl border bg-card p-4"><Icon size={18} className="text-primary mb-2" /><p className="text-2xl font-bold">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div>
             ))}
           </div>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            管理者が本人に代わってID・パスワード・プロフィールURLを登録できます。パスワードは保存後に再表示せず、公開ページにはプロフィールURLだけを反映します。
+            管理者が本人に代わってO2・XのIDとパスワードを登録できます。公開URLはIDから自動生成され、公開ページへ反映されます。パスワードは保存後に再表示しません。
           </div>
 
           <div className="grid gap-3 md:hidden">
@@ -192,18 +246,36 @@ export default function O2Management() {
       </main>
 
       <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing?.cast_name}さんのSNS連携</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
-            <div><Label htmlFor="sns-login-id">ID</Label><Input id="sns-login-id" autoComplete="off" placeholder="O2のログインID" value={editForm.loginId} onChange={(event) => setEditForm({ ...editForm, loginId: event.target.value })} /></div>
-            <div>
-              <Label htmlFor="sns-password">パスワード</Label>
-              <div className="relative"><Input id="sns-password" className="pr-10" type={showPassword ? "text" : "password"} autoComplete="new-password" placeholder={editing?.credential_configured ? "変更する場合のみ入力" : "O2のパスワード"} value={editForm.password} onChange={(event) => setEditForm({ ...editForm, password: event.target.value })} /><button type="button" aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"} className="absolute right-0 top-0 h-full px-3 text-muted-foreground" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
-              {editing?.credential_configured && <p className="mt-1 text-xs text-muted-foreground">現在のパスワードは表示されません。空欄なら変更しません。</p>}
-            </div>
-            <div><Label htmlFor="sns-profile-url">プロフィールURL</Label><Input id="sns-profile-url" inputMode="url" placeholder="https://m-sns.net/..." value={editForm.profileUrl} onChange={(event) => setEditForm({ ...editForm, profileUrl: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">保存すると公開側のセラピストカードと詳細ページへ反映されます。</p></div>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editForm.created} onChange={(event) => setEditForm({ ...editForm, created: event.target.checked })} />O2アカウント作成済み</label>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editForm.linkageRequested} onChange={(event) => setEditForm({ ...editForm, linkageRequested: event.target.checked })} />店舗連携を申請済み</label>
+            <section className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between"><h3 className="font-semibold">O2</h3>{editing?.credential_configured && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
+              <div><Label htmlFor="o2-login-id">ID</Label><Input id="o2-login-id" autoComplete="off" placeholder="例: enka_asami" value={editForm.o2LoginId} onChange={(event) => setEditForm({ ...editForm, o2LoginId: event.target.value })} /></div>
+              <div>
+                <Label htmlFor="o2-password">パスワード</Label>
+                <div className="relative"><Input id="o2-password" className="pr-10" type={showO2Password ? "text" : "password"} autoComplete="new-password" placeholder={editing?.credential_configured ? "変更する場合のみ入力" : "O2のパスワード"} value={editForm.o2Password} onChange={(event) => setEditForm({ ...editForm, o2Password: event.target.value })} /><button type="button" aria-label={showO2Password ? "O2のパスワードを隠す" : "O2のパスワードを表示"} className="absolute right-0 top-0 h-full px-3 text-muted-foreground" onClick={() => setShowO2Password((value) => !value)}>{showO2Password ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+                {editing?.credential_configured && <p className="mt-1 text-xs text-muted-foreground">現在のパスワードは表示されません。空欄なら変更しません。</p>}
+              </div>
+              <div><Label htmlFor="o2-profile-url">公開URL（自動生成）</Label><Input id="o2-profile-url" readOnly value={buildO2ProfileUrl(editForm.o2LoginId)} placeholder="IDを入力すると自動生成されます" className="bg-muted/60" /><p className="mt-1 text-xs text-muted-foreground">公開側のセラピストカードと詳細ページへ反映されます。</p></div>
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editForm.created} onChange={(event) => setEditForm({ ...editForm, created: event.target.checked })} />O2アカウント作成済み</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editForm.linkageRequested} onChange={(event) => setEditForm({ ...editForm, linkageRequested: event.target.checked })} />店舗連携を申請済み</label>
+              </div>
+            </section>
+
+            <section className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between"><h3 className="font-semibold">X</h3>{editing?.x_credential_configured && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
+              <div><Label htmlFor="x-login-id">ID</Label><Input id="x-login-id" autoComplete="off" placeholder="例: enka_asami" value={editForm.xLoginId} onChange={(event) => setEditForm({ ...editForm, xLoginId: event.target.value })} /></div>
+              <div>
+                <Label htmlFor="x-password">パスワード</Label>
+                <div className="relative"><Input id="x-password" className="pr-10" type={showXPassword ? "text" : "password"} autoComplete="new-password" placeholder={editing?.x_credential_configured ? "変更する場合のみ入力" : "Xのパスワード"} value={editForm.xPassword} onChange={(event) => setEditForm({ ...editForm, xPassword: event.target.value })} /><button type="button" aria-label={showXPassword ? "Xのパスワードを隠す" : "Xのパスワードを表示"} className="absolute right-0 top-0 h-full px-3 text-muted-foreground" onClick={() => setShowXPassword((value) => !value)}>{showXPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+                {editing?.x_credential_configured && <p className="mt-1 text-xs text-muted-foreground">現在のパスワードは表示されません。空欄なら変更しません。</p>}
+              </div>
+              <div><Label htmlFor="x-profile-url">公開URL（自動生成）</Label><Input id="x-profile-url" readOnly value={buildXProfileUrl(editForm.xLoginId)} placeholder="IDを入力すると自動生成されます" className="bg-muted/60" /></div>
+            </section>
+
+            <p className="text-xs text-muted-foreground">IDを保存すると、上記の公開URLがセラピストカードと詳細ページへ反映されます。</p>
             <Button className="w-full" onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="mr-1 animate-spin" />}保存</Button>
           </div>
         </DialogContent>
