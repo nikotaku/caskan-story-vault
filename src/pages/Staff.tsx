@@ -2328,7 +2328,7 @@ export default function Staff() {
                         </Button>
                       </div>
 
-                      {/* 02アカウント情報（パスワードは本人だけがポータルで設定） */}
+                      {/* 02アカウントの登録案内 */}
                       <div className="border rounded-lg p-4 space-y-3">
                         <div className="flex items-center justify-between">
                           <Label className="font-semibold">02アカウント案内</Label>
@@ -2337,7 +2337,7 @@ export default function Staff() {
                           </Button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          URL・登録メール・IDだけを共有します。パスワードは管理画面に保存せず、セラピスト本人がポータルのO2接続設定へ入力します。
+                          ID・パスワード・公開プロフィールURLの登録はSNS連携管理から行います。ここでは本人へ渡す登録案内を管理します。
                         </p>
                         <div>
                           <Label className="text-xs">管理画面URL</Label>
@@ -2351,7 +2351,7 @@ export default function Staff() {
                           <Label className="text-xs">ID</Label>
                           <Input className="mt-1" placeholder="hana_sendai" value={editingCast.o2_login_id || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_id: e.target.value})} />
                         </div>
-                        <a href="/marketing/o2" className="inline-flex text-xs text-primary hover:underline">O2連携管理を開く</a>
+                        <a href="/marketing/o2" className="inline-flex text-xs text-primary hover:underline">SNS連携管理を開く</a>
                       </div>
 
                       <div className="border rounded-lg p-4 space-y-3">
