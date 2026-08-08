@@ -1,20 +1,21 @@
-import { useState, useEffect } from "react";
-import { DashboardHeader } from "@/components/DashboardHeader";
-import { Sidebar } from "@/components/Sidebar";
-import { useAuth } from "@/hooks/useAuth";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, Send, Loader2, CheckCircle, XCircle, Clock, Link2, ChevronDown, ChevronUp, Copy, Check, ImageIcon } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Link2, Loader2, Plus, RefreshCw, Send, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { DashboardHeader } from "@/components/DashboardHeader";
+import { Sidebar } from "@/components/Sidebar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useAdminStore } from "@/hooks/useAdminStore";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Cast { id: string; name: string; }
 interface Post {
@@ -24,7 +25,7 @@ interface Post {
   body: string;
   image_urls: string[] | null;
   status: string;
-  posted_at: string | null;
+  hp_status: string;
   o2_status: string;
   esutama_status: string;
   o2_error: string | null;
@@ -33,324 +34,225 @@ interface Post {
   casts: { name: string };
 }
 
-const STATUS_BADGE: Record<string, { label: string; color: string }> = {
-  draft:   { label: "下書き",  color: "bg-gray-100 text-gray-700" },
-  pending: { label: "投稿待ち", color: "bg-yellow-100 text-yellow-700" },
-  posted:  { label: "投稿済み", color: "bg-green-100 text-green-700" },
-  failed:  { label: "失敗",    color: "bg-red-100 text-red-700" },
+type Target = "o2" | "esutama";
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "送信待ち",
+  posting: "送信中",
+  posted: "投稿済み",
+  failed: "失敗",
+  skipped: "未設定",
 };
-const SITE_BADGE: Record<string, JSX.Element> = {
-  pending: <Clock size={12} className="text-yellow-500" />,
-  posted:  <CheckCircle size={12} className="text-green-500" />,
-  failed:  <XCircle size={12} className="text-red-500" />,
-  skipped: <span className="text-xs text-muted-foreground">-</span>,
+
+const STATUS_ICON: Record<string, JSX.Element> = {
+  pending: <Clock size={13} className="text-amber-500" />,
+  posting: <Loader2 size={13} className="animate-spin text-blue-500" />,
+  posted: <CheckCircle size={13} className="text-green-600" />,
+  failed: <XCircle size={13} className="text-red-500" />,
+  skipped: <span className="text-xs text-muted-foreground">−</span>,
 };
+
+const rpc = (name: string, args: Record<string, unknown>) =>
+  (supabase.rpc as unknown as (rpcName: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
 
 export default function CastPostManagement() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [credentials, setCredentials] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [showConnections, setShowConnections] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ cast_id: "", title: "", body: "", image_urls: "" });
-  // 連携ステータス（cast_id -> 設定済みサイトの集合）
-  const [credsByCast, setCredsByCast] = useState<Record<string, Set<string>>>({});
-  const [showStatus, setShowStatus] = useState(true);
-  // エスたま投稿用パネルの開閉・エスたま未投稿のみ表示
-  const [openEsutama, setOpenEsutama] = useState<string | null>(null);
-  const [onlyEsutamaPending, setOnlyEsutamaPending] = useState(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const [form, setForm] = useState({ castId: "", title: "", body: "", imageUrls: "" });
   const { user, loading: authLoading } = useAuth();
+  const { storeId, store, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!authLoading && !user) navigate("/login"); }, [user, authLoading, navigate]);
-  useEffect(() => { if (user) { fetchPosts(); fetchCasts(); fetchCreds(); } }, [user]);
+  useEffect(() => {
+    if (!authLoading && !user) navigate("/login");
+  }, [authLoading, navigate, user]);
 
-  const fetchCasts = async () => {
-    const { data } = await supabase.from("casts").select("id, name").order("display_order", { ascending: true });
-    setCasts(data || []);
-  };
-
-  const fetchCreds = async () => {
-    const { data } = await supabase.from("cast_site_credentials").select("cast_id, site");
-    const map: Record<string, Set<string>> = {};
-    (data || []).forEach((c: any) => {
-      (map[c.cast_id] ??= new Set()).add(c.site);
-    });
-    setCredsByCast(map);
-  };
-
-  const fetchPosts = async () => {
+  const load = useCallback(async () => {
+    if (!user || storeLoading) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("cast_posts")
-      .select("*, casts(name)")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    setPosts((data || []) as Post[]);
-    setLoading(false);
-  };
-
-  const copyText = async (key: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedKey(key);
-      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
-    } catch {
-      toast.error("コピーに失敗しました");
+    const [castsResult, postsResult, credentialsResult] = await Promise.all([
+      supabase.from("casts").select("id,name").eq("store_id", storeId).order("display_order", { ascending: true }),
+      supabase.from("cast_posts").select("*,casts(name)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(100),
+      supabase.from("cast_site_credentials").select("cast_id,site").eq("store_id", storeId).in("site", ["o2", "esutama"]),
+    ]);
+    if (castsResult.error || postsResult.error || credentialsResult.error) {
+      toast.error("投稿管理データを取得できませんでした");
     }
-  };
+    setCasts((castsResult.data || []) as Cast[]);
+    setPosts((postsResult.data || []) as Post[]);
+    const next: Record<string, Set<string>> = {};
+    (credentialsResult.data || []).forEach((credential) => {
+      (next[credential.cast_id] ??= new Set()).add(credential.site);
+    });
+    setCredentials(next);
+    setLoading(false);
+  }, [storeId, storeLoading, user]);
 
-  // エスたまの投稿ステータスを手動で切り替える（Claude for Chrome／手作業で投稿した後に印を付ける）
-  const setEsutamaStatus = async (post: Post, status: "posted" | "pending") => {
-    const { error } = await supabase
-      .from("cast_posts")
-      .update({ esutama_status: status })
-      .eq("id", post.id);
-    if (error) { toast.error("更新に失敗しました"); return; }
-    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, esutama_status: status } : p)));
-    toast.success(status === "posted" ? "エスたま投稿済みにしました" : "エスたま未投稿に戻しました");
+  useEffect(() => { void load(); }, [load]);
+
+  const publishTarget = async (postId: string, target: Target) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error("ログインが期限切れです");
+    const response = await fetch("/api/automations/admin-portal-post", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ postId, target }),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload?.status === "failed") {
+      const fallback = target === "o2" ? "O2投稿に失敗しました" : "魂セラピスト投稿に失敗しました";
+      throw new Error(payload?.error || payload?.results?.o2?.error || payload?.result?.error || fallback);
+    }
+    return payload;
   };
 
   const handleSubmit = async () => {
-    if (!form.cast_id || !form.body.trim()) { toast.error("セラピストと本文は必須です"); return; }
+    const body = form.body.trim();
+    if (!form.castId || !body) {
+      toast.error("セラピストと本文は必須です");
+      return;
+    }
+    if (form.title.length > 120 || body.length > 5000) {
+      toast.error("タイトル120文字、本文5000文字以内で入力してください");
+      return;
+    }
+    const imageUrls = form.imageUrls.split("\n").map((value) => value.trim()).filter(Boolean);
+    if (imageUrls.length > 3 || imageUrls.some((url) => !url.startsWith("https://"))) {
+      toast.error("画像URLはHTTPSで3件まで入力できます");
+      return;
+    }
+
     setSubmitting(true);
-    const imageUrls = form.image_urls.split("\n").map(s => s.trim()).filter(Boolean);
-    const { data, error } = await supabase.from("cast_posts").insert({
-      cast_id: form.cast_id,
-      title: form.title || null,
-      body: form.body,
-      image_urls: imageUrls.length > 0 ? imageUrls : null,
-      status: "pending",
-    }).select("*, casts(name)").single();
-    setSubmitting(false);
-    if (error) { toast.error("作成に失敗しました"); return; }
-    toast.success("投稿を作成しました。自動投稿を開始します...");
-    setPosts(prev => [data as Post, ...prev]);
-    setShowDialog(false);
-    setForm({ cast_id: "", title: "", body: "", image_urls: "" });
-    // Edge Functionを呼び出して自動投稿
-    supabase.functions.invoke("post-to-sites", { body: { post_id: data.id } })
-      .then(({ error }) => {
-        if (error) toast.error("自動投稿に失敗しました: " + error.message);
-        else fetchPosts();
+    try {
+      const { data, error } = await rpc("create_admin_multi_post", {
+        p_store_id: storeId,
+        p_cast_id: form.castId,
+        p_title: form.title || null,
+        p_body: body,
+        p_image_urls: imageUrls.length ? imageUrls : null,
       });
+      if (error || typeof data !== "string") throw new Error(error?.message || "投稿を作成できませんでした");
+      setShowDialog(false);
+      setForm({ castId: "", title: "", body: "", imageUrls: "" });
+      toast.success("HPへ掲載しました。O2・魂セラピストへ送信中です");
+      await load();
+      const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
+      await load();
+      if (results.some((result) => result.status === "rejected")) {
+        toast.warning("外部媒体の一部に送れませんでした。失敗した媒体だけ再送できます");
+      } else {
+        toast.success("HP・O2・魂セラピストへの投稿処理が完了しました");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "投稿に失敗しました");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const retry = async (postId: string, target: Target) => {
+    const key = `${postId}:${target}`;
+    setRetrying(key);
+    try {
+      await publishTarget(postId, target);
+      toast.success(`${target === "o2" ? "O2" : "魂セラピスト"}へ再送しました`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "再送に失敗しました");
+    } finally {
+      await load();
+      setRetrying(null);
+    }
+  };
+
+  const statusRow = (post: Post, target: "hp" | Target, label: string) => {
+    const status = target === "hp" ? post.hp_status : target === "o2" ? post.o2_status : post.esutama_status;
+    const error = target === "o2" ? post.o2_error : target === "esutama" ? post.esutama_error : null;
+    const key = `${post.id}:${target}`;
+    return (
+      <div className="flex items-start justify-between gap-3 text-xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span className="font-medium">{label}</span><span className="text-muted-foreground">{STATUS_LABEL[status] || status}</span></div>
+          {error && <p className="mt-1 break-words text-red-600">{error}</p>}
+        </div>
+        {target !== "hp" && ["failed", "skipped"].includes(status) && (
+          <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === key}>
+            {retrying === key ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} className="mr-1" />}再送
+          </Button>
+        )}
+      </div>
+    );
   };
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <DashboardHeader onToggleSidebar={() => setSidebarOpen((value) => !value)} />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="pt-[60px] md:ml-[240px] p-4 md:p-6 overflow-x-hidden">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">投稿管理</h1>
-              <p className="text-sm text-muted-foreground">O2・エスたまの魂への自動投稿</p>
+              <h1 className="text-2xl font-bold">一括投稿管理</h1>
+              <p className="text-sm text-muted-foreground">{store?.name || "店舗"}のHP写メ日記・O2・魂セラピストへ同時投稿します（Xは対象外）</p>
             </div>
-            <Button onClick={() => setShowDialog(true)}>
-              <Plus size={16} className="mr-1" />新規投稿
-            </Button>
+            <Button onClick={() => setShowDialog(true)}><Plus size={16} className="mr-1" />新規投稿</Button>
           </div>
 
-          {/* 連携ステータス一覧 */}
-          <div className="border rounded-lg bg-card mb-4">
-            <button
-              className="w-full flex items-center justify-between px-4 py-3"
-              onClick={() => setShowStatus(!showStatus)}
-            >
-              <span className="flex items-center gap-2 font-semibold text-sm">
-                <Link2 size={16} className="text-primary" />
-                媒体連携ステータス
-                <span className="text-xs font-normal text-muted-foreground">
-                  （セラピストごとのO2・エスたまの魂ログイン設定）
-                </span>
-              </span>
-              {showStatus ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          <div className="rounded-lg border bg-card">
+            <button className="flex w-full items-center justify-between px-4 py-3" onClick={() => setShowConnections((value) => !value)}>
+              <span className="flex items-center gap-2 text-sm font-semibold"><Link2 size={16} className="text-primary" />媒体連携ステータス</span>
+              {showConnections ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
-            {showStatus && (
-              <div className="px-4 pb-3 border-t pt-3">
-                {casts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">セラピストがいません</p>
-                ) : (
-                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
-                    {casts.map((c) => {
-                      const sites = credsByCast[c.id] ?? new Set<string>();
-                      const badge = (ok: boolean) =>
-                        ok ? (
-                          <span className="inline-flex items-center gap-0.5 text-green-600"><CheckCircle size={12} />連携済</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5 text-muted-foreground"><XCircle size={12} />未連携</span>
-                        );
-                      return (
-                        <div key={c.id} className="flex items-center justify-between text-xs border-b border-dashed py-1">
-                          <span className="font-medium truncate">{c.name}</span>
-                          <span className="flex items-center gap-3 shrink-0">
-                            <span className="flex items-center gap-1"><span className="text-muted-foreground">O2</span>{badge(sites.has("o2"))}</span>
-                            <span className="flex items-center gap-1"><span className="text-muted-foreground">魂</span>{badge(sites.has("esutama"))}</span>
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <p className="text-[11px] text-muted-foreground mt-2">
-                  ※ ログイン情報の登録は各セラピストのポータル（投稿管理 → ⚙️）から行えます。「連携済」でも投稿の成否は各投稿のステータスで確認してください。
-                </p>
+            {showConnections && (
+              <div className="grid gap-x-6 border-t px-4 py-3 sm:grid-cols-2">
+                {casts.map((cast) => {
+                  const sites = credentials[cast.id] || new Set<string>();
+                  return (
+                    <div key={cast.id} className="flex items-center justify-between border-b border-dashed py-1.5 text-xs">
+                      <span className="truncate font-medium">{cast.name}</span>
+                      <span className="flex shrink-0 gap-2">
+                        <Badge variant={sites.has("o2") ? "default" : "outline"}>O2</Badge>
+                        <Badge variant={sites.has("esutama") ? "default" : "outline"}>魂</Badge>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* エスたま未投稿フィルタ */}
-          {posts.length > 0 && (
-            <div className="flex items-center justify-end mb-2">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={onlyEsutamaPending}
-                  onChange={(e) => setOnlyEsutamaPending(e.target.checked)}
-                />
-                エスたま未投稿のみ表示
-              </label>
-            </div>
-          )}
-
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">読み込み中...</div>
+            <div className="py-16 text-center"><Loader2 className="mx-auto animate-spin text-primary" /></div>
           ) : posts.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">投稿がありません</div>
+            <div className="rounded-xl border bg-card py-16 text-center text-sm text-muted-foreground">投稿がありません</div>
           ) : (
-            <div className="space-y-2">
-              {posts
-                .filter((p) => !onlyEsutamaPending || (p.esutama_status !== "posted" && p.esutama_status !== "skipped"))
-                .map(post => {
-                const s = STATUS_BADGE[post.status] ?? STATUS_BADGE.draft;
-                const esutamaDone = post.esutama_status === "posted";
-                const isOpen = openEsutama === post.id;
-                return (
-                  <div key={post.id} className="border rounded-lg p-3 bg-card">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="font-semibold text-sm">{post.casts?.name}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${s.color}`}>{s.label}</span>
-                          {post.posted_at && (
-                            <span className="text-xs text-muted-foreground">
-                              {format(new Date(post.posted_at), "M/d HH:mm", { locale: ja })}
-                            </span>
-                          )}
-                        </div>
-                        {post.title && <p className="text-sm font-medium mb-0.5">{post.title}</p>}
-                        <p className="text-sm text-muted-foreground line-clamp-2">{post.body}</p>
-                      </div>
-                      <div className="flex flex-col gap-1 items-end shrink-0 text-xs">
-                        <div className="flex items-center gap-1">
-                          {SITE_BADGE[post.o2_status]}
-                          <span className="text-muted-foreground">O2</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {SITE_BADGE[post.esutama_status]}
-                          <span className="text-muted-foreground">エスたま</span>
-                        </div>
-                      </div>
-                    </div>
-                    {(post.o2_error || post.esutama_error) && (
-                      <p className="text-xs text-red-500 mt-1">
-                        {post.o2_error && `O2: ${post.o2_error}`}
-                        {post.esutama_error && ` エスたま: ${post.esutama_error}`}
-                      </p>
-                    )}
-
-                    {/* エスたま投稿用パネル（Claude for Chrome／手作業で貼り付ける用） */}
-                    <div className="mt-2 border-t pt-2">
-                      <button
-                        onClick={() => setOpenEsutama(isOpen ? null : post.id)}
-                        className="w-full flex items-center justify-between text-xs font-medium"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className={esutamaDone ? "text-green-600" : "text-yellow-600"}>
-                            {esutamaDone ? <CheckCircle size={13} /> : <Clock size={13} />}
-                          </span>
-                          エスたま投稿用（コピー＆貼り付け）
-                          {esutamaDone && <span className="text-green-600">投稿済み</span>}
-                        </span>
-                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-
-                      {isOpen && (
-                        <div className="mt-2 space-y-2 bg-muted/40 rounded-md p-2.5">
-                          {/* タイトル */}
-                          {post.title && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-[10px] text-muted-foreground w-10 shrink-0 pt-1">タイトル</span>
-                              <p className="flex-1 text-xs break-words">{post.title}</p>
-                              <Button size="sm" variant="outline" className="h-6 px-2 shrink-0"
-                                onClick={() => copyText(`t-${post.id}`, post.title || "")}>
-                                {copiedKey === `t-${post.id}` ? <Check size={11} /> : <Copy size={11} />}
-                              </Button>
-                            </div>
-                          )}
-                          {/* 本文 */}
-                          <div className="flex items-start gap-2">
-                            <span className="text-[10px] text-muted-foreground w-10 shrink-0 pt-1">本文</span>
-                            <p className="flex-1 text-xs whitespace-pre-wrap break-words">{post.body}</p>
-                            <Button size="sm" variant="outline" className="h-6 px-2 shrink-0"
-                              onClick={() => copyText(`b-${post.id}`, post.body)}>
-                              {copiedKey === `b-${post.id}` ? <Check size={11} /> : <Copy size={11} />}
-                            </Button>
-                          </div>
-                          {/* 画像 */}
-                          {post.image_urls && post.image_urls.length > 0 && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-[10px] text-muted-foreground w-10 shrink-0 pt-1">画像</span>
-                              <div className="flex-1 flex flex-wrap gap-1.5">
-                                {post.image_urls.map((url, i) => (
-                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] text-primary underline">
-                                    <ImageIcon size={11} />画像{i + 1}
-                                  </a>
-                                ))}
-                              </div>
-                              <Button size="sm" variant="outline" className="h-6 px-2 shrink-0"
-                                onClick={() => copyText(`i-${post.id}`, (post.image_urls || []).join("\n"))}>
-                                {copiedKey === `i-${post.id}` ? <Check size={11} /> : <Copy size={11} />}
-                              </Button>
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-2 pt-1">
-                            <a
-                              href="https://estama.jp/admin/tamathera/therapist/"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] text-primary underline"
-                            >
-                              エスたま管理画面を開く ↗
-                            </a>
-                            <span className="flex-1" />
-                            {esutamaDone ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground"
-                                onClick={() => setEsutamaStatus(post, "pending")}>
-                                未投稿に戻す
-                              </Button>
-                            ) : (
-                              <Button size="sm" className="h-7 text-xs"
-                                onClick={() => setEsutamaStatus(post, "posted")}>
-                                <Check size={12} className="mr-1" />エスたま投稿済みにする
-                              </Button>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">
-                            ※「エスたま管理画面を開く」→対象セラピストの「本人の代わりにログイン」→写メ日記に上記を貼り付け。投稿できたら「投稿済みにする」を押してください。
-                          </p>
-                        </div>
-                      )}
+            <div className="space-y-3">
+              {posts.map((post) => (
+                <article key={post.id} className="rounded-xl border bg-card p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2"><span className="font-semibold">{post.casts?.name}</span><span className="text-xs text-muted-foreground">{format(new Date(post.created_at), "M/d HH:mm", { locale: ja })}</span></div>
+                      {post.title && <p className="mt-1 text-sm font-medium">{post.title}</p>}
+                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{post.body}</p>
                     </div>
                   </div>
-                );
-              })}
+                  <div className="grid gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-3">
+                    {statusRow(post, "hp", "HP写メ日記")}
+                    {statusRow(post, "o2", "O2")}
+                    {statusRow(post, "esutama", "魂セラピスト")}
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </div>
@@ -358,46 +260,14 @@ export default function CastPostManagement() {
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>新規投稿作成</DialogTitle></DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div>
-              <Label>セラピスト</Label>
-              <Select value={form.cast_id} onValueChange={v => setForm({ ...form, cast_id: v })}>
-                <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
-                <SelectContent>
-                  {casts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>タイトル（任意）</Label>
-              <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="タイトル" />
-            </div>
-            <div>
-              <Label>本文</Label>
-              <Textarea
-                rows={5}
-                value={form.body}
-                onChange={e => setForm({ ...form, body: e.target.value })}
-                placeholder="投稿内容を入力..."
-              />
-            </div>
-            <div>
-              <Label>画像URL（1行1URL）</Label>
-              <Textarea
-                rows={2}
-                value={form.image_urls}
-                onChange={e => setForm({ ...form, image_urls: e.target.value })}
-                placeholder="https://..."
-              />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button className="flex-1" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}
-                {submitting ? "投稿中..." : "投稿する"}
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)}>キャンセル</Button>
-            </div>
+          <DialogHeader><DialogTitle>3媒体へ一括投稿</DialogTitle></DialogHeader>
+          <div className="mt-2 space-y-4">
+            <div><Label>セラピスト</Label><Select value={form.castId} onValueChange={(value) => setForm({ ...form, castId: value })}><SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger><SelectContent>{casts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>タイトル（任意）</Label><Input maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
+            <div><Label>本文</Label><Textarea rows={6} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="投稿内容を入力" /></div>
+            <div><Label>画像URL（任意・1行1URL・3件まで）</Label><Textarea rows={3} value={form.imageUrls} onChange={(event) => setForm({ ...form, imageUrls: event.target.value })} placeholder="https://..." /></div>
+            <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">投稿するとHP写メ日記へ即時掲載し、O2と魂セラピストへ同時送信します。Xには投稿しません。</p>
+            <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}一括投稿</Button><Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)} disabled={submitting}>キャンセル</Button></div>
           </div>
         </DialogContent>
       </Dialog>

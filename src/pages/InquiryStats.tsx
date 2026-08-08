@@ -17,7 +17,7 @@ import { BarChart3, Plus, Loader2, Trash2, MessageCircle, Phone, Globe, HelpCirc
 
 /**
  * 問い合わせ集計：LINE bot・管理画面から記録した問い合わせ（電話/LINE/その他）と、
- * WEB予約（公開フォーム経由の reservations = created_by が null。完了含む全ステータス）を
+ * WEB予約（公開フォーム経由）とエステ魂のGmailデイリーレポートを
  * 月別・日別に集計する。表示はログイン店舗のデータのみ（RLSで自動分離）。
  */
 
@@ -29,16 +29,23 @@ interface InquiryRow {
   inquired_at: string;
 }
 
+interface ExternalDailyReport {
+  report_date: string;
+  page_views: number;
+  inquiry_count: number;
+}
+
 const CHANNEL_LABEL: Record<string, string> = { phone: "電話", line: "LINE", other: "その他" };
 
-interface Counts { phone: number; line: number; other: number; web: number; }
-const emptyCounts = (): Counts => ({ phone: 0, line: 0, other: 0, web: 0 });
-const total = (c: Counts) => c.phone + c.line + c.other + c.web;
+interface Counts { phone: number; line: number; other: number; web: number; estama: number; estamaViews: number; }
+const emptyCounts = (): Counts => ({ phone: 0, line: 0, other: 0, web: 0, estama: 0, estamaViews: 0 });
+const total = (c: Counts) => c.phone + c.line + c.other + c.web + c.estama;
 
 export default function InquiryStats() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inquiries, setInquiries] = useState<InquiryRow[]>([]);
   const [webDates, setWebDates] = useState<Date[]>([]);
+  const [externalReports, setExternalReports] = useState<ExternalDailyReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [showAdd, setShowAdd] = useState(false);
@@ -50,7 +57,7 @@ export default function InquiryStats() {
   });
 
   const { user, loading: authLoading } = useAuth();
-  const { store: adminStore } = useAdminStore();
+  const { store: adminStore, storeId } = useAdminStore();
   const navigate = useNavigate();
 
   useEffect(() => { if (!authLoading && !user) navigate("/login"); }, [user, authLoading, navigate]);
@@ -62,7 +69,7 @@ export default function InquiryStats() {
     from.setMonth(from.getMonth() - 12);
     const fromIso = from.toISOString();
 
-    const [inqRes, webRes] = await Promise.all([
+    const [inqRes, webRes, reportRes] = await Promise.all([
       supabase
         .from("inquiries" as any)
         .select("id, channel, memo, source, inquired_at")
@@ -73,11 +80,18 @@ export default function InquiryStats() {
         .select("created_at")
         .is("created_by", null)
         .gte("created_at", fromIso),
+      supabase
+        .from("external_daily_reports" as any)
+        .select("report_date, page_views, inquiry_count")
+        .eq("store_id", storeId)
+        .eq("provider", "estama")
+        .gte("report_date", fromIso.slice(0, 10)),
     ]);
     setInquiries(((inqRes.data ?? []) as unknown as InquiryRow[]));
     setWebDates(((webRes.data ?? []) as { created_at: string }[]).map((r) => new Date(r.created_at)));
+    setExternalReports(((reportRes.data ?? []) as unknown as ExternalDailyReport[]));
     setLoading(false);
-  }, []);
+  }, [storeId]);
 
   useEffect(() => { if (user) fetchData(); }, [user, fetchData]);
 
@@ -88,10 +102,19 @@ export default function InquiryStats() {
       if (!map.has(key)) map.set(key, emptyCounts());
       map.get(key)![ch]++;
     };
+    const addAmount = (key: string, ch: keyof Counts, amount: number) => {
+      if (!map.has(key)) map.set(key, emptyCounts());
+      map.get(key)![ch] += amount;
+    };
     inquiries.forEach((i) => add(format(new Date(i.inquired_at), "yyyy-MM"), i.channel));
     webDates.forEach((d) => add(format(d, "yyyy-MM"), "web"));
+    externalReports.forEach((report) => {
+      const key = report.report_date.slice(0, 7);
+      addAmount(key, "estama", report.inquiry_count);
+      addAmount(key, "estamaViews", report.page_views);
+    });
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [inquiries, webDates]);
+  }, [inquiries, webDates, externalReports]);
 
   // 選択月の日別集計（昇順）
   const daily = useMemo(() => {
@@ -102,10 +125,19 @@ export default function InquiryStats() {
       if (!map.has(key)) map.set(key, emptyCounts());
       map.get(key)![ch]++;
     };
+    const addAmount = (key: string, ch: keyof Counts, amount: number) => {
+      if (key.slice(0, 7) !== selectedMonth) return;
+      if (!map.has(key)) map.set(key, emptyCounts());
+      map.get(key)![ch] += amount;
+    };
     inquiries.forEach((i) => add(new Date(i.inquired_at), i.channel));
     webDates.forEach((d) => add(d, "web"));
+    externalReports.forEach((report) => {
+      addAmount(report.report_date, "estama", report.inquiry_count);
+      addAmount(report.report_date, "estamaViews", report.page_views);
+    });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [inquiries, webDates, selectedMonth]);
+  }, [inquiries, webDates, externalReports, selectedMonth]);
 
   // 選択月の記録一覧（手動・LINE入力分のみ。削除可能）
   const monthEntries = useMemo(
@@ -157,7 +189,7 @@ export default function InquiryStats() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mb-5">
-            電話・LINE・その他はLINE bot（「問合せ 店舗 チャネル」）または手動入力。WEB予約は予約フォームの件数を自動集計（完了予約含む）。
+            電話・LINE・その他はLINE botまたは手動入力。WEB予約は予約フォーム、エステ魂予約と媒体アクセスはGmailのデイリーレポートから自動集計します。
           </p>
 
           {loading ? (
@@ -176,12 +208,14 @@ export default function InquiryStats() {
                         <th className="text-right px-3 py-2">LINE</th>
                         <th className="text-right px-3 py-2">その他</th>
                         <th className="text-right px-3 py-2">WEB予約</th>
+                        <th className="text-right px-3 py-2">エステ魂予約</th>
+                        <th className="text-right px-3 py-2">媒体アクセス</th>
                         <th className="text-right px-4 py-2 font-bold">合計</th>
                       </tr>
                     </thead>
                     <tbody>
                       {monthly.length === 0 && (
-                        <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">データがありません</td></tr>
+                        <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">データがありません</td></tr>
                       )}
                       {monthly.map(([m, c]) => (
                         <tr
@@ -194,6 +228,8 @@ export default function InquiryStats() {
                           <td className="text-right px-3 py-2">{c.line}</td>
                           <td className="text-right px-3 py-2">{c.other}</td>
                           <td className="text-right px-3 py-2">{c.web}</td>
+                          <td className="text-right px-3 py-2">{c.estama}</td>
+                          <td className="text-right px-3 py-2 text-muted-foreground">{c.estamaViews.toLocaleString("ja-JP")}</td>
                           <td className="text-right px-4 py-2 font-bold">{total(c)}</td>
                         </tr>
                       ))}
@@ -216,12 +252,14 @@ export default function InquiryStats() {
                         <th className="text-right px-3 py-2">LINE</th>
                         <th className="text-right px-3 py-2">その他</th>
                         <th className="text-right px-3 py-2">WEB予約</th>
+                        <th className="text-right px-3 py-2">エステ魂予約</th>
+                        <th className="text-right px-3 py-2">媒体アクセス</th>
                         <th className="text-right px-4 py-2 font-bold">合計</th>
                       </tr>
                     </thead>
                     <tbody>
                       {daily.length === 0 && (
-                        <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">この月のデータがありません</td></tr>
+                        <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">この月のデータがありません</td></tr>
                       )}
                       {daily.map(([d, c]) => (
                         <tr key={d} className="border-t">
@@ -230,6 +268,8 @@ export default function InquiryStats() {
                           <td className="text-right px-3 py-2">{c.line}</td>
                           <td className="text-right px-3 py-2">{c.other}</td>
                           <td className="text-right px-3 py-2">{c.web}</td>
+                          <td className="text-right px-3 py-2">{c.estama}</td>
+                          <td className="text-right px-3 py-2 text-muted-foreground">{c.estamaViews.toLocaleString("ja-JP")}</td>
                           <td className="text-right px-4 py-2 font-bold">{total(c)}</td>
                         </tr>
                       ))}

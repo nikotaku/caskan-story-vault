@@ -32,6 +32,7 @@ interface Cast {
   line_url: string | null;
   litlink_url: string | null;
   o2_url: string | null;
+  estama_profile_url: string | null;
   instagram_url: string | null;
   blog_url: string | null;
   skebiy_url: string | null;
@@ -77,7 +78,7 @@ const Casts = () => {
     try {
       const { data, error } = await supabase
         .from("casts")
-        .select("id,name,age,height,bust,cup_size,waist,hip,type,status,photo,photos,title_badge_id,tags,join_date,profile,x_account,line_url,litlink_url,o2_url,instagram_url,blog_url,skebiy_url,custom_fields")
+        .select("id,name,age,height,bust,cup_size,waist,hip,type,status,photo,photos,title_badge_id,tags,join_date,profile,x_account,line_url,litlink_url,o2_url,estama_profile_url,instagram_url,blog_url,skebiy_url,custom_fields")
         .eq("is_visible", true)
         .eq("store_id", storeId)
         .order("name", { ascending: true });
@@ -165,7 +166,7 @@ const Casts = () => {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {filteredCasts.map((cast) => {
-                const hasSns = !!(cast.x_account || cast.line_url || cast.litlink_url || cast.instagram_url || cast.o2_url || cast.blog_url || cast.skebiy_url);
+                const hasSns = !!(cast.x_account || cast.line_url || cast.litlink_url || cast.instagram_url || cast.o2_url || cast.estama_profile_url || cast.blog_url || cast.skebiy_url);
                 return (
                   <div key={cast.id} className="relative">
                     <Link to={`/casts/${cast.id}`} className="block group">
@@ -257,6 +258,19 @@ const Casts = () => {
                                       <img src={o2LogoUrl} alt="O2" className="w-6 h-6 object-contain" />
                                     </span>
                                     <span className="text-[9px] text-white/80 leading-none">O2</span>
+                                  </a>
+                                )}
+                                {cast.estama_profile_url && (
+                                  <a
+                                    href={cast.estama_profile_url}
+                                    target="_blank" rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()} aria-label="魂セラピスト"
+                                    className="flex flex-col items-center gap-0.5 group/sns"
+                                  >
+                                    <span className="w-8 h-8 rounded-full bg-[#b72d5b] flex items-center justify-center text-white text-sm font-bold shadow-md group-hover/sns:scale-110 transition-transform">
+                                      魂
+                                    </span>
+                                    <span className="text-[9px] text-white/80 leading-none">魂</span>
                                   </a>
                                 )}
                                 {cast.blog_url && (
