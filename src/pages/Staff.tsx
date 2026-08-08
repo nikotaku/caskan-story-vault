@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, CalendarPlus, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, CalendarPlus, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot, AlertTriangle } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
 import { ImportModal } from "@/components/ImportModal";
 import { EstamaImportModal, type EstamaProfileData } from "@/components/EstamaImportModal";
@@ -295,6 +295,7 @@ export default function Staff() {
   const [formData, setFormData] = useState({ ...emptyForm });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [perksOpen, setPerksOpen] = useState(false);
+  const [expandedChecklistIds, setExpandedChecklistIds] = useState<Set<string>>(new Set());
   const [estamaDialogOpen, setEstamaDialogOpen] = useState(false);
   const [estamaScript, setEstamaScript] = useState("");
   const [estamaData, setEstamaData] = useState("");
@@ -409,6 +410,17 @@ export default function Staff() {
     return null;
   };
 
+  const isSbLinked = (cast: Cast) => Boolean(cast.referral_reward_id);
+
+  const toggleChecklistSection = (castId: string) => {
+    setExpandedChecklistIds(prev => {
+      const next = new Set(prev);
+      if (next.has(castId)) next.delete(castId);
+      else next.add(castId);
+      return next;
+    });
+  };
+
   const handleSetLevelTag = async (castId: string, level: LevelTag | "") => {
     const cast = casts.find(c => c.id === castId);
     if (!cast) return;
@@ -462,6 +474,7 @@ export default function Staff() {
   );
 
   const categoryFilteredCasts = filteredCasts.filter(cast => getCastCategory(cast) === categoryTab);
+  const missingSbCasts = categoryFilteredCasts.filter(cast => !isSbLinked(cast));
 
   const handleAddCast = async () => {
     if (!isAdmin) {
@@ -1787,6 +1800,14 @@ export default function Staff() {
                           {getCastLevel(editingCast)}
                         </span>
                       )}
+                      <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-semibold ${
+                        isSbLinked(editingCast)
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                          : "bg-rose-50 text-rose-700 border-rose-300"
+                      }`}>
+                        {isSbLinked(editingCast) ? <LinkIcon size={11} /> : <AlertTriangle size={11} />}
+                        {isSbLinked(editingCast) ? "SB紐付け済み" : "SB未紐付け"}
+                      </span>
                     </DialogTitle>
                   </DialogHeader>
 
@@ -2531,16 +2552,33 @@ export default function Staff() {
               </CardContent>
             </Card>
 
+            {missingSbCasts.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2.5 text-rose-800" role="alert">
+                <AlertTriangle size={17} className="mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">SB未紐付けが{missingSbCasts.length}名います</p>
+                  <p className="mt-0.5 text-xs leading-relaxed">
+                    {missingSbCasts.map(cast => cast.name).join("、")}。カードを開き、「管理情報」の紹介報酬を設定してください。
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Cast List */}
             <div className="space-y-1">
-              {categoryFilteredCasts.map((cast) => (
-                <div
+              {categoryFilteredCasts.map((cast) => {
+                const checklistExpanded = expandedChecklistIds.has(cast.id);
+                const completedChecklistCount = CAST_CHECKLIST_ITEMS.filter(item => !!cast[item.field]).length;
+                return (
+                  <div
                   key={cast.id}
                   draggable={isAdmin}
                   onDragStart={() => { dragCastId.current = cast.id; }}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDropCast(cast.id)}
-                  className="rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors"
+                  className={`rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors ${
+                    isSbLinked(cast) ? "" : "border-rose-300"
+                  }`}
                   onClick={() => handleEditCast(cast)}
                 >
                   <div className="flex items-center gap-3 p-3 pb-2">
@@ -2574,6 +2612,14 @@ export default function Staff() {
                             {getCastLevel(cast)}
                           </span>
                         )}
+                        <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${
+                          isSbLinked(cast)
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                            : "bg-rose-50 text-rose-700 border-rose-300"
+                        }`}>
+                          {isSbLinked(cast) ? <LinkIcon size={10} /> : <AlertTriangle size={10} />}
+                          {isSbLinked(cast) ? "SB紐付け済み" : "SB未紐付け"}
+                        </span>
                         {!cast.is_visible && (
                           <Badge variant="secondary" className="text-[10px] px-1 py-0">
                             <EyeOff size={10} className="mr-0.5" />非表示
@@ -2586,31 +2632,45 @@ export default function Staff() {
                     <ChevronRight size={16} className="flex-shrink-0 text-muted-foreground" />
                   </div>
 
-                  {/* 登録・SNS準備チェック（タップで切替） */}
-                  <div className="flex flex-wrap gap-1.5 px-3 pb-3">
-                    {CAST_CHECKLIST_ITEMS.map((item) => {
-                      const on = !!cast[item.field];
-                      return (
-                        <button
-                          key={item.field}
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); toggleChecklist(cast.id, item.field, !on); }}
-                          title={on ? `${item.label}済み（タップで解除）` : `${item.label}未完了（タップで完了）`}
-                          aria-pressed={on}
-                          className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border font-semibold transition-colors ${
-                            on
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-300"
-                          : "bg-muted text-muted-foreground border-transparent hover:border-border"
-                          }`}
-                        >
-                          <span className={on ? "" : "opacity-40"}>{on ? "✅" : "⬜️"}</span>
-                          <span>{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* 登録・SNS準備チェック（開閉式） */}
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between border-t px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/40"
+                    onClick={(e) => { e.stopPropagation(); toggleChecklistSection(cast.id); }}
+                    aria-expanded={checklistExpanded}
+                    aria-controls={`cast-checklist-${cast.id}`}
+                  >
+                    <span className="font-semibold">登録・SNS準備 {completedChecklistCount}/{CAST_CHECKLIST_ITEMS.length}</span>
+                    {checklistExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                  </button>
+
+                  {checklistExpanded && (
+                    <div id={`cast-checklist-${cast.id}`} className="flex flex-wrap gap-1.5 px-3 pb-3">
+                      {CAST_CHECKLIST_ITEMS.map((item) => {
+                        const on = !!cast[item.field];
+                        return (
+                          <button
+                            key={item.field}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); toggleChecklist(cast.id, item.field, !on); }}
+                            title={on ? `${item.label}済み（タップで解除）` : `${item.label}未完了（タップで完了）`}
+                            aria-pressed={on}
+                            className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full border font-semibold transition-colors ${
+                              on
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-300"
+                            : "bg-muted text-muted-foreground border-transparent hover:border-border"
+                            }`}
+                          >
+                            <span className={on ? "" : "opacity-40"}>{on ? "✅" : "⬜️"}</span>
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {categoryFilteredCasts.length === 0 && (
