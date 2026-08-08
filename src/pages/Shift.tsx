@@ -40,6 +40,7 @@ interface Shift {
   status: string;
   notes: string | null;
   room: string | null;
+  estama_registered: boolean;
 }
 
 interface Reservation {
@@ -251,6 +252,7 @@ const Shift = () => {
           end_time: formData.end_time,
           room: formData.room,
           notes: formData.notes || null,
+          estama_registered: false,
           created_by: user!.id,
         }]);
 
@@ -318,6 +320,7 @@ const Shift = () => {
     endTime: shift.end_time.slice(0, 5),
     room: shift.room || "",
     notes: shift.notes || "",
+    estamaRegistered: shift.estama_registered ?? false,
   }));
 
   const filteredReservations = reservations.filter(reservation => {
