@@ -99,7 +99,7 @@ const menuItems: MenuItem[] = [
   },
   {
     href: "/marketing/o2",
-    label: "O2連携管理",
+    label: "SNS連携管理",
     icon: Link2,
   },
   {
