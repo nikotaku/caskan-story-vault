@@ -9,9 +9,9 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from "date-fns";
+import { addMinutes, format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, ChevronDown, Loader2, CheckCircle, AlertCircle, Users, Receipt, Wallet, TrendingUp, Plus, Trash2, Lock, Download, PieChart } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, CheckCircle, AlertCircle, AlertTriangle, Users, Receipt, Wallet, TrendingUp, Plus, Trash2, Lock, Download, PieChart } from "lucide-react";
 import { toast } from "sonner";
 import { downloadMonthlyReport } from "@/lib/monthlyClosingReport";
 import { splitClearanceExtraItems, sumClearanceExtraItems } from "@/lib/clearanceExtraItems";
@@ -74,13 +74,25 @@ interface ClearanceRec {
 }
 
 interface ReservationRec {
+  id: string;
   cast_id: string | null;
   cast_name: string;
+  customer_name: string;
+  reservation_date: string;
+  start_time: string;
+  duration: number;
+  status: string;
+  room: string | null;
   price: number;
   payment_method: string | null;
   nomination_type: string | null;
   referral_reward_amount: number;
 }
+
+type IncompleteReservationRec = Pick<
+  ReservationRec,
+  "id" | "cast_name" | "customer_name" | "reservation_date" | "start_time" | "duration" | "status" | "room"
+>;
 
 interface MonthlyClosingState {
   closed_at?: string | null;
@@ -100,6 +112,23 @@ interface TherapistMetric {
 type TherapistMetricTab = "sales" | "nominations" | "repeatRate";
 
 const yen = (v: number) => `¥${v.toLocaleString()}`;
+
+const getReservationEndAt = (reservation: Pick<ReservationRec, "reservation_date" | "start_time" | "duration">) => {
+  const startAt = new Date(`${reservation.reservation_date}T${reservation.start_time.slice(0, 8)}`);
+  return addMinutes(startAt, reservation.duration);
+};
+
+const formatExtendedMinutes = (minutes: number) =>
+  `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+
+const formatReservationSlot = (reservation: IncompleteReservationRec) => {
+  const [hour, minute] = reservation.start_time.slice(0, 5).split(":").map(Number);
+  const calendarDate = new Date(`${reservation.reservation_date}T12:00:00`);
+  const businessDate = hour < 6 ? subDays(calendarDate, 1) : calendarDate;
+  const startMinutes = (hour < 6 ? hour + 24 : hour) * 60 + minute;
+
+  return `${format(businessDate, "M/d(E)", { locale: ja })} ${formatExtendedMinutes(startMinutes)}〜${formatExtendedMinutes(startMinutes + reservation.duration)}`;
+};
 
 function TherapistMetricList({ rows, metric }: { rows: TherapistMetric[]; metric: TherapistMetricTab }) {
   const sorted = [...rows].sort((a, b) => {
@@ -142,6 +171,7 @@ export default function SalesMonthlyClosing() {
   const [records, setRecords] = useState<ExpenseRec[]>([]);
   const [clearances, setClearances] = useState<ClearanceRec[]>([]);
   const [reservations, setReservations] = useState<ReservationRec[]>([]);
+  const [incompleteReservations, setIncompleteReservations] = useState<IncompleteReservationRec[]>([]);
   const [therapistMetricTab, setTherapistMetricTab] = useState<TherapistMetricTab>("sales");
   const [loading, setLoading] = useState(true);
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -169,6 +199,13 @@ export default function SalesMonthlyClosing() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setRecords([]);
+    setClearances([]);
+    setReservations([]);
+    setIncompleteReservations([]);
+    setReferralSuggested(0);
+    setPay({ cash: 0, card: 0, paypay: 0, cashOnHand: 0 });
+    setClosing(null);
     const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
     const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
     const [expRes, clrRes, rewardsRes, resvRes, closeRes] = await Promise.all([
@@ -185,10 +222,9 @@ export default function SalesMonthlyClosing() {
       supabase.from("referral_rewards").select("id, amount"),
       supabase
         .from("reservations")
-        .select("cast_id, price, payment_method, nomination_type, casts(name, referral_reward_id)")
+        .select("id, cast_id, customer_name, reservation_date, start_time, duration, status, room, price, payment_method, nomination_type, casts(name, referral_reward_id)")
         .gte("reservation_date", monthStart)
-        .lte("reservation_date", monthEnd)
-        .eq("status", "completed"),
+        .lte("reservation_date", monthEnd),
       supabase
         .from("monthly_closings")
         .select("*")
@@ -206,9 +242,16 @@ export default function SalesMonthlyClosing() {
     }
 
     const rewardAmounts = new Map((rewardsRes.data ?? []).map((reward) => [reward.id, reward.amount ?? 0]));
-    const reservationRows: ReservationRec[] = (resvRes.data ?? []).map((reservation) => ({
+    const allReservationRows: ReservationRec[] = (resvRes.data ?? []).map((reservation) => ({
+      id: reservation.id,
       cast_id: reservation.cast_id,
       cast_name: reservation.casts?.name ?? "不明",
+      customer_name: reservation.customer_name,
+      reservation_date: reservation.reservation_date,
+      start_time: reservation.start_time,
+      duration: reservation.duration,
+      status: reservation.status,
+      room: reservation.room,
       price: reservation.price ?? 0,
       payment_method: reservation.payment_method,
       nomination_type: reservation.nomination_type,
@@ -216,8 +259,18 @@ export default function SalesMonthlyClosing() {
         ? rewardAmounts.get(reservation.casts.referral_reward_id) ?? 0
         : 0,
     }));
+    const reservationRows = allReservationRows.filter((reservation) => reservation.status === "completed");
+    const now = new Date();
+    const overdueReservations = allReservationRows
+      .filter((reservation) =>
+        reservation.status !== "completed"
+        && reservation.status !== "cancelled"
+        && getReservationEndAt(reservation) < now
+      )
+      .sort((a, b) => getReservationEndAt(a).getTime() - getReservationEndAt(b).getTime());
     setClosing(closeRes.data);
     setReservations(reservationRows);
+    setIncompleteReservations(overdueReservations);
 
     // 支払方法別売上
     const payAgg = { cash: 0, card: 0, paypay: 0, cashOnHand: 0 };
@@ -550,6 +603,51 @@ export default function SalesMonthlyClosing() {
                     {closing.closed_at && `（${format(new Date(closing.closed_at), "M/d HH:mm")}）`}。数字を変更した場合は再度「締める」で更新してください。
                   </span>
                 </div>
+              )}
+
+              {/* ── 完了処理漏れアラート ── */}
+              {incompleteReservations.length > 0 && (
+                <Card className="overflow-hidden border-red-300 bg-red-50/70">
+                  <div className="px-4 py-3 border-b border-red-200 flex items-start gap-3">
+                    <span className="mt-0.5 p-1.5 rounded-full bg-red-100 text-red-600 shrink-0">
+                      <AlertTriangle size={18} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-red-800">完了していない予約が {incompleteReservations.length}件あります</p>
+                      <p className="text-[11px] text-red-700 mt-0.5">終了予定時刻を過ぎています。未完了のままだとセラピスト実績と売上内訳へ反映されません。</p>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-red-200/80">
+                    {incompleteReservations.slice(0, 8).map((reservation) => (
+                      <div key={reservation.id} className="px-4 py-3 flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-red-950">{formatReservationSlot(reservation)}</p>
+                          <p className="text-xs text-red-800 truncate mt-0.5">
+                            {reservation.cast_name} ／ 予約名：{reservation.customer_name}
+                            {reservation.room ? ` ／ ${reservation.room}` : ""}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white border border-red-200 px-2 py-1 text-[10px] font-bold text-red-700 shrink-0">
+                          未完了
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-4 py-3 border-t border-red-200 bg-white/60">
+                    {incompleteReservations.length > 8 && (
+                      <p className="text-center text-[11px] text-red-700 mb-2">ほか {incompleteReservations.length - 8}件あります</p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800"
+                      onClick={() => navigate("/schedule/reservations-list")}
+                    >
+                      予約一覧で完了処理する
+                    </Button>
+                  </div>
+                </Card>
               )}
 
               {/* ── 会計サマリー（純利益・利益率） ── */}
