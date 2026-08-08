@@ -153,7 +153,7 @@ export default function TherapistPostPage() {
     });
     const data = await response.json();
     if (!response.ok || data?.status === "failed") {
-      const fallback = target === "o2" ? "O2投稿に失敗しました" : "エスたま投稿に失敗しました";
+      const fallback = target === "o2" ? "O2投稿に失敗しました" : "魂セラピスト投稿に失敗しました";
       throw new Error(data?.error || data?.results?.o2?.error || data?.result?.error || fallback);
     }
     return data;
@@ -186,7 +186,7 @@ export default function TherapistPostPage() {
       setForm({ title: "", body: "", confirmed: false });
       setImages([]);
       setShowPost(false);
-      toast.success("HPの写メ日記へ掲載しました。O2・エスたまへ送信中です");
+      toast.success("HPの写メ日記へ掲載しました。O2・魂セラピストへ送信中です");
       await fetchPosts();
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
       await fetchPosts();
@@ -206,7 +206,7 @@ export default function TherapistPostPage() {
     setRetrying(`${postId}:${target}`);
     try {
       await publishTarget(postId, target);
-      toast.success(`${target === "o2" ? "O2" : "エスたま"}へ再送しました`);
+      toast.success(`${target === "o2" ? "O2" : "魂セラピスト"}へ再送しました`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "再送に失敗しました");
     } finally {
@@ -270,7 +270,7 @@ export default function TherapistPostPage() {
       <header className="border-b bg-card/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3 max-w-2xl">
           <button onClick={() => navigate(`/therapist/${token}`)} className="text-primary flex items-center gap-1 text-sm"><ChevronLeft size={18} />戻る</button>
-          <div className="flex-1"><p className="font-bold">3媒体投稿</p><p className="text-xs text-muted-foreground">HP写メ日記・O2・エスたま</p></div>
+          <div className="flex-1"><p className="font-bold">3媒体投稿</p><p className="text-xs text-muted-foreground">HP写メ日記・O2・魂セラピスト</p></div>
           <button aria-label="O2ログイン設定" onClick={() => setShowCreds(true)} className="text-muted-foreground hover:text-foreground"><Settings size={19} /></button>
         </div>
       </header>
@@ -279,11 +279,11 @@ export default function TherapistPostPage() {
         <div className="grid grid-cols-3 gap-2 text-xs">
           <div className="rounded border bg-green-50 border-green-200 text-green-700 p-2 text-center">HP<br />✓ 接続済み</div>
           <button onClick={() => setShowCreds(true)} className={`rounded border p-2 text-center ${o2Connected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>O2<br />{o2Connected ? "✓ 設定済み" : "未設定"}</button>
-          <div className={`rounded border p-2 text-center ${estamaConnected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>エスたま<br />{estamaConnected ? "✓ 接続済み" : "管理者設定待ち"}</div>
+          <div className={`rounded border p-2 text-center ${estamaConnected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>魂セラピスト<br />{estamaConnected ? "✓ 接続済み" : "管理者設定待ち"}</div>
         </div>
 
         <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          HPには先に必ず保存し、O2とエスたまは別々に送信します。片方が失敗しても他媒体の投稿は消えず、失敗した媒体だけ再送できます。
+          HPには先に必ず保存し、O2と魂セラピストは別々に送信します。片方が失敗しても他媒体の投稿は消えず、失敗した媒体だけ再送できます。Xは投稿対象外です。
         </div>
 
         {posts.length === 0 ? <div className="text-center py-12 text-muted-foreground text-sm">投稿がありません</div> : (
@@ -294,7 +294,7 @@ export default function TherapistPostPage() {
                 <div className="border-t pt-3 space-y-2">
                   {statusRow(post, "hp", "HP写メ日記")}
                   {statusRow(post, "o2", "O2")}
-                  {statusRow(post, "esutama", "エスたま")}
+                  {statusRow(post, "esutama", "魂セラピスト")}
                 </div>
               </article>
             ))}
@@ -321,7 +321,7 @@ export default function TherapistPostPage() {
               <input type="checkbox" className="mt-0.5" checked={form.confirmed} onChange={(event) => setForm({ ...form, confirmed: event.target.checked })} />
               <span>私はセラピスト本人として投稿し、O2を含む各媒体の投稿ルールを確認・順守します。</span>
             </label>
-            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}HP・O2・エスたまへ投稿</Button>
+            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}HP・O2・魂セラピストへ投稿</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -334,7 +334,7 @@ export default function TherapistPostPage() {
             <a href="https://m-sns.net/cast/login/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">O2ログイン画面を確認 <ExternalLink size={14} /></a>
             <div><Label htmlFor="o2-id">O2ユーザー名（@なし）</Label><Input id="o2-id" autoComplete="username" value={credential.loginId} onChange={(event) => setCredential({ ...credential, loginId: event.target.value })} /></div>
             <div><Label htmlFor="o2-password">O2パスワード</Label><Input id="o2-password" type="password" autoComplete="current-password" value={credential.password} onChange={(event) => setCredential({ ...credential, password: event.target.value })} /></div>
-            <p className="text-xs text-muted-foreground">保存済みのパスワードは画面へ再表示しません。変更時だけ入力してください。エスたま接続は店舗管理者が一括設定します。</p>
+            <p className="text-xs text-muted-foreground">保存済みのパスワードは画面へ再表示しません。変更時だけ入力してください。魂セラピスト接続は店舗管理者が一括設定します。</p>
             <Button className="w-full" onClick={handleSaveCredential} disabled={submitting}>{submitting && <Loader2 size={14} className="mr-1 animate-spin" />}保存</Button>
           </div>
         </DialogContent>
