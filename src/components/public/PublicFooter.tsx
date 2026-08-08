@@ -1,10 +1,32 @@
+import { useEffect, useState } from "react";
+import o2Logo from "@/assets/o2-logo.png";
 import { useStore } from "@/hooks/useStore";
 import { useStoreContact } from "@/hooks/useStoreContact";
+import { supabase } from "@/integrations/supabase/client";
+
+const DEFAULT_X_URL = "https://x.com/enka_salon";
 
 export const PublicFooter = () => {
   const { lineUrl } = useStoreContact();
-  const { store } = useStore();
+  const { store, storeId, loading: storeLoading } = useStore();
+  const [xUrl, setXUrl] = useState(DEFAULT_X_URL);
+  const [o2Url, setO2Url] = useState("");
   const storeName = store?.name ?? "全力エステ 仙台";
+
+  useEffect(() => {
+    if (storeLoading) return;
+    supabase
+      .from("site_content")
+      .select("key, value")
+      .eq("store_id", storeId)
+      .in("key", ["store_sns_x", "store_sns_o2"])
+      .then(({ data }) => {
+        const links = new Map((data || []).map((row: { key: string; value: string }) => [row.key, row.value]));
+        setXUrl(links.get("store_sns_x") || DEFAULT_X_URL);
+        setO2Url(links.get("store_sns_o2") || "");
+      });
+  }, [storeId, storeLoading]);
+
   return (
     <footer className="text-white" style={{ backgroundColor: "var(--pub-dark,#242220)" }}>
       {/* SNS Icons */}
@@ -23,7 +45,7 @@ export const PublicFooter = () => {
             />
           </a>
           <a
-            href="https://twitter.com/zr_sendai"
+            href={xUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:opacity-80"
@@ -34,6 +56,21 @@ export const PublicFooter = () => {
               className="w-9 h-9"
             />
           </a>
+          {o2Url && (
+            <a
+              href={o2Url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="店舗公式02"
+              className="hover:opacity-80"
+            >
+              <img
+                src={o2Logo}
+                alt="02"
+                className="w-9 h-9 rounded-full bg-white object-contain"
+              />
+            </a>
+          )}
         </div>
       </div>
 
