@@ -127,6 +127,9 @@ const EMPTY_PREFS: PreferenceForm = {
   preference_notes: "",
 };
 
+const EXTENDED_HOURS = Array.from({ length: 30 }, (_, hour) => hour);
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => minute);
+
 export function ReservationForm({
   formData,
   setFormData,
@@ -152,6 +155,15 @@ export function ReservationForm({
   // 自由割引（マスタ割引に加えて任意金額を引ける）。保存は discount 合計額に含める
   const [customDiscount, setCustomDiscount] = useState(0);
   const customInitRef = useRef(false);
+
+  const [startHour = 0, startMinute = 0] = formData.start_time.split(":").map(Number);
+
+  const updateStartTime = (hour: number, minute: number) => {
+    setFormData({
+      ...formData,
+      start_time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    });
+  };
 
   useEffect(() => {
     supabase
@@ -269,7 +281,7 @@ export function ReservationForm({
     const [h, m] = formData.start_time.split(":").map(Number);
     if (Number.isNaN(h) || Number.isNaN(m)) return;
     const total = h * 60 + m + formData.duration;
-    const eh = Math.floor((total % 1440) / 60); // 日跨ぎはラップ
+    const eh = Math.floor(total / 60);
     const em = total % 60;
     const newEnd = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
     if (newEnd !== formData.end_time) {
@@ -771,13 +783,36 @@ export function ReservationForm({
 
       {/* 7. 開始時間 */}
       <div>
-        <Label htmlFor="start_time">開始時間</Label>
-        <Input
-          id="start_time"
-          type="time"
-          value={formData.start_time}
-          onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-        />
+        <Label htmlFor="start_time_hour">開始時間</Label>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <select
+            id="start_time_hour"
+            aria-label="開始時間の時"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            value={startHour}
+            onChange={(e) => updateStartTime(Number(e.target.value), startMinute)}
+          >
+            {EXTENDED_HOURS.map((hour) => (
+              <option key={hour} value={hour}>
+                {String(hour).padStart(2, "0")}時{hour >= 24 ? `（翌日${hour - 24}時）` : ""}
+              </option>
+            ))}
+          </select>
+          <span className="text-muted-foreground">:</span>
+          <select
+            aria-label="開始時間の分"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            value={startMinute}
+            onChange={(e) => updateStartTime(startHour, Number(e.target.value))}
+          >
+            {MINUTE_OPTIONS.map((minute) => (
+              <option key={minute} value={minute}>{String(minute).padStart(2, "0")}分</option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          24時台は、選択した日付の深夜として自動保存されます。
+        </p>
       </div>
 
       {/* 8. 終了時間 */}
@@ -785,9 +820,9 @@ export function ReservationForm({
         <Label htmlFor="end_time">終了時間</Label>
         <Input
           id="end_time"
-          type="time"
+          type="text"
           value={formData.end_time}
-          onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+          readOnly
         />
       </div>
 

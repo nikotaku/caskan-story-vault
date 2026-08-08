@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, addDays, subDays, addMonths, subMonths, parse, addMinutes, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval } from "date-fns";
-import { toExtTime } from "@/lib/timeFormat";
+import { toExtTime, toStoredTime } from "@/lib/timeFormat";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2 } from "lucide-react";
 import paypayGuideUrl from "@/assets/paypay-guide.jpeg";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,6 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReservationForm } from "@/components/ReservationForm";
 import { useAuth } from "@/hooks/useAuth";
@@ -230,6 +240,7 @@ export default function Schedule() {
   const [detailRes, setDetailRes] = useState<Reservation | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState<string>("confirmed");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { user, loading: authLoading, isAdmin } = useAuth();
   const { dayStartTime, loaded: settingsLoaded, businessToday, intervalMinutes } = useShopSettings();
@@ -497,13 +508,15 @@ export default function Schedule() {
   const handleAddReservation = async () => {
     if (!isAdmin || !user) return;
     try {
+      const storedStart = toStoredTime(formData.start_time);
+      const storedDate = addDays(formData.reservation_date, storedStart.dayOffset);
       const { error } = await supabase.from("reservations").insert([{
         cast_id: formData.cast_id,
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email || null,
-        reservation_date: format(formData.reservation_date, "yyyy-MM-dd"),
-        start_time: formData.start_time,
+        reservation_date: format(storedDate, "yyyy-MM-dd"),
+        start_time: storedStart.time,
         duration: formData.duration,
         course_type: formData.course_type,
         course_name: formData.course_name,
@@ -744,6 +757,9 @@ export default function Schedule() {
   const startEdit = (target?: Reservation) => {
     const res = target ?? detailRes;
     if (!res) return;
+    const storedDate = new Date(`${res.reservation_date}T00:00:00`);
+    const displayTime = toExtTime(res.start_time);
+    const displayDate = displayTime !== res.start_time.slice(0, 5) ? subDays(storedDate, 1) : storedDate;
     setDetailRes(res);
     setEditStatus(res.status);
     setEditFormData({
@@ -752,8 +768,8 @@ export default function Schedule() {
       customer_phone: res.customer_phone,
       customer_email: res.customer_email ?? "",
       nomination_type: res.nomination_type ?? "none",
-      reservation_date: new Date(res.reservation_date),
-      start_time: res.start_time.slice(0, 5),
+      reservation_date: displayDate,
+      start_time: displayTime,
       end_time: "",
       duration: res.duration,
       room: res.room ?? "",
@@ -775,6 +791,8 @@ export default function Schedule() {
   const handleSaveEdit = async () => {
     if (!detailRes) return;
     try {
+      const storedStart = toStoredTime(editFormData.start_time);
+      const storedDate = addDays(editFormData.reservation_date, storedStart.dayOffset);
       // Recompute price from master data to avoid stale-state race conditions
       const dur = Number(editFormData.duration);
       const backRate = backRates.find((r) => r.course_type === editFormData.course_type && r.duration === dur);
@@ -799,8 +817,8 @@ export default function Schedule() {
         customer_name: editFormData.customer_name,
         customer_phone: editFormData.customer_phone,
         customer_email: editFormData.customer_email || null,
-        reservation_date: format(editFormData.reservation_date, "yyyy-MM-dd"),
-        start_time: editFormData.start_time,
+        reservation_date: format(storedDate, "yyyy-MM-dd"),
+        start_time: storedStart.time,
         duration: dur,
         course_type: editFormData.course_type,
         course_name: courseName,
@@ -836,7 +854,7 @@ export default function Schedule() {
     }
   };
 
-  const handleDeleteReservation = async () => {
+  const handleCancelReservation = async () => {
     if (!detailRes || !confirm("この予約をキャンセルしますか？")) return;
     try {
       const { error } = await supabase.from("reservations").update({ status: "cancelled" }).eq("id", detailRes.id);
@@ -846,6 +864,21 @@ export default function Schedule() {
       fetchData();
     } catch {
       toast({ title: "エラー", description: "キャンセルに失敗しました", variant: "destructive" });
+    }
+  };
+
+  const handlePermanentlyDeleteReservation = async () => {
+    if (!detailRes) return;
+    try {
+      const { error } = await supabase.from("reservations").delete().eq("id", detailRes.id);
+      if (error) throw error;
+      toast({ title: "予約データを削除しました" });
+      setDeleteConfirmOpen(false);
+      setEditMode(false);
+      setDetailRes(null);
+      fetchData();
+    } catch {
+      toast({ title: "エラー", description: "予約データの削除に失敗しました", variant: "destructive" });
     }
   };
 
@@ -1332,7 +1365,7 @@ export default function Schedule() {
                         variant="outline"
                         size="sm"
                         className="text-rose-600 border-rose-200 hover:bg-rose-50 w-full"
-                        onClick={handleDeleteReservation}
+                        onClick={handleCancelReservation}
                       >
                         <X size={14} className="mr-1" />キャンセルにする
                       </Button>
@@ -1340,10 +1373,54 @@ export default function Schedule() {
                   </div>
                 </>
               )}
+              {isAdmin && (
+                <div className="pt-3 border-t border-rose-100">
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => setDeleteConfirmOpen(true)}
+                  >
+                    <Trash2 size={14} className="mr-1" />予約データを削除
+                  </Button>
+                  <p className="mt-1.5 text-center text-xs text-muted-foreground">
+                    キャンセル扱いではなく、予約そのものを完全に削除します。
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>予約データを完全に削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {detailRes && (
+                <>
+                  {detailRes.customer_name} 様／
+                  {(() => {
+                    const value = extBusinessDateTime(detailRes.reservation_date, detailRes.start_time);
+                    return `${value.dateStr} ${value.timeStr}`;
+                  })()}
+                  <br />
+                </>
+              )}
+              この操作は取り消せません。予約一覧と当日表からも表示されなくなります。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>戻る</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handlePermanentlyDeleteReservation}
+            >
+              完全に削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
