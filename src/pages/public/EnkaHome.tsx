@@ -8,7 +8,7 @@ import { useStore } from "@/hooks/useStore";
 import { useStoreContact } from "@/hooks/useStoreContact";
 import { driveImgUrl } from "@/lib/drive";
 import { format } from "date-fns";
-import { Phone, Calendar, ChevronDown, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { Phone, Calendar, ChevronDown, ChevronLeft, ChevronRight, Sparkles, TicketPercent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -41,6 +41,13 @@ interface HpArticle {
   image_urls: string[] | null;
 }
 
+interface ActiveDiscount {
+  id: string;
+  name: string;
+  discount_type: string;
+  discount_value: number;
+}
+
 const CATEGORY_LABEL: Record<string, string> = {
   news: "ニュース",
   coupon: "クーポン",
@@ -54,6 +61,15 @@ const CATEGORY_LABEL: Record<string, string> = {
 const hhmm = (t: string) => t?.slice(0, 5) ?? "";
 
 const isVideoUrl = (url: string) => /\.(?:mp4|webm|ogg)(?:[?#].*)?$/i.test(url);
+
+const discountLabel = (discount: ActiveDiscount) => {
+  if (discount.discount_type === "percent" || discount.discount_type === "percentage") {
+    return `${discount.discount_value}%OFF`;
+  }
+  return discount.discount_value > 0
+    ? `${discount.discount_value.toLocaleString()}円OFF`
+    : "特典あり";
+};
 
 const LinkedParagraph = ({ text }: { text: string }) => {
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
@@ -116,6 +132,7 @@ export default function EnkaHome() {
   const [todayShifts, setTodayShifts] = useState<ShiftRow[]>([]);
   const [newFaces, setNewFaces] = useState<CastRow[]>([]);
   const [articles, setArticles] = useState<HpArticle[]>([]);
+  const [activeDiscounts, setActiveDiscounts] = useState<ActiveDiscount[]>([]);
   const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
 
   useEffect(() => { document.title = `${storeName}｜仙台・宮城のメンズエステ`; }, [storeName]);
@@ -170,7 +187,17 @@ export default function EnkaHome() {
       .order("created_at", { ascending: false })
       .limit(10)
       .then(({ data }) => setArticles((data ?? []) as HpArticle[]));
+
+    supabase
+      .from("discounts")
+      .select("id, name, discount_type, discount_value")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("discount_value", { ascending: false })
+      .then(({ data }) => setActiveDiscounts((data ?? []) as ActiveDiscount[]));
   }, [storeId]);
+
+  const featuredDiscount = activeDiscounts[0] ?? null;
 
   const Heading = ({ en, ja }: { en: string; ja: string }) => (
     <div className="text-center mb-6">
@@ -302,6 +329,29 @@ export default function EnkaHome() {
         <section className="px-4 py-8" style={{ backgroundColor: "var(--pub-card,#211320)" }}>
           <div className="container mx-auto max-w-3xl">
             <Heading en="NEWS" ja="艶華からのお知らせ" />
+            {featuredDiscount && (
+              <div
+                className="mb-4 flex flex-col gap-3 rounded-xl border px-4 py-4 sm:flex-row sm:items-center"
+                style={{ borderColor: "var(--pub-accent,#d4547a)", backgroundColor: "var(--pub-accent-a10,#d4547a1a)" }}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <TicketPercent size={24} className="shrink-0" style={{ color: "var(--pub-accent-light,#f2a0bc)" }} />
+                  <div className="min-w-0">
+                    <p className="text-[11px]" style={{ color: "var(--pub-text-muted,#a98496)" }}>予約時に使えるクーポン</p>
+                    <p className="font-bold" style={{ color: "var(--pub-text,#f7e9f0)" }}>
+                      {featuredDiscount.name} <span style={{ color: "var(--pub-accent-light,#f2a0bc)" }}>{discountLabel(featuredDiscount)}</span>
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/booking"
+                  className="shrink-0 rounded-lg px-4 py-2.5 text-center text-sm font-bold text-white"
+                  style={{ backgroundColor: "var(--pub-accent,#d4547a)" }}
+                >
+                  クーポンを使って予約
+                </Link>
+              </div>
+            )}
             <div className="divide-y overflow-hidden rounded-xl border" style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "var(--pub-bg,#150a11)" }}>
               {articles.map((article) => {
                 const expanded = expandedArticle === article.id;
@@ -363,6 +413,43 @@ export default function EnkaHome() {
                               ))}
                           </div>
                         )}
+                        <div
+                          className="mt-5 rounded-xl border p-3"
+                          style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "var(--pub-card,#211320)" }}
+                        >
+                          {featuredDiscount && (
+                            <p className="mb-3 text-center text-sm font-bold" style={{ color: "var(--pub-accent-light,#f2a0bc)" }}>
+                              {featuredDiscount.name}で{discountLabel(featuredDiscount)}
+                            </p>
+                          )}
+                          <div className="grid grid-cols-2 gap-2">
+                            <Link
+                              to="/booking"
+                              className="rounded-lg px-3 py-2.5 text-center text-sm font-bold text-white"
+                              style={{ backgroundColor: "var(--pub-accent,#d4547a)" }}
+                            >
+                              Web予約・空き状況
+                            </Link>
+                            <Link
+                              to="/campaigns"
+                              className="rounded-lg border px-3 py-2.5 text-center text-sm font-bold"
+                              style={{ borderColor: "var(--pub-accent,#d4547a)", color: "var(--pub-text,#f7e9f0)" }}
+                            >
+                              クーポン詳細
+                            </Link>
+                          </div>
+                          {lineUrl && (
+                            <a
+                              href={lineUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-3 block text-center text-xs underline underline-offset-4"
+                              style={{ color: "var(--pub-text-mid,#dfc0cf)" }}
+                            >
+                              LINEで予約・相談する
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
                   </article>

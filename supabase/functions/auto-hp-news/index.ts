@@ -29,14 +29,9 @@ function jstYmd(): string {
 
 async function buildNewsGrounding(sb: any, storeId: string, ymd: string): Promise<{ facts: string; images: string[] }> {
   try {
-    const start = new Date(`${ymd}T00:00:00+09:00`);
-    const weekLater = new Date(start.getTime() + 7 * 86400000);
-    const iso = (date: Date) => new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-    const [discountsRes, optionsRes, shiftsRes, castsRes, bannersRes] = await Promise.all([
+    const [discountsRes, shiftsRes, castsRes, bannersRes] = await Promise.all([
       sb.from("discounts").select("name, discount_type, discount_value").eq("store_id", storeId).eq("is_active", true),
-      sb.from("option_rates").select("option_name, customer_price, extension_minutes").eq("store_id", storeId).eq("is_visible", true).order("display_order"),
-      sb.from("shifts").select("cast_id, shift_date, start_time, end_time").eq("store_id", storeId).gte("shift_date", ymd).lte("shift_date", iso(weekLater)).order("shift_date").limit(40),
+      sb.from("shifts").select("cast_id, shift_date, start_time, end_time").eq("store_id", storeId).eq("shift_date", ymd).order("start_time").limit(20),
       sb.from("casts").select("id, name, photo").eq("store_id", storeId).eq("is_visible", true),
       sb.from("banners").select("image_url").eq("store_id", storeId).eq("is_active", true).order("display_order").limit(1),
     ]);
@@ -53,31 +48,18 @@ async function buildNewsGrounding(sb: any, storeId: string, ymd: string): Promis
       }
     }
 
-    const options = optionsRes.data ?? [];
-    if (options.length > 0) {
-      lines.push("【オプション料金】");
-      for (const option of options) {
-        const extension = option.extension_minutes ? `（${option.extension_minutes}分）` : "";
-        lines.push(`・${option.option_name}${extension}：${Number(option.customer_price).toLocaleString()}円`);
-      }
-    }
-
     const castMap = new Map<string, { name: string; photo: string | null }>();
     for (const cast of castsRes.data ?? []) castMap.set(cast.id, { name: cast.name, photo: cast.photo });
 
     const shifts = (shiftsRes.data ?? []).filter((shift: any) => castMap.has(shift.cast_id));
     if (shifts.length > 0) {
-      lines.push("【今後7日間の出勤予定】");
-      const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-      for (const shift of shifts.slice(0, 20)) {
+      lines.push("【本日の出勤】");
+      for (const shift of shifts.slice(0, 8)) {
         const cast = castMap.get(shift.cast_id)!;
-        const [year, month, day] = String(shift.shift_date).split("-").map(Number);
-        const weekday = weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-        const dateLabel = `${month}/${day}(${weekday})`;
         const time = shift.start_time && shift.end_time
           ? ` ${String(shift.start_time).slice(0, 5)}〜${String(shift.end_time).slice(0, 5)}`
           : "";
-        lines.push(`・${dateLabel}${time} ${cast.name}`);
+        lines.push(`・${cast.name}${time}`);
       }
     }
 
@@ -131,20 +113,23 @@ async function generateForStore({
     ? `\n\n===== 参照データ（ここにある事実だけ使用） =====\n${facts}\n=============================================`
     : "\n\n参照データが空のため、具体的な料金・割引名・セラピスト名・日時は書かないでください。";
 
-  const systemPrompt = `あなたは仙台・宮城のメンズエステ「${store.name}」公式サイトのニュース編集者です。
-読みやすく上品な敬語で、毎日違う切り口の短いニュースを書いてください。
+  const systemPrompt = `あなたは仙台・宮城のメンズエステ「${store.name}」公式サイトの予約獲得を担当する編集者です。
+スマートフォンで一読でき、そのまま予約したくなる短いニュースを書いてください。
 
 【厳守事項】
 ・料金、割引、出勤、固有名詞は参照データにある事実だけを使い、創作しない。
 ・過度な性的表現、誇大表現、同じ言い回しの繰り返しを避ける。
-・検索語を不自然に詰め込まず、仙台または宮城という地域名は本文中に自然に1回まで使える。
-・Markdownは **太字** と「・」の箇条書きだけを使用する。
+・季節や天気の挨拶、一般論、翌日以降の案内、オプションの説明は書かない。
+・参照データに割引がある場合は、最も予約につながる割引名と金額を必ずタイトルまたは本文前半に入れる。
+・参照データに本日の出勤がある場合は、名前と時間を簡潔に案内する。
+・本文の最後は「Web予約またはLINEからご予約ください」など、次の行動が明確な一文にする。URLは書かない。
+・Markdown記法、絵文字、ハッシュタグは使わない。
 
 【出力形式】
-1行目：記事タイトル（15〜32文字、記号や絵文字なし）
+1行目：記事タイトル（14〜30文字。空き状況または割引の利点を結論から伝える）
 2行目：空行
-3行目以降：本文（合計120〜400文字、段落は2〜4つ）`;
-  const userPrompt = `本日（${ymd}）の${store.name}公式ニュースを作成してください。季節や曜日の短い話題から入り、参照データに掲載できる情報があれば簡潔に案内してください。${factsBlock}`;
+3行目以降：本文（合計90〜180文字、段落は2〜3つ。結論→本日の案内→予約の順）`;
+  const userPrompt = `本日（${ymd}）の${store.name}公式ニュースを作成してください。目的はニュースを読んだ方に、クーポンまたは本日の空き状況を確認して予約してもらうことです。参照データの中から予約判断に必要な情報だけを選び、短くまとめてください。${factsBlock}`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

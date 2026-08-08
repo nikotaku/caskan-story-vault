@@ -14,15 +14,11 @@ async function buildNewsGrounding(): Promise<{ facts: string; images: string[] }
 
   try {
     const sb = createClient(SUPABASE_URL, SERVICE_KEY);
-    const today = new Date();
-    const weekLater = new Date(today.getTime() + 7 * 86400000);
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const todayYmd = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    const [discountsRes, nomRes, optRes, shiftsRes, castsRes, bannersRes] = await Promise.all([
+    const [discountsRes, shiftsRes, castsRes, bannersRes] = await Promise.all([
       sb.from("discounts").select("name, discount_type, discount_value").eq("is_active", true),
-      sb.from("nomination_rates").select("nomination_type, customer_price"),
-      sb.from("option_rates").select("option_name, customer_price, extension_minutes").eq("is_visible", true).order("display_order"),
-      sb.from("shifts").select("cast_id, shift_date, start_time, end_time").gte("shift_date", iso(today)).lte("shift_date", iso(weekLater)).order("shift_date").limit(40),
+      sb.from("shifts").select("cast_id, shift_date, start_time, end_time").eq("shift_date", todayYmd).order("start_time").limit(20),
       sb.from("casts").select("id, name, photo").eq("is_visible", true),
       sb.from("banners").select("image_url").eq("is_active", true).order("display_order").limit(1),
     ]);
@@ -38,34 +34,16 @@ async function buildNewsGrounding(): Promise<{ facts: string; images: string[] }
       }
     }
 
-    const noms = nomRes.data ?? [];
-    if (noms.length) {
-      lines.push("【指名料金】");
-      for (const n of noms) lines.push(`・${n.nomination_type}：${Number(n.customer_price).toLocaleString()}円`);
-    }
-
-    const opts = optRes.data ?? [];
-    if (opts.length) {
-      lines.push("【オプション料金】");
-      for (const o of opts) {
-        const ext = o.extension_minutes ? `（${o.extension_minutes}分）` : "";
-        lines.push(`・${o.option_name}${ext}：${Number(o.customer_price).toLocaleString()}円`);
-      }
-    }
-
     const castMap = new Map<string, { name: string; photo: string | null }>();
     for (const c of castsRes.data ?? []) castMap.set(c.id, { name: c.name, photo: c.photo });
 
     const shifts = (shiftsRes.data ?? []).filter((s) => castMap.has(s.cast_id));
     if (shifts.length) {
-      lines.push("【今後7日間の出勤予定】");
-      const wd = ["日", "月", "火", "水", "木", "金", "土"];
-      for (const s of shifts.slice(0, 20)) {
+      lines.push("【本日の出勤】");
+      for (const s of shifts.slice(0, 8)) {
         const c = castMap.get(s.cast_id)!;
-        const dt = new Date(s.shift_date + "T00:00:00");
-        const dstr = `${dt.getMonth() + 1}/${dt.getDate()}(${wd[dt.getDay()]})`;
         const time = s.start_time && s.end_time ? ` ${String(s.start_time).slice(0, 5)}〜${String(s.end_time).slice(0, 5)}` : "";
-        lines.push(`・${dstr}${time} ${c.name}`);
+        lines.push(`・${c.name}${time}`);
       }
     }
 
@@ -133,14 +111,14 @@ serve(async (req) => {
       case "news": {
         const { facts, images } = await buildNewsGrounding();
         autoImages = images;
-        systemPrompt = "あなたはメンズエステのニュース記事を作成する専門のライターです。読みやすく、魅力的で、お客様の興味を引く記事を日本語で作成してください。重要: 料金・割引・出勤など具体的な情報は、必ず提供された『参照データ』に記載のある事実のみを使用し、記載のない金額・割引名・キャスト名・日時を創作してはいけません。参照データが空の場合は、具体的な数値や固有名を避けた一般的な内容にしてください。\n\n出力形式の厳守: Markdown記法は一切使わないでください。具体的には、見出し記号(#)、太字(**)、区切り線(---)、表組み(|)、箇条書き記号(- や *)を使わず、通常の日本語の文章と改行のみで書いてください。ハッシュタグ(#〇〇)も使わないでください。絵文字は控えめ（多くても2〜3個まで）にしてください。";
+        systemPrompt = "あなたはメンズエステ公式サイトの予約獲得を担当する編集者です。スマートフォンで一読できる短いニュースを日本語で作成してください。料金・割引・出勤などの具体的な情報は、必ず提供された参照データにある事実だけを使用し、創作してはいけません。季節や天気の挨拶、一般論、オプション説明は不要です。参照データに割引があれば割引名と金額を前半で伝え、本日の出勤があれば名前と時間を簡潔に案内してください。最後はWeb予約またはLINE予約を促す一文にしてください。Markdown、絵文字、ハッシュタグ、URLは使わず、通常の文章と改行だけで書いてください。";
         const factsBlock = facts
           ? `\n\n===== 参照データ（この事実のみ使用可。創作禁止）=====\n${facts}\n===============================================\n`
           : "";
         userPrompt = (newsTitle
-          ? `タイトル: ${newsTitle}\n\n上記のタイトルに基づいて、メンズエステのニュース記事を300-500文字程度で作成してください。`
-          : `メンズエステの新着ニュース記事を300-500文字程度で作成してください。`)
-          + `下記の参照データに含まれる実際の割引・料金・出勤情報を活用し、お得感のある内容にしてください。参照データに無い具体的な数値や固有名は使わないでください。${factsBlock}`;
+          ? `タイトル: ${newsTitle}\n\n上記のタイトルに基づき、結論から始まる90〜180文字の記事を作成してください。`
+          : `クーポンまたは本日の空き状況を結論から伝える、90〜180文字のニュース記事を作成してください。`)
+          + `参照データから予約判断に必要な情報だけを選び、結論、本日の案内、予約の順に2〜3段落でまとめてください。参照データにない具体的な数値や固有名は使わないでください。${factsBlock}`;
         break;
       }
       
