@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { toExtTime } from "@/lib/timeFormat";
+import { toExtTime, toStoredTime } from "@/lib/timeFormat";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { postToSheet } from "@/lib/sheetWebhook";
-import { format } from "date-fns";
+import { addDays, format, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Search, FileUp, Table2, Plus, Pencil, Trash2 } from "lucide-react";
 import {
@@ -203,13 +203,15 @@ export default function ReservationsList() {
       return;
     }
     try {
+      const storedStart = toStoredTime(formData.start_time);
+      const storedDate = addDays(formData.reservation_date, storedStart.dayOffset);
       const { error } = await supabase.from("reservations").insert([{
         cast_id: formData.cast_id,
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email || null,
-        reservation_date: format(formData.reservation_date, "yyyy-MM-dd"),
-        start_time: formData.start_time,
+        reservation_date: format(storedDate, "yyyy-MM-dd"),
+        start_time: storedStart.time,
         duration: formData.duration,
         course_type: formData.course_type,
         course_name: formData.course_name,
@@ -226,8 +228,8 @@ export default function ReservationsList() {
       }]);
       if (error) throw error;
       postToSheet("reservation", {
-        reservation_date: format(formData.reservation_date, "yyyy-MM-dd"),
-        start_time: formData.start_time,
+        reservation_date: format(storedDate, "yyyy-MM-dd"),
+        start_time: storedStart.time,
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email || "",
@@ -259,16 +261,19 @@ export default function ReservationsList() {
     setEditingReservation(res);
     const [h, m] = res.start_time.slice(0, 5).split(":").map(Number);
     const endMin = (h < 6 ? h + 24 : h) * 60 + m + res.duration;
-    const eh = Math.floor(endMin / 60) % 24;
+    const eh = Math.floor(endMin / 60);
     const em = endMin % 60;
+    const storedDate = new Date(`${res.reservation_date}T00:00:00`);
+    const displayTime = toExtTime(res.start_time);
+    const displayDate = displayTime !== res.start_time.slice(0, 5) ? subDays(storedDate, 1) : storedDate;
     setEditFormData({
       cast_id: res.cast_id || "",
       customer_name: res.customer_name,
       customer_phone: res.customer_phone,
       customer_email: res.customer_email || "",
       nomination_type: res.nomination_type || "none",
-      reservation_date: new Date(`${res.reservation_date}T00:00:00`),
-      start_time: res.start_time.slice(0, 5),
+      reservation_date: displayDate,
+      start_time: displayTime,
       end_time: `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`,
       duration: res.duration,
       room: res.room || "",
@@ -290,6 +295,8 @@ export default function ReservationsList() {
   const handleUpdateReservation = async () => {
     if (!editingReservation) return;
     try {
+      const storedStart = toStoredTime(editFormData.start_time);
+      const storedDate = addDays(editFormData.reservation_date, storedStart.dayOffset);
       // Recompute price from master data to avoid stale-state race conditions
       const backRate = backRates.find((r) => r.course_type === editFormData.course_type && r.duration === editFormData.duration);
       let subtotal = backRate?.customer_price ?? 0;
@@ -318,8 +325,8 @@ export default function ReservationsList() {
         customer_name: editFormData.customer_name,
         customer_phone: editFormData.customer_phone,
         customer_email: editFormData.customer_email || null,
-        reservation_date: format(editFormData.reservation_date, "yyyy-MM-dd"),
-        start_time: editFormData.start_time,
+        reservation_date: format(storedDate, "yyyy-MM-dd"),
+        start_time: storedStart.time,
         duration: editFormData.duration,
         course_type: editFormData.course_type,
         course_name: courseName,
@@ -541,7 +548,13 @@ export default function ReservationsList() {
                     {filteredReservations.map((res) => (
                       <tr key={res.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 whitespace-nowrap">
-                          {format(new Date(res.reservation_date), "yyyy/MM/dd", { locale: ja })}
+                          {(() => {
+                            const storedDate = new Date(`${res.reservation_date}T00:00:00`);
+                            const businessDate = toExtTime(res.start_time) !== res.start_time.slice(0, 5)
+                              ? subDays(storedDate, 1)
+                              : storedDate;
+                            return format(businessDate, "yyyy/MM/dd", { locale: ja });
+                          })()}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {toExtTime(res.start_time)}<span className="text-muted-foreground ml-1">({res.duration}分)</span>
