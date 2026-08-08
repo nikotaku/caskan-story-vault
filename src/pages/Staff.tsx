@@ -2369,14 +2369,6 @@ export default function Staff() {
                           <p className="text-xs text-muted-foreground mt-1">縦に改行されたプロフィール文章をそのまま貼り付け・編集できます</p>
                         </div>
                         <div>
-                          <Label htmlFor="e-customer-base">客層メモ</Label>
-                          <Textarea id="e-customer-base" rows={2} className="mt-1" value={editingCast.customer_base_memo || ""} onChange={(e) => setEditingCast({...editingCast, customer_base_memo: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label htmlFor="e-referral-route">紹介経由</Label>
-                          <Input id="e-referral-route" className="mt-1" value={editingCast.referral_route || ""} onChange={(e) => setEditingCast({...editingCast, referral_route: e.target.value})} />
-                        </div>
-                        <div>
                           <Label>紹介報酬（広告費）</Label>
                           <Select
                             value={editingCast.referral_reward_id || "none"}
