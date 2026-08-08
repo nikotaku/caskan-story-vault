@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +15,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, Loader2, CheckCircle, AlertCirc
 import { toast } from "sonner";
 import { downloadMonthlyReport } from "@/lib/monthlyClosingReport";
 import { splitClearanceExtraItems, sumClearanceExtraItems } from "@/lib/clearanceExtraItems";
+import { ZENRYOKU_STORE_ID } from "@/lib/storeSwitch";
 
 /**
  * 月別清算：毎月の締め作業。
@@ -60,6 +62,7 @@ interface ExpenseRec {
 }
 
 interface ClearanceRec {
+  cast_id: string;
   cast_name: string;
   total_sales: number;
   therapist_back: number;
@@ -70,13 +73,76 @@ interface ClearanceRec {
   salary_adjustments: number;
 }
 
+interface ReservationRec {
+  cast_id: string | null;
+  cast_name: string;
+  price: number;
+  payment_method: string | null;
+  nomination_type: string | null;
+  referral_reward_amount: number;
+}
+
+interface MonthlyClosingState {
+  closed_at?: string | null;
+  [key: string]: unknown;
+}
+
+interface TherapistMetric {
+  castId: string;
+  name: string;
+  totalSales: number;
+  completedCount: number;
+  nominationCount: number;
+  repeatNominationCount: number;
+  repeatRate: number;
+}
+
+type TherapistMetricTab = "sales" | "nominations" | "repeatRate";
+
 const yen = (v: number) => `¥${v.toLocaleString()}`;
+
+function TherapistMetricList({ rows, metric }: { rows: TherapistMetric[]; metric: TherapistMetricTab }) {
+  const sorted = [...rows].sort((a, b) => {
+    if (metric === "sales") return b.totalSales - a.totalSales;
+    if (metric === "nominations") return b.nominationCount - a.nominationCount;
+    return b.repeatRate - a.repeatRate;
+  });
+
+  if (sorted.length === 0) {
+    return <p className="text-center text-muted-foreground text-sm py-8">この月のセラピスト実績がありません</p>;
+  }
+
+  return (
+    <div className="divide-y">
+      {sorted.map((row, index) => (
+        <div key={row.castId} className="px-4 py-3 flex items-center gap-3">
+          <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold text-muted-foreground shrink-0">
+            {index + 1}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="font-medium text-sm block truncate">{row.name}</span>
+            <span className="text-[11px] text-muted-foreground">
+              完了 {row.completedCount}本 ／ 本指名 {row.repeatNominationCount}本
+            </span>
+          </span>
+          <span className="font-bold tabular-nums text-primary shrink-0">
+            {metric === "sales" && yen(row.totalSales)}
+            {metric === "nominations" && `${row.nominationCount}本`}
+            {metric === "repeatRate" && `${row.repeatRate.toFixed(1)}%`}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function SalesMonthlyClosing() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()));
   const [records, setRecords] = useState<ExpenseRec[]>([]);
   const [clearances, setClearances] = useState<ClearanceRec[]>([]);
+  const [reservations, setReservations] = useState<ReservationRec[]>([]);
+  const [therapistMetricTab, setTherapistMetricTab] = useState<TherapistMetricTab>("sales");
   const [loading, setLoading] = useState(true);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [savingItem, setSavingItem] = useState<string | null>(null);
@@ -91,7 +157,7 @@ export default function SalesMonthlyClosing() {
   // 支払方法別・投函合計
   const [pay, setPay] = useState({ cash: 0, card: 0, paypay: 0, cashOnHand: 0 });
   // 締め状態
-  const [closing, setClosing] = useState<any>(null);
+  const [closing, setClosing] = useState<MonthlyClosingState | null>(null);
   const [closingBusy, setClosingBusy] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
@@ -105,7 +171,7 @@ export default function SalesMonthlyClosing() {
     setLoading(true);
     const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
     const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
-    const [expRes, clrRes, castsRes, rewardsRes, resvRes, closeRes] = await Promise.all([
+    const [expRes, clrRes, rewardsRes, resvRes, closeRes] = await Promise.all([
       supabase
         .from("expenses")
         .select("id, expense_date, expense_type, amount, is_paid")
@@ -113,68 +179,79 @@ export default function SalesMonthlyClosing() {
         .lte("expense_date", monthEnd),
       supabase
         .from("daily_clearances")
-        .select("total_sales, therapist_back, misc_expenses, accommodation_fee, transportation_fee, other_expenses, payout_amount, casts(name)")
+        .select("cast_id, total_sales, therapist_back, misc_expenses, accommodation_fee, transportation_fee, other_expenses, payout_amount, casts(name)")
         .gte("date", monthStart)
         .lte("date", monthEnd),
-      // 紹介広告費の推奨額算出用
-      supabase.from("casts").select("id, referral_reward_id").not("referral_reward_id", "is", null),
       supabase.from("referral_rewards").select("id, amount"),
-      // 支払方法別＋紹介広告費算出用
-      supabase.from("reservations").select("cast_id, status, reservation_date, price, payment_method")
-        .gte("reservation_date", monthStart).lte("reservation_date", monthEnd).eq("status", "completed"),
-      // 締め状態
-      supabase.from("monthly_closings").select("*").eq("month_date", monthStart).maybeSingle(),
+      supabase
+        .from("reservations")
+        .select("cast_id, price, payment_method, nomination_type, casts(name, referral_reward_id)")
+        .gte("reservation_date", monthStart)
+        .lte("reservation_date", monthEnd)
+        .eq("status", "completed"),
+      supabase
+        .from("monthly_closings")
+        .select("*")
+        .eq("store_id", ZENRYOKU_STORE_ID)
+        .eq("month_date", monthStart)
+        .maybeSingle(),
     ]);
-    setClosing((closeRes as any)?.data ?? null);
+
+    const firstError = [expRes.error, clrRes.error, rewardsRes.error, resvRes.error, closeRes.error].find(Boolean);
+    if (firstError) {
+      console.error("monthly settlement fetch failed", firstError);
+      toast.error(`月別清算の読み込みに失敗しました: ${firstError.message}`);
+      setLoading(false);
+      return;
+    }
+
+    const rewardAmounts = new Map((rewardsRes.data ?? []).map((reward) => [reward.id, reward.amount ?? 0]));
+    const reservationRows: ReservationRec[] = (resvRes.data ?? []).map((reservation) => ({
+      cast_id: reservation.cast_id,
+      cast_name: reservation.casts?.name ?? "不明",
+      price: reservation.price ?? 0,
+      payment_method: reservation.payment_method,
+      nomination_type: reservation.nomination_type,
+      referral_reward_amount: reservation.casts?.referral_reward_id
+        ? rewardAmounts.get(reservation.casts.referral_reward_id) ?? 0
+        : 0,
+    }));
+    setClosing(closeRes.data);
+    setReservations(reservationRows);
+
     // 支払方法別売上
     const payAgg = { cash: 0, card: 0, paypay: 0, cashOnHand: 0 };
-    for (const r of (resvRes.data || []) as any[]) {
-      const m = r.payment_method;
+    for (const r of reservationRows) {
+      const m = r.payment_method?.toLowerCase();
       const p = r.price ?? 0;
-      if (m === "card") payAgg.card += p;
+      if (m === "card" || m === "カード") payAgg.card += p;
       else if (m === "paypay") payAgg.paypay += p;
       else payAgg.cash += p; // cash / null は現金扱い
     }
-    payAgg.cashOnHand = ((clrRes.data || []) as any[]).reduce((s, r) => s + (r.payout_amount ?? 0), 0);
+    payAgg.cashOnHand = (clrRes.data ?? []).reduce((s, r) => s + (r.payout_amount ?? 0), 0);
     setPay(payAgg);
-    if (!expRes.error) {
-      setRecords((expRes.data || []).map((r: any) => ({
-        id: r.id,
-        date: r.expense_date,
-        category: r.expense_type,
-        amount: r.amount,
-        is_paid: r.is_paid ?? true,
-      })));
-    }
-    if (!clrRes.error) {
-      setClearances((clrRes.data || []).map((r: any) => {
-        const { deductions, salaryAdditions } = splitClearanceExtraItems(r.other_expenses);
-        return {
-          cast_name: r.casts?.name ?? "不明",
-          total_sales: r.total_sales ?? 0,
-          therapist_back: r.therapist_back ?? 0,
-          misc_expenses: r.misc_expenses ?? 0,
-          accommodation_fee: r.accommodation_fee ?? 0,
-          transportation_fee: r.transportation_fee ?? 0,
-          other_expenses: sumClearanceExtraItems(deductions),
-          salary_adjustments: sumClearanceExtraItems(salaryAdditions),
-        };
-      }));
-    }
-    // 紹介広告費の推奨額 = Σ（紹介ルール紐付きキャストの完了予約数 × 1本単価）
-    const rewardAmt = new Map<string, number>();
-    for (const r of rewardsRes.data || []) rewardAmt.set(r.id, (r as any).amount ?? 0);
-    const castUnit = new Map<string, number>();
-    for (const c of castsRes.data || []) {
-      const amt = rewardAmt.get((c as any).referral_reward_id);
-      if (amt) castUnit.set((c as any).id, amt);
-    }
-    let refTotal = 0;
-    for (const r of resvRes.data || []) {
-      const unit = castUnit.get((r as any).cast_id);
-      if (unit) refTotal += unit;
-    }
-    setReferralSuggested(refTotal);
+    setRecords((expRes.data ?? []).map((r) => ({
+      id: r.id,
+      date: r.expense_date,
+      category: r.expense_type,
+      amount: r.amount,
+      is_paid: r.is_paid ?? true,
+    })));
+    setClearances((clrRes.data ?? []).map((r) => {
+      const { deductions, salaryAdditions } = splitClearanceExtraItems(r.other_expenses);
+      return {
+        cast_id: r.cast_id,
+        cast_name: r.casts?.name ?? "不明",
+        total_sales: r.total_sales ?? 0,
+        therapist_back: r.therapist_back ?? 0,
+        misc_expenses: r.misc_expenses ?? 0,
+        accommodation_fee: r.accommodation_fee ?? 0,
+        transportation_fee: r.transportation_fee ?? 0,
+        other_expenses: sumClearanceExtraItems(deductions),
+        salary_adjustments: sumClearanceExtraItems(salaryAdditions),
+      };
+    }));
+    setReferralSuggested(reservationRows.reduce((sum, r) => sum + (r.referral_reward_amount ?? 0), 0));
     setLoading(false);
   }, [selectedMonth]);
 
@@ -185,24 +262,63 @@ export default function SalesMonthlyClosing() {
   const toggleSection = (key: string) => {
     setOpenSections((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
   // ── セラピスト報酬（キャスト別バック合計） ──
-  const backByCast = new Map<string, { total: number; days: number }>();
+  const backByCast = new Map<string, { name: string; total: number; days: number }>();
   for (const c of clearances) {
-    const cur = backByCast.get(c.cast_name) || { total: 0, days: 0 };
+    const cur = backByCast.get(c.cast_id) || { name: c.cast_name, total: 0, days: 0 };
     cur.total += c.therapist_back;
     cur.days += 1;
-    backByCast.set(c.cast_name, cur);
+    backByCast.set(c.cast_id, cur);
   }
   const castRows = [...backByCast.entries()].sort((a, b) => b[1].total - a[1].total);
   const totalBack = clearances.reduce((s, c) => s + c.therapist_back, 0);
 
   // ── 売上（日別精算の売上合計） ──
   const totalSales = clearances.reduce((s, c) => s + c.total_sales, 0);
+
+  // ── セラピスト別実績（全店舗・完了予約を合算） ──
+  const metricMap = new Map<string, TherapistMetric>();
+  for (const c of clearances) {
+    const current = metricMap.get(c.cast_id) || {
+      castId: c.cast_id,
+      name: c.cast_name,
+      totalSales: 0,
+      completedCount: 0,
+      nominationCount: 0,
+      repeatNominationCount: 0,
+      repeatRate: 0,
+    };
+    current.totalSales += c.total_sales;
+    metricMap.set(c.cast_id, current);
+  }
+  for (const r of reservations) {
+    if (!r.cast_id) continue;
+    const current = metricMap.get(r.cast_id) || {
+      castId: r.cast_id,
+      name: r.cast_name,
+      totalSales: 0,
+      completedCount: 0,
+      nominationCount: 0,
+      repeatNominationCount: 0,
+      repeatRate: 0,
+    };
+    const nominationType = r.nomination_type?.trim();
+    const isNomination = !!nominationType && !["none", "フリー", "指名なし"].includes(nominationType);
+    current.completedCount += 1;
+    if (isNomination) current.nominationCount += 1;
+    if (nominationType === "本指名") current.repeatNominationCount += 1;
+    metricMap.set(r.cast_id, current);
+  }
+  const therapistMetrics = [...metricMap.values()].map((row) => ({
+    ...row,
+    repeatRate: row.completedCount > 0 ? (row.repeatNominationCount / row.completedCount) * 100 : 0,
+  }));
 
   // ── 雑費・宿泊費・交通費 ──
   const totalMisc = clearances.reduce((s, c) => s + c.misc_expenses, 0);
@@ -349,6 +465,7 @@ export default function SalesMonthlyClosing() {
     setClosingBusy(true);
     const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
     const { data, error } = await supabase.from("monthly_closings").upsert({
+      store_id: ZENRYOKU_STORE_ID,
       month_date: monthStart,
       total_sales: totalSales,
       therapist_paid: totalSalaryPaid,
@@ -404,7 +521,7 @@ export default function SalesMonthlyClosing() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">月別清算</h1>
-              <p className="text-muted-foreground text-sm">毎月の締め作業：報酬・諸費・固定費のチェック</p>
+              <p className="text-muted-foreground text-sm">全店舗合算：報酬・諸費・固定費・セラピスト実績</p>
             </div>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" onClick={() => setSelectedMonth((d) => subMonths(d, 1))}>
@@ -450,6 +567,28 @@ export default function SalesMonthlyClosing() {
                   <div className="px-4 py-2 flex justify-between text-muted-foreground"><span>− セラピスト給与（実支払）</span><span className="tabular-nums">{yen(totalSalaryPaid)}</span></div>
                   <div className="px-4 py-2 flex justify-between text-muted-foreground"><span>− 販管費（経費合計）</span><span className="tabular-nums">{yen(totalExpenses)}</span></div>
                 </div>
+              </Card>
+
+              {/* ── セラピスト別実績 ── */}
+              <Card className="overflow-hidden">
+                <div className="px-4 py-3 border-b">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="font-bold text-sm flex items-center gap-2">
+                      <Users size={16} className="text-primary" />
+                      セラピスト別実績
+                    </span>
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">全店舗合算</span>
+                  </div>
+                  <Tabs value={therapistMetricTab} onValueChange={(value) => setTherapistMetricTab(value as TherapistMetricTab)}>
+                    <TabsList className="grid w-full grid-cols-3 h-9">
+                      <TabsTrigger value="sales" className="text-xs">売上</TabsTrigger>
+                      <TabsTrigger value="nominations" className="text-xs">指名本数</TabsTrigger>
+                      <TabsTrigger value="repeatRate" className="text-xs">本指名率</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <p className="text-[10px] text-muted-foreground mt-2">本指名率＝本指名本数 ÷ 施術完了本数</p>
+                </div>
+                <TherapistMetricList rows={therapistMetrics} metric={therapistMetricTab} />
               </Card>
 
               {/* ── 支払方法別 ── */}
@@ -507,10 +646,10 @@ export default function SalesMonthlyClosing() {
                       <p className="text-center text-muted-foreground text-sm py-8">精算データがありません</p>
                     ) : (
                       <div className="divide-y">
-                        {castRows.map(([name, v]) => (
-                          <div key={name} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                        {castRows.map(([castId, v]) => (
+                          <div key={castId} className="px-4 py-2.5 flex items-center justify-between gap-3">
                             <span className="text-sm">
-                              {name}
+                              {v.name}
                               <span className="ml-2 text-xs text-muted-foreground">{v.days}日</span>
                             </span>
                             <span className="font-semibold tabular-nums">{yen(v.total)}</span>
