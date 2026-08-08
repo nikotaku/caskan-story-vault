@@ -86,7 +86,7 @@ export default function SalesDashboard() {
         { href: "/sales/pending-reports", label: "確認待ちボックス", icon: Inbox, description: "確認待ちの売上報告" },
         { href: "/sales/monthly-sales", label: "月別サマリー", icon: CalendarRange, description: "日別精算の月別集計" },
         { href: "/sales/daily-sales", label: "日別清算", icon: CalendarCheck, description: "日別の清算管理" },
-        { href: "/sales/monthly-closing", label: "月別清算", icon: CalendarRange, description: "毎月の固定費 締め作業" },
+        { href: "/sales/monthly-closing", label: "月別清算", icon: CalendarRange, description: "全店舗合算の月別精算・セラピスト実績" },
         { href: "/sales/card-sales", label: "カード売上", icon: CreditCard, description: "カード決済の売上" },
         { href: "/sales/paypay-sales", label: "PayPay売上", icon: Wallet, description: "PayPay決済の売上" },
         { href: "/sales/monthly-target", label: "月別売上目標", icon: Target, description: "月別の売上目標設定" },
