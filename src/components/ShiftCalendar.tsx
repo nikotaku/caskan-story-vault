@@ -25,6 +25,7 @@ interface Shift {
   endTime: string;
   room?: string;
   notes?: string;
+  estamaRegistered: boolean;
 }
 
 interface DateInfo {
@@ -101,6 +102,11 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
             end_time: formData.endTime,
             room: formData.room,
             notes: formData.notes,
+            estama_registered:
+              existingShift.startTime === formData.startTime
+              && existingShift.endTime === formData.endTime
+                ? existingShift.estamaRegistered
+                : false,
           })
           .eq('id', existingShift.id);
 
@@ -122,6 +128,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
             room: formData.room,
             notes: formData.notes,
             status: 'scheduled',
+            estama_registered: false,
             created_by: user.id,
           });
 
