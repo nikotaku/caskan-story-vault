@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PORTAL_WORKER_URL = Deno.env.get("PORTAL_WORKER_URL") || "https://enka-salon.jp/api/automations/estama-portal-worker";
+const PORTAL_WORKER_URL = Deno.env.get("ESTAMA_PORTAL_WORKER_URL") || "https://newkyasukan.vercel.app/api/automations/estama-portal-worker";
 const O2_BASE = "https://m-sns.net";
 const O2_LOGIN = `${O2_BASE}/cast/login/`;
 const ALLOWED_ORIGINS = new Set([
