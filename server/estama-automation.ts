@@ -1090,6 +1090,24 @@ const estamaEndTime = (startTime: string, endTime: string) => {
   return `${String(endHour + 24).padStart(2, "0")}:${endTime.slice(3, 5)}`;
 };
 
+async function setEstamaScheduleSelect(
+  locator: Locator,
+  value: string,
+  label: string,
+) {
+  await locator.evaluate((element, nextValue) => {
+    const select = element as HTMLSelectElement;
+    const option = Array.from(select.options).find((item) => item.value === nextValue);
+    if (!option) throw new Error(`option_not_found:${nextValue}`);
+    select.value = nextValue;
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value).catch((error) => {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`エステ魂の${label}に${value || "未出勤"}を設定できません: ${detail}`);
+  });
+}
+
 export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   const items = input.items.slice(0, 60);
   if (!input.contextId) throw new Error("Browserbaseの保存済みログイン情報がありません");
@@ -1159,13 +1177,13 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         }
 
         if (item.action === "delete") {
-          await start.selectOption("").catch(() => start.selectOption({ index: 0 }));
-          await end.selectOption("").catch(() => end.selectOption({ index: 0 }));
+          await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
+          await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
         } else {
           const startValue = item.startTime.slice(0, 5);
           const endValue = estamaEndTime(item.startTime, item.endTime);
-          await start.selectOption(startValue);
-          await end.selectOption(endValue);
+          await setEstamaScheduleSelect(start, startValue, `${item.shiftDate}の出勤時刻`);
+          await setEstamaScheduleSelect(end, endValue, `${item.shiftDate}の退勤時刻`);
         }
         await clickSave(page);
         const result: EstamaShiftBatchResult = {
