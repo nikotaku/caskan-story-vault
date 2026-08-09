@@ -554,7 +554,7 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   if (await start.count()) {
     await start.click();
     await page.waitForTimeout(300);
-    const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible').last();
+    const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, #createAccountModal:visible, .p-tamathera-confirm-modal:visible').last();
     const credentialForm = page.locator('form:visible').filter({
       has: page.locator('input[type="email"], input[name*="mail" i], input[type="password"]'),
     }).last();
