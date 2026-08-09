@@ -1,6 +1,7 @@
 import {
   syncEstamaShiftBatch,
   type EstamaShiftBatchInput,
+  type EstamaShiftEvidenceReport,
   type EstamaShiftBatchItem,
   type EstamaShiftBatchResult,
 } from "../../server/estama-automation.js";
@@ -67,6 +68,25 @@ async function reportResult(token: string, result: EstamaShiftBatchResult) {
   throw new Error(lastError || "同期結果を保存できませんでした");
 }
 
+async function notifyEvidence(token: string, report: EstamaShiftEvidenceReport) {
+  if (!token || token.length < 48) throw new Error("LINE通知用トークンがありません");
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/notify-estama-shift-sync`, {
+    method: "POST",
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      Authorization: `Bearer ${PUBLISHABLE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ notificationToken: token, report }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`公開確認のLINE通知に失敗しました (${response.status}): ${body.slice(0, 500)}`);
+  }
+  return body ? JSON.parse(body) : { success: true };
+}
+
 function parseItems(value: unknown): EstamaShiftBatchItem[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 60).map((item) => {
@@ -99,24 +119,39 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   }
 
   const startedAt = Date.now();
+  let notificationAttempted = false;
+  let notificationToken = "";
+  let storeId = "";
+  let shopId = "";
   try {
     const body = req.body || {};
     const token = stringValue(body.token);
+    notificationToken = stringValue(body.notificationToken);
+    storeId = stringValue(body.storeId);
+    shopId = stringValue(body.shopId);
     if (!await claimToken(token)) {
       res.status(401).json({ error: "同期用トークンが無効または使用済みです" });
       return;
     }
 
     const input: EstamaShiftBatchInput = {
-      storeId: stringValue(body.storeId),
+      storeId,
+      shopId,
       contextId: stringValue(body.contextId),
       configuration: body.configuration && typeof body.configuration === "object"
         ? body.configuration as Record<string, unknown>
         : {},
       items: parseItems(body.items),
+      missingProfiles: Array.isArray(body.missingProfiles)
+        ? body.missingProfiles.filter((item): item is string => typeof item === "string").slice(0, 30)
+        : [],
       onResult: (result, reportToken) => reportResult(reportToken, result),
+      onEvidence: async (report) => {
+        notificationAttempted = true;
+        await notifyEvidence(notificationToken, report);
+      },
     };
-    if (!input.storeId || !input.contextId || !input.items.length) {
+    if (!input.storeId || !input.shopId || !input.contextId || !input.items.length || !notificationToken) {
       throw new Error("同期対象データが不足しています");
     }
 
@@ -139,6 +174,27 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     res.status(200).json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (!notificationAttempted && notificationToken && storeId) {
+      notificationAttempted = true;
+      try {
+        await notifyEvidence(notificationToken, {
+          storeId,
+          shopId,
+          sessionId: "",
+          startedAt: new Date(startedAt).toISOString(),
+          finishedAt: new Date().toISOString(),
+          results: [],
+          evidence: [],
+          fatalError: message,
+        });
+      } catch (notifyError) {
+        console.error(JSON.stringify({
+          level: "error",
+          msg: "estama_shift_fatal_notification_failed",
+          error: notifyError instanceof Error ? notifyError.message : String(notifyError),
+        }));
+      }
+    }
     console.error(JSON.stringify({
       level: "error",
       msg: "estama_shift_worker_failed",

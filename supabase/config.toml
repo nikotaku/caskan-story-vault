@@ -31,4 +31,7 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.notify-estama-shift-sync]
-verify_jwt = true
+verify_jwt = false
+
+[functions.estama-reconcile-dispatch]
+verify_jwt = false

@@ -1206,18 +1206,60 @@ export type EstamaShiftBatchResult = {
   jobId: string;
   shiftId: string;
   castId: string;
+  castName: string;
   action: "upsert" | "delete";
   shiftDate: string;
+  startTime: string;
+  endTime: string;
   ok: boolean;
+  publicVerified: boolean;
+  publicUrl?: string;
   error?: string;
+};
+
+export type EstamaShiftEvidence = {
+  castId: string;
+  castName: string;
+  externalId: string;
+  weekStart: string;
+  publicUrl: string;
+  capturedAt: string;
+  verified: boolean;
+  expected: Array<{
+    jobId: string;
+    action: "upsert" | "delete";
+    shiftDate: string;
+    startTime: string;
+    endTime: string;
+    verified: boolean;
+    error?: string;
+  }>;
+  screenshotBase64: string;
+  mimeType: "image/jpeg";
+  error?: string;
+};
+
+export type EstamaShiftEvidenceReport = {
+  storeId: string;
+  shopId: string;
+  sessionId: string;
+  startedAt: string;
+  finishedAt: string;
+  results: EstamaShiftBatchResult[];
+  evidence: EstamaShiftEvidence[];
+  missingProfiles?: string[];
+  fatalError?: string;
 };
 
 export type EstamaShiftBatchInput = {
   storeId: string;
+  shopId: string;
   contextId: string;
   configuration?: Json | null;
   items: EstamaShiftBatchItem[];
+  missingProfiles?: string[];
   onResult?: (result: EstamaShiftBatchResult, reportToken: string) => Promise<void>;
+  onEvidence?: (report: EstamaShiftEvidenceReport) => Promise<void>;
 };
 
 const estamaEndTime = (startTime: string, endTime: string) => {
@@ -1248,7 +1290,163 @@ async function setEstamaScheduleSelect(
   });
 }
 
+const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
+  `https://estama.jp/shop/${encodeURIComponent(shopId)}/cast/${encodeURIComponent(externalId)}/`;
+
+const mondayOf = (date: string) => {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  const daysFromMonday = (value.getUTCDay() + 6) % 7;
+  value.setUTCDate(value.getUTCDate() - daysFromMonday);
+  return value.toISOString().slice(0, 10);
+};
+
+const currentJstDate = () =>
+  new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
+
+const weekOffsetFromCurrent = (weekStart: string) => {
+  const currentMonday = new Date(`${mondayOf(currentJstDate())}T00:00:00.000Z`).getTime();
+  const targetMonday = new Date(`${weekStart}T00:00:00.000Z`).getTime();
+  return Math.max(0, Math.round((targetMonday - currentMonday) / (7 * 86_400_000)));
+};
+
+const compactScheduleText = (value: string) => value
+  .normalize("NFKC")
+  .replace(/[〜~]/g, "～")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const shiftDateLabel = (date: string) => {
+  const [, month, day] = date.split("-");
+  return `${Number(month)}/${Number(day)}`;
+};
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
+  const normalized = compactScheduleText(text);
+  const label = shiftDateLabel(item.shiftDate);
+  const dateIndex = normalized.indexOf(label);
+  if (dateIndex < 0) {
+    return item.action === "delete"
+      ? { verified: true }
+      : { verified: false, error: `${label}の出勤表示がありません` };
+  }
+
+  const nextDate = normalized.slice(dateIndex + label.length).search(/\b\d{1,2}\/\d{1,2}(?:\([^)]*\))?/);
+  const dateBlock = normalized.slice(
+    dateIndex,
+    nextDate >= 0 ? dateIndex + label.length + nextDate : dateIndex + 500,
+  );
+  const timeRange = /\d{1,2}:\d{2}\s*～\s*\d{1,2}:\d{2}/;
+  if (item.action === "delete") {
+    return timeRange.test(dateBlock)
+      ? { verified: false, error: `${label}の削除前の出勤表示が残っています` }
+      : { verified: true };
+  }
+
+  const start = item.startTime.slice(0, 5);
+  const end = estamaEndTime(item.startTime, item.endTime);
+  const expected = new RegExp(`${escapeRegExp(start)}\\s*～\\s*${escapeRegExp(end)}`);
+  return expected.test(dateBlock)
+    ? { verified: true }
+    : { verified: false, error: `${label} ${start}～${end}が公開ページにありません` };
+}
+
+async function clickNextPublicScheduleWeek(page: Page) {
+  const next = page.locator("a, button").filter({ hasText: "次の1週間" }).filter({ visible: true }).first();
+  if (!await next.count()) throw new Error("公開ページの「次の1週間」が見つかりません");
+  await next.click();
+  await page.waitForTimeout(600);
+}
+
+async function capturePublicScheduleScreenshot(page: Page) {
+  const heading = page.locator("h1, h2, h3, h4, dt").filter({ hasText: /今週のスケジュール|スケジュール/ }).first();
+  let buffer: Buffer | null = null;
+  if (await heading.count()) {
+    await heading.scrollIntoViewIfNeeded().catch(() => undefined);
+    const section = heading.locator("xpath=ancestor::*[.//table][1]").first();
+    if (await section.count()) {
+      const box = await section.boundingBox().catch(() => null);
+      if (box && box.width <= 1_600 && box.height <= 2_400) {
+        buffer = await section.screenshot({ type: "jpeg", quality: 72 }).catch(() => null);
+      }
+    }
+  }
+  if (!buffer || buffer.byteLength > 650_000) {
+    buffer = await page.screenshot({ type: "jpeg", quality: 48, fullPage: false });
+  }
+  return buffer.toString("base64");
+}
+
+async function verifyPublicShiftGroup(
+  page: Page,
+  shopId: string,
+  group: EstamaShiftBatchItem[],
+) {
+  const first = group[0];
+  if (!shopId) throw new Error("エステ魂の店舗IDがありません");
+  if (!first.externalId) throw new Error(`${first.castName}のエステ魂公開ページIDがありません`);
+
+  const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
+  const byWeek = new Map<string, EstamaShiftBatchItem[]>();
+  for (const item of group) {
+    const weekStart = mondayOf(item.shiftDate);
+    byWeek.set(weekStart, [...(byWeek.get(weekStart) || []), item]);
+  }
+  const weeks = [...byWeek.entries()]
+    .map(([weekStart, expected]) => ({ weekStart, expected, offset: weekOffsetFromCurrent(weekStart) }))
+    .sort((left, right) => left.offset - right.offset);
+  const maxOffset = Math.min(2, Math.max(...weeks.map((week) => week.offset)));
+  let finalEvidence: EstamaShiftEvidence[] = [];
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const attemptEvidence: EstamaShiftEvidence[] = [];
+    await page.goto(`${publicUrl}?sync_verify=${Date.now()}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(attempt === 1 ? 500 : 1_500);
+
+    for (let offset = 0; offset <= maxOffset; offset += 1) {
+      if (offset > 0) await clickNextPublicScheduleWeek(page);
+      const week = weeks.find((candidate) => candidate.offset === offset);
+      if (!week) continue;
+      const rawText = await page.locator("body").innerText();
+      if (/Site Unavailable|Unable to access this site|アクセスできません/i.test(rawText)) {
+        throw new Error("エステ魂の公開ページを取得できませんでした");
+      }
+      const expected = week.expected.map((item) => ({
+        jobId: item.jobId,
+        action: item.action,
+        shiftDate: item.shiftDate,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        ...verifyPublicScheduleText(rawText, item),
+      }));
+      const screenshotBase64 = await capturePublicScheduleScreenshot(page);
+      const verified = expected.every((item) => item.verified) && Boolean(screenshotBase64);
+      attemptEvidence.push({
+        castId: first.castId,
+        castName: first.castName,
+        externalId: first.externalId,
+        weekStart: week.weekStart,
+        publicUrl: page.url(),
+        capturedAt: new Date().toISOString(),
+        verified,
+        expected,
+        screenshotBase64,
+        mimeType: "image/jpeg",
+        error: verified ? undefined : expected.find((item) => !item.verified)?.error || "証跡画像を取得できませんでした",
+      });
+    }
+
+    finalEvidence = attemptEvidence;
+    if (attemptEvidence.length === weeks.length && attemptEvidence.every((item) => item.verified)) break;
+    if (attempt < 2) await page.waitForTimeout(1_500);
+  }
+  return finalEvidence;
+}
+
 export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
+  const startedAt = new Date().toISOString();
   const items = input.items.slice(0, 60);
   if (!input.contextId) throw new Error("Browserbaseの保存済みログイン情報がありません");
   if (!items.length) return { sessionId: null, shiftUrl: null, results: [] };
@@ -1261,6 +1459,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   const { browser, page } = await connectSession(session.connectUrl);
   page.setDefaultTimeout(8_000);
   const results: EstamaShiftBatchResult[] = [];
+  const evidence: EstamaShiftEvidence[] = [];
   const reportResult = async (result: EstamaShiftBatchResult, reportToken: string) => {
     if (!input.onResult) return;
     try {
@@ -1282,9 +1481,16 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         jobId: item.jobId,
         shiftId: item.shiftId,
         castId: item.castId,
+        castName: item.castName,
         action: item.action,
         shiftDate: item.shiftDate,
+        startTime: item.startTime,
+        endTime: item.endTime,
         ok: true,
+        publicVerified: true,
+        publicUrl: item.externalId && input.shopId
+          ? estamaPublicProfileUrl(input.shopId, item.externalId)
+          : undefined,
       };
       results.push(result);
       await reportResult(result, item.reportToken);
@@ -1303,9 +1509,16 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         jobId: item.jobId,
         shiftId: item.shiftId,
         castId: item.castId,
+        castName: item.castName,
         action: item.action,
         shiftDate: item.shiftDate,
+        startTime: item.startTime,
+        endTime: item.endTime,
         ok: false,
+        publicVerified: false,
+        publicUrl: item.externalId && input.shopId
+          ? estamaPublicProfileUrl(input.shopId, item.externalId)
+          : undefined,
         error: message,
       };
       results.push(result);
@@ -1327,11 +1540,14 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
       grouped.set(key, [...(grouped.get(key) || []), item]);
     }
 
+    let stopAfterGroup = false;
     for (const group of grouped.values()) {
       const first = group[0];
       const itemShiftUrl = first.externalId
         ? `https://estama.jp/admin/schedule/${encodeURIComponent(first.externalId)}/`
         : shiftUrl;
+      const prepared: EstamaShiftBatchItem[] = [];
+      let adminError: unknown = null;
       try {
         await page.goto(itemShiftUrl, { waitUntil: "domcontentloaded" });
         await ensureAdminLogin(page);
@@ -1355,7 +1571,6 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           }));
         }
 
-        const prepared: EstamaShiftBatchItem[] = [];
         for (const item of group) {
           try {
             const scheduleName = `column[${item.shiftDate}][select]`;
@@ -1380,23 +1595,87 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         }
 
         if (prepared.length) {
-          try {
-            await clickSave(page);
-            for (const item of prepared) await recordSuccess(item);
-          } catch (error) {
-            for (const item of prepared) await recordFailure(item, error);
-          }
+          await clickSave(page);
         }
       } catch (error) {
+        adminError = error;
         for (const item of group) {
           if (!results.some((result) => result.jobId === item.jobId)) {
             await recordFailure(item, error);
           }
         }
-        if (error instanceof LoginRequiredError) break;
+        if (error instanceof LoginRequiredError) stopAfterGroup = true;
+      }
+
+      let groupEvidence: EstamaShiftEvidence[] = [];
+      try {
+        groupEvidence = await verifyPublicShiftGroup(page, input.shopId, group);
+        evidence.push(...groupEvidence);
+      } catch (error) {
+        console.warn(JSON.stringify({
+          level: "warning",
+          msg: "estama_public_evidence_failed",
+          castName: first.castName,
+          externalId: first.externalId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        if (!adminError) adminError = error;
+      }
+
+      if (!adminError) {
+        for (const item of prepared) {
+          if (results.some((result) => result.jobId === item.jobId)) continue;
+          const itemEvidence = groupEvidence.find((entry) =>
+            entry.expected.some((expected) => expected.jobId === item.jobId)
+          );
+          const verification = itemEvidence?.expected.find((expected) => expected.jobId === item.jobId);
+          if (itemEvidence?.verified && verification?.verified) {
+            await recordSuccess(item);
+          } else {
+            await recordFailure(
+              item,
+              new Error(`公開ページ未反映: ${verification?.error || itemEvidence?.error || "証跡を確認できませんでした"}`),
+            );
+          }
+        }
+      } else {
+        for (const item of prepared) {
+          if (!results.some((result) => result.jobId === item.jobId)) {
+            await recordFailure(item, adminError);
+          }
+        }
+      }
+
+      if (stopAfterGroup) {
+        const unprocessed = items.filter((item) => !results.some((result) => result.jobId === item.jobId));
+        for (const item of unprocessed) {
+          await recordFailure(item, new LoginRequiredError("エステ魂への再ログインが必要です"));
+        }
+        break;
       }
     }
-    return { sessionId: session.id, shiftUrl, results };
+
+    if (input.onEvidence) {
+      await input.onEvidence({
+        storeId: input.storeId,
+        shopId: input.shopId,
+        sessionId: session.id,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        results,
+        evidence,
+        missingProfiles: input.missingProfiles || [],
+      });
+    }
+    return {
+      sessionId: session.id,
+      shiftUrl,
+      results,
+      evidence: evidence.map(({ screenshotBase64, ...entry }) => ({
+        ...entry,
+        screenshotBytes: Buffer.byteLength(screenshotBase64, "base64"),
+      })),
+    };
   } finally {
     await disconnect(browser);
     await releaseSession(bb, session.id);
