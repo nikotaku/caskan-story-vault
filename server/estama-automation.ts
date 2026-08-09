@@ -553,6 +553,12 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   const start = row.getByText(/魂セラピストを始める/, { exact: false }).first();
   if (await start.count()) {
     await start.click();
+    await page.waitForTimeout(300);
+    const setupEmail = page.locator('input[type="email"]:visible, input[name*="mail" i]:visible').first();
+    const setupPasswords = page.locator('input[type="password"]:visible');
+    if (await setupEmail.count()) await setupEmail.fill(credentials.email);
+    if (await setupPasswords.count()) await setupPasswords.nth(0).fill(credentials.password);
+    if (await setupPasswords.count() > 1) await setupPasswords.nth(1).fill(credentials.password);
     const confirm = page.getByText(/確定|はい|開始する/, { exact: false }).last();
     if (await confirm.count()) await confirm.click();
     await page.waitForTimeout(800);
@@ -562,6 +568,10 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   }
   const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
   if (!await login.count()) return { status: "issued" };
+  const loginClass = await login.getAttribute("class") || "";
+  if (loginClass.includes("disabled") || !await login.isEnabled()) {
+    throw new Error("魂セラピスト本人ログインがまだ有効化されていません。登録メールとパスワードを確認してください");
+  }
   const context = page.context();
   const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
   await login.click();
