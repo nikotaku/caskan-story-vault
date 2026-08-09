@@ -570,7 +570,9 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   if (!await login.count()) return { status: "issued" };
   const loginClass = await login.getAttribute("class") || "";
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
-    throw new Error("魂セラピスト本人ログインがまだ有効化されていません。登録メールとパスワードを確認してください");
+    const actions = [...new Set((await row.locator("a, button, .btn, .btn-wrap").allTextContents())
+      .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
+    throw new Error(`魂セラピスト本人ログインがまだ有効化されていません（表示操作: ${actions.join(" / ") || "なし"}）`);
   }
   const context = page.context();
   const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
