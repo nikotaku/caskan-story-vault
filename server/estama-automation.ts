@@ -1541,11 +1541,11 @@ const mondayOf = (date: string) => {
   return value.toISOString().slice(0, 10);
 };
 
-const currentJstDate = () =>
-  new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10);
+const currentEstamaDate = () =>
+  new Date().toISOString().slice(0, 10);
 
 const weekOffsetFromCurrent = (weekStart: string) => {
-  const currentMonday = new Date(`${mondayOf(currentJstDate())}T00:00:00.000Z`).getTime();
+  const currentMonday = new Date(`${mondayOf(currentEstamaDate())}T00:00:00.000Z`).getTime();
   const targetMonday = new Date(`${weekStart}T00:00:00.000Z`).getTime();
   return Math.max(0, Math.round((targetMonday - currentMonday) / (7 * 86_400_000)));
 };
@@ -1933,7 +1933,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
             entry.expected.some((expected) => expected.jobId === item.jobId)
           );
           const verification = itemEvidence?.expected.find((expected) => expected.jobId === item.jobId);
-          if (itemEvidence?.verified && verification?.verified) {
+          if (verification?.verified) {
             await recordSuccess(item);
           } else {
             await recordFailure(
