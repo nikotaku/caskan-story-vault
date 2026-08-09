@@ -588,9 +588,9 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
       await page.waitForTimeout(300);
       const sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
       if (await sendDialog.count()) {
-        let sendConfirm = sendDialog.getByRole("button", { name: /送信する|送る|はい|確定/, exact: false }).last();
-        if (!await sendConfirm.count()) sendConfirm = sendDialog.getByRole("link", { name: /送信する|送る|はい|確定/, exact: false }).last();
-        if (!await sendConfirm.count()) sendConfirm = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /送信する|送る|はい|確定/ }).last();
+        let sendConfirm = sendDialog.getByRole("button", { name: /送信する|送る|はい|確定|閉じる|OK/, exact: false }).last();
+        if (!await sendConfirm.count()) sendConfirm = sendDialog.getByRole("link", { name: /送信する|送る|はい|確定|閉じる|OK/, exact: false }).last();
+        if (!await sendConfirm.count()) sendConfirm = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /送信する|送る|はい|確定|閉じる|OK/ }).last();
         if (await sendConfirm.count()) await sendConfirm.click();
         else {
           const sendText = (await sendDialog.innerText()).replace(/\s+/g, " ").trim().slice(0, 300);
