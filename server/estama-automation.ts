@@ -1307,7 +1307,7 @@ async function setEstamaSchedulePeriods(
       const field = element as HTMLInputElement;
       const slot = field.name.match(/\[period\]\[([^\]]+)\]$/)?.[1] || "";
       const slotMinutes = slot ? toMinutes(slot) : -1;
-      const active = start >= 0 && end > start && slotMinutes >= start && slotMinutes < end;
+      const active = start >= 0 && end > start && slotMinutes >= start && slotMinutes <= end;
       field.value = active ? "1" : "0";
       field.setAttribute("value", field.value);
       if (field.type === "checkbox" || field.type === "radio") field.checked = active;
