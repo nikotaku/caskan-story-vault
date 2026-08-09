@@ -185,7 +185,7 @@ export default function CastPostManagement() {
           <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span className="font-medium">{label}</span><span className="text-muted-foreground">{STATUS_LABEL[status] || status}</span></div>
           {error && <p className="mt-1 break-words text-red-600">{error}</p>}
         </div>
-        {target !== "hp" && ["failed", "skipped"].includes(status) && (
+        {target !== "hp" && ["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === key}>
             {retrying === key ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} className="mr-1" />}再送
           </Button>

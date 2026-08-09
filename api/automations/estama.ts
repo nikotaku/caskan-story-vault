@@ -70,10 +70,22 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       const rawCredentials = source.soulCredentials && typeof source.soulCredentials === "object"
         ? source.soulCredentials as Record<string, unknown>
         : {};
-      const soulCredentials: SoulCredentials | undefined =
+      let soulCredentials: SoulCredentials | undefined =
         stringValue(rawCredentials.email) && stringValue(rawCredentials.password)
           ? { email: stringValue(rawCredentials.email), password: stringValue(rawCredentials.password) }
           : undefined;
+      if (!soulCredentials) {
+        const { data: storedCredentials, error: credentialsError } = await admin.from("cast_site_credentials")
+          .select("login_id,password")
+          .eq("store_id", storeId)
+          .eq("cast_id", castId)
+          .eq("site", "esutama")
+          .maybeSingle();
+        if (credentialsError) throw credentialsError;
+        const email = stringValue(storedCredentials?.login_id);
+        const password = stringValue(storedCredentials?.password);
+        if (email && password) soulCredentials = { email, password };
+      }
       const results = await processAvailableJobs(admin, { storeId, castId, limit: 1, soulCredentials });
       res.status(200).json({ results });
       return;

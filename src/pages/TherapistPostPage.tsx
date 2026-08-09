@@ -255,7 +255,7 @@ export default function TherapistPostPage() {
           <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span>{label}</span><span className="text-muted-foreground">{status}</span></div>
           {error && <p className="mt-1 text-red-600 break-words">{error}</p>}
         </div>
-        {target !== "hp" && ["failed", "skipped"].includes(status) && (
+        {target !== "hp" && ["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === retryKey}>
             {retrying === retryKey ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             <span className="ml-1">再送</span>
