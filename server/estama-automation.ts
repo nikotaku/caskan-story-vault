@@ -1542,7 +1542,7 @@ const mondayOf = (date: string) => {
 };
 
 const currentEstamaDate = () =>
-  new Date().toISOString().slice(0, 10);
+  new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
 const weekOffsetFromCurrent = (weekStart: string) => {
   const currentMonday = new Date(`${mondayOf(currentEstamaDate())}T00:00:00.000Z`).getTime();
