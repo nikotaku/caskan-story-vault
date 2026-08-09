@@ -1368,8 +1368,13 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     submit.click(),
   ]);
 
-  const confirm = page.locator('button, input[type="submit"], a').filter({
-    hasText: /確定|はい|登録する|保存する|更新する/,
+  const confirm = page.locator([
+    'button:not(#SendWorkSchedule)',
+    'input[type="submit"]:not(#SendWorkSchedule)',
+    'input[type="button"]:not(#SendWorkSchedule)',
+    'a:not(#SendWorkSchedule)',
+  ].join(",")).filter({
+    hasText: /確定|はい|OK|実行|登録する|保存する|更新する/,
   }).filter({ visible: true }).last();
   if (await confirm.count()) {
     await Promise.all([
@@ -1377,6 +1382,34 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
       confirm.click().catch(() => undefined),
     ]);
   }
+  await page.waitForTimeout(1_200);
+}
+
+async function submitEstamaScheduleFormDirect(page: Page, scheduleField: Locator) {
+  const form = scheduleField.locator("xpath=ancestor::form[1]");
+  if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
+  const formMeta = await form.evaluate((element) => {
+    const typed = element as HTMLFormElement;
+    return {
+      id: typed.id,
+      action: typed.action,
+      method: typed.method,
+      hiddenFields: Array.from(typed.querySelectorAll('input[type="hidden"]')).slice(0, 30).map((input) => ({
+        name: input.getAttribute("name"),
+        value: (input as HTMLInputElement).value.slice(0, 80),
+      })),
+    };
+  });
+  console.log(JSON.stringify({
+    level: "warning",
+    msg: "estama_schedule_direct_submit_fallback",
+    url: page.url(),
+    form: formMeta,
+  }));
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 12_000 }).catch(() => undefined),
+    form.evaluate((element) => (element as HTMLFormElement).submit()),
+  ]);
   await page.waitForTimeout(1_200);
 }
 
@@ -1760,6 +1793,46 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           await page.reload({ waitUntil: "domcontentloaded" });
           await ensureAdminLogin(page);
           await page.waitForTimeout(600);
+          const uiSaveMismatches: EstamaShiftBatchItem[] = [];
+          for (const item of prepared) {
+            try {
+              await verifyEstamaAdminSchedule(page, item);
+            } catch {
+              uiSaveMismatches.push(item);
+            }
+          }
+
+          if (uiSaveMismatches.length) {
+            for (const item of uiSaveMismatches) {
+              const scheduleName = `column[${item.shiftDate}][select]`;
+              const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
+              const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
+              if (!await start.count() || !await end.count()) {
+                throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
+              }
+              if (item.action === "delete") {
+                await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
+                await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
+              } else {
+                await setEstamaScheduleSelect(start, item.startTime.slice(0, 5), `${item.shiftDate}の出勤時刻`);
+                await setEstamaScheduleSelect(
+                  end,
+                  estamaEndTime(item.startTime, item.endTime),
+                  `${item.shiftDate}の退勤時刻`,
+                );
+              }
+            }
+            const fallbackItem = uiSaveMismatches[0];
+            const fallbackName = `column[${fallbackItem.shiftDate}][select]`;
+            await submitEstamaScheduleFormDirect(
+              page,
+              page.locator(`select[name="${fallbackName}[select_start]"]`).first(),
+            );
+            await page.goto(itemShiftUrl, { waitUntil: "domcontentloaded" });
+            await ensureAdminLogin(page);
+            await page.waitForTimeout(600);
+          }
+
           for (const item of prepared) {
             try {
               await verifyEstamaAdminSchedule(page, item);
