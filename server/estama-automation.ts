@@ -1139,28 +1139,21 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           item.shiftDate,
         );
         await page.waitForTimeout(500);
-        const row = await findEstamaCastRow(page, {
-          externalId: item.externalId,
-          remoteName: item.remoteName,
-          localName: item.castName,
-        });
+        const scheduleName = `column[${item.shiftDate}][select]`;
+        const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
+        const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
+        if (!await start.count() || !await end.count()) {
+          throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
+        }
 
         if (item.action === "delete") {
-          const off = row.getByText(/休み|非出勤|削除/, { exact: false }).first();
-          if (await off.count()) await off.click();
-          else {
-            const checkbox = row.locator('input[type="checkbox"]').first();
-            if (await checkbox.count() && await checkbox.isChecked()) await checkbox.uncheck();
-            const timeInputs = row.locator('input[type="time"], input[name*="time" i]');
-            for (let index = 0; index < await timeInputs.count(); index += 1) {
-              await timeInputs.nth(index).fill("");
-            }
-          }
+          await start.selectOption("").catch(() => start.selectOption({ index: 0 }));
+          await end.selectOption("").catch(() => end.selectOption({ index: 0 }));
         } else {
-          const checkbox = row.locator('input[type="checkbox"]').first();
-          if (await checkbox.count() && !await checkbox.isChecked()) await checkbox.check();
-          await setTimeInRow(row, "start", item.startTime);
-          await setTimeInRow(row, "end", estamaEndTime(item.startTime, item.endTime));
+          const startValue = item.startTime.slice(0, 5);
+          const endValue = estamaEndTime(item.startTime, item.endTime);
+          await start.selectOption(startValue);
+          await end.selectOption(endValue);
         }
         await clickSave(page);
         const result: EstamaShiftBatchResult = {
