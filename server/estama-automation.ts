@@ -1294,8 +1294,8 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   const form = scheduleField.locator("xpath=ancestor::form[1]");
   if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
 
-  const preparedFields = await form.locator('[name^="column["]').evaluateAll((elements) =>
-    elements.map((element) => {
+  const preparedFields = await form.locator('[name^="column["]').evaluateAll((elements) => {
+    const fields = elements.map((element) => {
       const field = element as HTMLInputElement | HTMLSelectElement;
       return {
         name: field.name,
@@ -1303,9 +1303,21 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
         checked: field instanceof HTMLInputElement && field.type === "checkbox"
           ? field.checked
           : undefined,
+        context: field instanceof HTMLInputElement && field.type === "checkbox"
+          ? (field.parentElement?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 120)
+          : undefined,
       };
-    }).filter((field) => field.value || field.checked)
-  );
+    });
+    const activeDates = new Set(fields
+      .filter((field) => /\\[select_(?:start|end)\\]$/.test(field.name) && field.value)
+      .map((field) => field.name.match(/^column\\[([^\\]]+)\\]/)?.[1])
+      .filter((date): date is string => Boolean(date)));
+    return fields.filter((field) => {
+      const date = field.name.match(/^column\\[([^\\]]+)\\]/)?.[1];
+      return (/\\[select_(?:start|end)\\]$/.test(field.name) && Boolean(field.value))
+        || (/\\[work_status\\]$/.test(field.name) && Boolean(date) && activeDates.has(date));
+    });
+  });
 
   const saveSelector = [
     'button[type="submit"]',
@@ -1418,7 +1430,10 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     const postData = saveResponse.request().postData() || "";
     try {
       requestFields = Array.from(new URLSearchParams(postData).entries())
-        .filter(([name]) => name.startsWith("column["))
+        .filter(([name, value]) =>
+          (name.startsWith("column[") && /\\[select_(?:start|end)\\]$/.test(name) && Boolean(value))
+          || /\\[work_status\\]$/.test(name)
+        )
         .map(([name, value]) => ({ name, value }));
     } catch {
       requestFields = [];
