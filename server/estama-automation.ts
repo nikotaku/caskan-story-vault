@@ -974,10 +974,21 @@ export type EstamaShiftBatchItem = {
   castName: string;
   externalId: string | null;
   remoteName: string | null;
+  reportToken: string;
   action: "upsert" | "delete";
   shiftDate: string;
   startTime: string;
   endTime: string;
+};
+
+export type EstamaShiftBatchResult = {
+  jobId: string;
+  shiftId: string;
+  castId: string;
+  action: "upsert" | "delete";
+  shiftDate: string;
+  ok: boolean;
+  error?: string;
 };
 
 export type EstamaShiftBatchInput = {
@@ -985,6 +996,7 @@ export type EstamaShiftBatchInput = {
   contextId: string;
   configuration?: Json | null;
   items: EstamaShiftBatchItem[];
+  onResult?: (result: EstamaShiftBatchResult, reportToken: string) => Promise<void>;
 };
 
 const estamaEndTime = (startTime: string, endTime: string) => {
@@ -1008,15 +1020,20 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   });
   const { browser, page } = await connectSession(session.connectUrl);
   page.setDefaultTimeout(8_000);
-  const results: Array<{
-    jobId: string;
-    shiftId: string;
-    castId: string;
-    action: "upsert" | "delete";
-    shiftDate: string;
-    ok: boolean;
-    error?: string;
-  }> = [];
+  const results: EstamaShiftBatchResult[] = [];
+  const reportResult = async (result: EstamaShiftBatchResult, reportToken: string) => {
+    if (!input.onResult) return;
+    try {
+      await input.onResult(result, reportToken);
+    } catch (error) {
+      console.error(JSON.stringify({
+        level: "error",
+        msg: "estama_shift_item_report_failed",
+        jobId: result.jobId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  };
 
   try {
     const shiftUrl = await discoverShiftAdminUrl(page, input.configuration || null);
@@ -1054,14 +1071,16 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           await setTimeInRow(row, "end", estamaEndTime(item.startTime, item.endTime));
         }
         await clickSave(page);
-        results.push({
+        const result: EstamaShiftBatchResult = {
           jobId: item.jobId,
           shiftId: item.shiftId,
           castId: item.castId,
           action: item.action,
           shiftDate: item.shiftDate,
           ok: true,
-        });
+        };
+        results.push(result);
+        await reportResult(result, item.reportToken);
         console.log(JSON.stringify({
           level: "info",
           msg: "estama_shift_item_done",
@@ -1072,7 +1091,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         }));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        results.push({
+        const result: EstamaShiftBatchResult = {
           jobId: item.jobId,
           shiftId: item.shiftId,
           castId: item.castId,
@@ -1080,7 +1099,9 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           shiftDate: item.shiftDate,
           ok: false,
           error: message,
-        });
+        };
+        results.push(result);
+        await reportResult(result, item.reportToken);
         console.warn(JSON.stringify({
           level: "warning",
           msg: "estama_shift_item_failed",
