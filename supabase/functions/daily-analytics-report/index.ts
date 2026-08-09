@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const ZENRYOKU_STORE_ID = "00000000-0000-0000-0000-000000000001";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -27,8 +29,8 @@ serve(async (req) => {
     const displayDate = `${yesterday.getMonth() + 1}月${yesterday.getDate()}日`;
 
     const [dailyRes, pagesRes] = await Promise.all([
-      supabase.from("hp_analytics_daily").select("visits,page_views").eq("date", dateStr).maybeSingle(),
-      supabase.from("hp_analytics_pages").select("page_path,views").eq("date", dateStr).order("views", { ascending: false }).limit(5),
+      supabase.from("hp_analytics_daily").select("visits,page_views").eq("store_id", ZENRYOKU_STORE_ID).eq("date", dateStr).maybeSingle(),
+      supabase.from("hp_analytics_pages").select("page_path,views").eq("store_id", ZENRYOKU_STORE_ID).eq("date", dateStr).order("views", { ascending: false }).limit(5),
     ]);
 
     const daily = dailyRes.data;
@@ -38,7 +40,7 @@ serve(async (req) => {
     const pageViews = daily?.page_views ?? 0;
 
     const pageLines = pages.length > 0
-      ? pages.map((p: any) => `  ${p.page_path}：${p.views}PV`).join("\n")
+      ? pages.map((p: { page_path: string; views: number }) => `  ${p.page_path}：${p.views}PV`).join("\n")
       : "  データなし";
 
     const message = [
@@ -72,8 +74,9 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, date: dateStr, visits, pageViews }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
