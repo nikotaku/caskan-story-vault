@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type EstamaRunResult = {
+  skipped?: boolean;
+  reason?: string;
   results: Array<{
     id: string;
     status: string;
@@ -35,6 +37,17 @@ export async function runEstamaCastAutomation(input: {
     storeId: input.storeId,
     castId: input.castId,
     soulCredentials: input.soulCredentials,
+  }) as Promise<EstamaRunResult>;
+}
+
+export async function runEstamaProfileSync(input: {
+  storeId: string;
+  castId: string;
+}): Promise<EstamaRunResult> {
+  return requestEstamaAutomation({
+    action: "run-profile-sync",
+    storeId: input.storeId,
+    castId: input.castId,
   }) as Promise<EstamaRunResult>;
 }
 
