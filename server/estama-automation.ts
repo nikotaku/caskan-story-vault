@@ -1285,6 +1285,44 @@ async function setEstamaScheduleSelect(
   });
 }
 
+async function setEstamaSchedulePeriods(
+  scheduleField: Locator,
+  shiftDate: string,
+  startTime: string,
+  endTime: string,
+) {
+  const form = scheduleField.locator("xpath=ancestor::form[1]");
+  const periodFields = form.locator(`[name^="column[${shiftDate}][period]"]`);
+  if (!await periodFields.count()) return;
+
+  const activeCount = await periodFields.evaluateAll((elements, range) => {
+    const toMinutes = (value: string) => {
+      const [hour, minute] = value.split(":").map(Number);
+      return (hour * 60) + minute;
+    };
+    const start = range.startTime ? toMinutes(range.startTime) : -1;
+    const end = range.endTime ? toMinutes(range.endTime) : -1;
+    let count = 0;
+    for (const element of elements) {
+      const field = element as HTMLInputElement;
+      const slot = field.name.match(/\\[period\\]\\[([^\\]]+)\\]$/)?.[1] || "";
+      const slotMinutes = slot ? toMinutes(slot) : -1;
+      const active = start >= 0 && end > start && slotMinutes >= start && slotMinutes < end;
+      field.value = active ? "1" : "0";
+      field.setAttribute("value", field.value);
+      if (field.type === "checkbox" || field.type === "radio") field.checked = active;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      if (active) count += 1;
+    }
+    return count;
+  }, { startTime, endTime });
+
+  if (startTime && endTime && activeCount === 0) {
+    throw new Error(`エステ魂の${shiftDate}の30分単位出勤枠を設定できません`);
+  }
+}
+
 async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   const form = scheduleField.locator("xpath=ancestor::form[1]");
   if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
@@ -1439,6 +1477,7 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
       requestFields = Array.from(new URLSearchParams(postData).entries())
         .filter(([name, value]) =>
           (name.startsWith("column[") && /\[select_(?:start|end)\]$/.test(name) && Boolean(value))
+          || (/\[period\]\[[^\]]+\]$/.test(name) && value !== "0")
           || /\[work_status\]$/.test(name)
         )
         .map(([name, value]) => ({ name, value }));
@@ -1830,11 +1869,13 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
             if (item.action === "delete") {
               await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
               await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
+              await setEstamaSchedulePeriods(start, item.shiftDate, "", "");
             } else {
               const startValue = item.startTime.slice(0, 5);
               const endValue = estamaEndTime(item.startTime, item.endTime);
               await setEstamaScheduleSelect(start, startValue, `${item.shiftDate}の出勤時刻`);
               await setEstamaScheduleSelect(end, endValue, `${item.shiftDate}の退勤時刻`);
+              await setEstamaSchedulePeriods(start, item.shiftDate, startValue, endValue);
             }
             prepared.push(item);
           } catch (error) {
