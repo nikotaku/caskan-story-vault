@@ -1277,7 +1277,7 @@ async function setEstamaScheduleSelect(
   value: string,
   label: string,
 ) {
-  await locator.selectOption({ value }).then((selected) => {
+  await locator.selectOption({ value }, { force: true }).then((selected) => {
     if (!selected.length) throw new Error(`option_not_found:${value}`);
   }).catch((error) => {
     const detail = error instanceof Error ? error.message : String(error);
