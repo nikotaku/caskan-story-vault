@@ -94,6 +94,13 @@ export class LoginRequiredError extends Error {
   }
 }
 
+export class SoulActivationRequiredError extends Error {
+  constructor(message = "エステ魂から送信されたログイン情報で初回ログインを完了してください") {
+    super(message);
+    this.name = "SoulActivationRequiredError";
+  }
+}
+
 const requiredEnv = (name: string) => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} がVercelに設定されていません`);
@@ -942,6 +949,7 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
 export type PreparedEstamaDiary = {
   jobId: string;
   browserbaseContextId: string;
+  soulStatus?: string | null;
   soulCredentials?: SoulCredentials;
   cast: {
     name: string;
@@ -966,7 +974,7 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     browser = connected.browser;
     const page = connected.page;
     let soulResult: Json | undefined;
-    if (input.soulCredentials) {
+    if (input.soulCredentials && input.soulStatus !== "issued") {
       soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials);
     }
     await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
@@ -979,6 +987,10 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
     if (!await login.count()) {
       throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
+    }
+    const loginClass = await login.getAttribute("class") || "";
+    if (loginClass.includes("disabled") || !await login.isEnabled()) {
+      throw new SoulActivationRequiredError();
     }
 
     const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
