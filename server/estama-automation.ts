@@ -530,13 +530,16 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
 async function setupSoulTherapist(page: Page, castName: string, credentials: SoulCredentials) {
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
-  const row = await findEstamaCastRow(page, { localName: castName });
+  let row = await findEstamaCastRow(page, { localName: castName });
   const start = row.getByText(/魂セラピストを始める/, { exact: false }).first();
   if (await start.count()) {
     await start.click();
     const confirm = page.getByText(/確定|はい|開始する/, { exact: false }).last();
     if (await confirm.count()) await confirm.click();
     await page.waitForTimeout(800);
+    await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    row = await findEstamaCastRow(page, { localName: castName });
   }
   const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
   if (!await login.count()) return { status: "issued" };
@@ -819,6 +822,7 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
 export type PreparedEstamaDiary = {
   jobId: string;
   browserbaseContextId: string;
+  soulCredentials?: SoulCredentials;
   cast: {
     name: string;
     externalId?: string | null;
@@ -841,6 +845,10 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     const connected = await connectSession(created.session.connectUrl);
     browser = connected.browser;
     const page = connected.page;
+    let soulResult: Json | undefined;
+    if (input.soulCredentials) {
+      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials);
+    }
     await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
     const row = await findEstamaCastRow(page, {
@@ -887,7 +895,12 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     if (visibleError.some((value) => value.trim())) {
       throw new Error(`エステ魂: ${visibleError.join(" / ").slice(0, 300)}`);
     }
-    return { posted: true, uploadedPhotos, url: accountPage.url() };
+    return {
+      posted: true,
+      uploadedPhotos,
+      url: accountPage.url(),
+      ...(soulResult ? { soul: soulResult } : {}),
+    };
   } finally {
     if (browser) await disconnect(browser);
     await releaseSession(created.bb, created.session.id);

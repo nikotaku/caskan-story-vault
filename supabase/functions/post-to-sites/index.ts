@@ -93,11 +93,12 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   if (!claimed) return json(req, { error: "実行認証に失敗しました" }, 401);
 
   const postId = stringValue(payload.post_id);
-  const [{ data: connection }, { data: cast }, { data: external }, { data: post }] = await Promise.all([
+  const [{ data: connection }, { data: cast }, { data: external }, { data: post }, { data: soulCredential }] = await Promise.all([
     admin.from("automation_connections").select("browserbase_context_id,status").eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
     admin.from("casts").select("name").eq("id", job.cast_id).maybeSingle(),
-    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
+    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status,soul_status").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
     admin.from("cast_posts").select("title,body,image_urls").eq("id", postId).eq("cast_id", job.cast_id).maybeSingle(),
+    admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("site", "esutama").maybeSingle(),
   ]);
   if (!connection?.browserbase_context_id || connection.status !== "ready") {
     return json(req, { error: "エステ魂ログイン設定が未完了です" }, 409);
@@ -105,10 +106,15 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   if (!cast || !post || !external || external.sync_status !== "synced") {
     return json(req, { error: "先にセラピストをエステ魂へ登録してください" }, 409);
   }
+  const soulReady = external.soul_status === "configured";
+  if (!soulReady && (!soulCredential?.login_id || !soulCredential?.password)) {
+    return json(req, { error: "魂セラピスト本人ログイン情報が未設定です" }, 409);
+  }
   return json(req, {
     work: {
       jobId: job.id,
       browserbaseContextId: connection.browserbase_context_id,
+      ...(!soulReady ? { soulCredentials: { email: soulCredential.login_id, password: soulCredential.password } } : {}),
       cast: { name: cast.name, externalId: external.external_cast_id, remoteName: external.remote_name },
       post: { title: post.title, body: post.body, imageUrls: post.image_urls },
     },
@@ -198,7 +204,18 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
   });
   const workerPayload = await workerResponse.json().catch(() => ({})) as JsonRecord;
   if (workerResponse.ok) {
-    const result = workerPayload.result && typeof workerPayload.result === "object" ? workerPayload.result : {};
+    const result = workerPayload.result && typeof workerPayload.result === "object" ? workerPayload.result as JsonRecord : {};
+    const soul = result.soul && typeof result.soul === "object" ? result.soul as JsonRecord : null;
+    if (soul) {
+      const soulStatus = stringValue(soul.status);
+      const { data: credential } = await admin.from("cast_site_credentials").select("login_id")
+        .eq("cast_id", post.cast_id).eq("site", "esutama").maybeSingle();
+      await admin.from("external_cast_profiles").update({
+        soul_status: soulStatus === "configured" ? "configured" : soulStatus === "issued" ? "issued" : "error",
+        soul_login_url: stringValue(soul.loginUrl) || null,
+        soul_account_email: credential?.login_id || null,
+      }).eq("cast_id", post.cast_id).eq("provider", "estama");
+    }
     await Promise.all([
       admin.from("automation_jobs").update({
         status: "completed", result, error_message: null, finished_at: new Date().toISOString(),
@@ -397,8 +414,16 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
   if (!loginForm) throw new Error("O2のログインフォームが見つかりません（画面仕様変更の可能性）");
   const loginBody = new URLSearchParams();
   for (const [name, value] of hiddenFields(loginForm.html)) loginBody.set(name, value);
-  loginBody.set("username", loginId);
-  loginBody.set("password", password);
+  const loginFields = fieldNames(loginForm.html, "input");
+  const passwordField = loginFields.find((field) => (field.type || "").toLowerCase() === "password");
+  const identityField = loginFields.find((field) => {
+    const type = (field.type || "text").toLowerCase();
+    return ["text", "email", "tel"].includes(type) && /user|login|mail|email|account|member|cast|^id$/i.test(field.name);
+  }) || loginFields.find((field) => ["text", "email", "tel"].includes((field.type || "text").toLowerCase()));
+  const submitField = loginFields.find((field) => (field.type || "").toLowerCase() === "submit" && field.name);
+  loginBody.set(identityField?.name || "username", loginId);
+  loginBody.set(passwordField?.name || "password", password);
+  if (submitField?.name) loginBody.set(submitField.name, submitField.value || "1");
   let loggedIn = await request(jar, loginForm.action, {
     method: loginForm.method,
     headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: O2_LOGIN },
