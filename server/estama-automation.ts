@@ -431,39 +431,58 @@ async function findEstamaCastRow(
   options: { externalId?: string | null; remoteName?: string | null; localName: string },
 ): Promise<Locator> {
   const rows = page.locator("tr, .cast-row, .schedule-row, .therapist-row, .list-group-item, li");
-  const count = await rows.count();
+  const rowData = await rows.evaluateAll((elements) => elements.map((element, index) => {
+    const identity = Array.from(element.querySelectorAll("a, input, button, [data-id]"))
+      .map((node) => [
+        node.getAttribute("href"),
+        node.getAttribute("value"),
+        node.getAttribute("data-id"),
+        node.getAttribute("name"),
+        node.getAttribute("id"),
+      ].filter(Boolean).join(" "))
+      .join(" ");
+    const values = Array.from(element.querySelectorAll(
+      "td, th, .name, .cast-name, .therapist-name, strong, b, span, a",
+    )).map((node) => node.textContent || "");
+    const text = (element.textContent || "").trim();
+    return {
+      index,
+      identity,
+      values: [...values, ...text.split(/\r?\n/)],
+      textLength: text.length,
+      controls: element.querySelectorAll("input, select, button").length,
+    };
+  }));
+
+  const rank = (matches: typeof rowData) => matches.sort((left, right) =>
+    right.controls - left.controls || left.textLength - right.textLength
+  );
 
   if (options.externalId) {
-    const idPattern = new RegExp(`(^|\\D)${options.externalId}(\\D|$)`);
-    const matches: Locator[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const row = rows.nth(index);
-      const identity = await row.locator("a, input, button, [data-id]").evaluateAll((elements) =>
-        elements.map((element) => [
-          element.getAttribute("href"), element.getAttribute("value"), element.getAttribute("data-id"),
-          element.getAttribute("name"), element.getAttribute("id"),
-        ].filter(Boolean).join(" ")).join(" "),
-      ).catch(() => "");
-      if (idPattern.test(identity)) matches.push(row);
-    }
-    if (matches.length === 1) return matches[0];
-    if (matches.length > 1) throw new Error(`エステ魂ID ${options.externalId} に一致する行が複数あります`);
+    const escapedId = options.externalId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const idPattern = new RegExp(`(^|\\D)${escapedId}(\\D|$)`);
+    const matches = rank(rowData.filter((row) => idPattern.test(row.identity)));
+    if (matches.length) return rows.nth(matches[0].index);
   }
 
-  const expected = [...new Set([options.remoteName, options.localName].filter(Boolean).map((name) => normalizeEstamaName(String(name))))];
-  const matches: Locator[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const row = rows.nth(index);
-    const values = await row.locator("td, th, .name, .cast-name, .therapist-name, strong, b, span, a").allTextContents().catch(() => []);
-    const rowText = await row.innerText().catch(() => "");
-    const candidates = [...values, ...rowText.split(/\r?\n/)];
-    if (candidates.some((candidate) => expected.includes(normalizeEstamaName(candidate)))) matches.push(row);
-  }
-  if (matches.length === 1) return matches[0];
-  if (matches.length > 1) {
-    throw new Error(`「${options.remoteName || options.localName}」と同名のセラピストが複数います。エステ魂IDを確認してください`);
-  }
-  throw new Error(`エステ魂に「${options.remoteName || options.localName}」の完全一致が見つかりません`);
+  const expected = [...new Set(
+    [options.remoteName, options.localName]
+      .filter(Boolean)
+      .map((name) => normalizeEstamaName(String(name))),
+  )];
+  const matches = rank(rowData.filter((row) =>
+    row.values.some((candidate) => expected.includes(normalizeEstamaName(candidate)))
+  ));
+  if (matches.length) return rows.nth(matches[0].index);
+
+  const observed = [...new Set(rowData.flatMap((row) => row.values)
+    .map((value) => String(value).trim())
+    .filter((value) => value.length > 0 && value.length <= 30))]
+    .slice(0, 12);
+  throw new Error(
+    `エステ魂に「${options.remoteName || options.localName}」の完全一致が見つかりません`
+    + `（画面: ${page.url()} / 候補: ${observed.join("、") || "なし"}）`,
+  );
 }
 
 async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, soul?: SoulCredentials) {
