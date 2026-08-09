@@ -991,7 +991,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   const { bb, session } = await createBrowserSession(input.contextId, false, {
     action: "edge-shift-worker",
     storeId: input.storeId,
-    itemCount: items.length,
+    itemCount: String(items.length),
   });
   const { browser, page } = await connectSession(session.connectUrl);
   const results: Array<{
