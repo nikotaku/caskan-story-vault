@@ -1594,7 +1594,47 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
     : { verified: false, error: `${label} ${start}～${end}が公開ページにありません` };
 }
 
-async function clickNextPublicScheduleWeek(page: Page) {
+async function clickNextPublicScheduleWeek(page: Page, targetOffset: number) {
+  const controls = page.locator(".js-schedule-ctrl[data-param]");
+  const controlInfo = await controls.evaluateAll((elements) => elements.map((element, index) => {
+    let week = -1;
+    try {
+      const parsed = JSON.parse(element.getAttribute("data-param") || "{}") as { week?: unknown };
+      week = Number(parsed.week);
+    } catch {
+      week = -1;
+    }
+    const typed = element as HTMLElement;
+    const style = window.getComputedStyle(typed);
+    const box = typed.getBoundingClientRect();
+    return {
+      index,
+      week,
+      current: typed.classList.contains("disable"),
+      visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
+    };
+  }));
+  const target = controlInfo.find((control) => control.week === targetOffset && control.visible)
+    || controlInfo.find((control) => control.week === targetOffset);
+  if (target) {
+    if (!target.current) {
+      await controls.nth(target.index).evaluate((element) => (element as HTMLElement).click());
+      await page.waitForFunction((expectedWeek) => {
+        return Array.from(document.querySelectorAll<HTMLElement>(".js-schedule-ctrl[data-param]"))
+          .some((element) => {
+            try {
+              const parsed = JSON.parse(element.getAttribute("data-param") || "{}") as { week?: unknown };
+              return Number(parsed.week) === expectedWeek && element.classList.contains("disable");
+            } catch {
+              return false;
+            }
+          });
+      }, targetOffset, { timeout: 5_000 }).catch(() => undefined);
+    }
+    await page.waitForTimeout(1_200);
+    return;
+  }
+
   const candidates = page.locator('a:has-text("次の1週間"), button:has-text("次の1週間"), input[value*="次の1週間"]');
   const count = await candidates.count();
   for (let index = 0; index < count; index += 1) {
@@ -1605,15 +1645,7 @@ async function clickNextPublicScheduleWeek(page: Page) {
       return;
     }
   }
-  if (count) {
-    const href = await candidates.first().getAttribute("href").catch(() => null);
-    if (href && !href.startsWith("javascript:")) {
-      await page.goto(new URL(href, page.url()).toString(), { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(600);
-      return;
-    }
-  }
-  throw new Error("公開ページの「次の1週間」が見つかりません");
+  throw new Error(`公開ページの${targetOffset}週後の出勤表が見つかりません`);
 }
 
 async function capturePublicScheduleScreenshot(page: Page) {
@@ -1664,7 +1696,7 @@ async function verifyPublicShiftGroup(
     for (let offset = 0; offset <= maxOffset; offset += 1) {
       if (offset > 0) {
         try {
-          await clickNextPublicScheduleWeek(page);
+          await clickNextPublicScheduleWeek(page, offset);
         } catch (error) {
           const screenshotBase64 = await capturePublicScheduleScreenshot(page);
           const message = error instanceof Error ? error.message : String(error);
