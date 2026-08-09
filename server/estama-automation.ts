@@ -591,6 +591,7 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
         let sendConfirm = sendDialog.getByRole("button", { name: /送信する|送る|はい|確定|閉じる|OK/, exact: false }).last();
         if (!await sendConfirm.count()) sendConfirm = sendDialog.getByRole("link", { name: /送信する|送る|はい|確定|閉じる|OK/, exact: false }).last();
         if (!await sendConfirm.count()) sendConfirm = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /送信する|送る|はい|確定|閉じる|OK/ }).last();
+        if (!await sendConfirm.count()) sendConfirm = sendDialog.getByText("閉じる", { exact: true }).last();
         if (await sendConfirm.count()) await sendConfirm.click();
         else {
           const sendText = (await sendDialog.innerText()).replace(/\s+/g, " ").trim().slice(0, 300);
