@@ -1600,8 +1600,8 @@ async function clickNextPublicScheduleWeek(page: Page) {
   for (let index = 0; index < count; index += 1) {
     const candidate = candidates.nth(index);
     if (await candidate.isVisible().catch(() => false)) {
-      await candidate.click();
-      await page.waitForTimeout(600);
+      await candidate.evaluate((element) => (element as HTMLElement).click());
+      await page.waitForTimeout(1_200);
       return;
     }
   }
