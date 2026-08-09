@@ -1534,10 +1534,9 @@ async function verifyEstamaAdminSchedule(page: Page, item: EstamaShiftBatchItem)
 const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
   `https://estama.jp/shop/${encodeURIComponent(shopId)}/cast/${encodeURIComponent(externalId)}/`;
 
-const mondayOf = (date: string) => {
+const sundayOf = (date: string) => {
   const value = new Date(`${date}T00:00:00.000Z`);
-  const daysFromMonday = (value.getUTCDay() + 6) % 7;
-  value.setUTCDate(value.getUTCDate() - daysFromMonday);
+  value.setUTCDate(value.getUTCDate() - value.getUTCDay());
   return value.toISOString().slice(0, 10);
 };
 
@@ -1545,9 +1544,9 @@ const currentEstamaDate = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
 const weekOffsetFromCurrent = (weekStart: string) => {
-  const currentMonday = new Date(`${mondayOf(currentEstamaDate())}T00:00:00.000Z`).getTime();
-  const targetMonday = new Date(`${weekStart}T00:00:00.000Z`).getTime();
-  return Math.max(0, Math.round((targetMonday - currentMonday) / (7 * 86_400_000)));
+  const currentSunday = new Date(`${sundayOf(currentEstamaDate())}T00:00:00.000Z`).getTime();
+  const targetSunday = new Date(`${weekStart}T00:00:00.000Z`).getTime();
+  return Math.max(0, Math.round((targetSunday - currentSunday) / (7 * 86_400_000)));
 };
 
 const compactScheduleText = (value: string) => value
@@ -1679,7 +1678,7 @@ async function verifyPublicShiftGroup(
   const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
   const byWeek = new Map<string, EstamaShiftBatchItem[]>();
   for (const item of group) {
-    const weekStart = mondayOf(item.shiftDate);
+    const weekStart = sundayOf(item.shiftDate);
     byWeek.set(weekStart, [...(byWeek.get(weekStart) || []), item]);
   }
   const weeks = [...byWeek.entries()]
