@@ -41,7 +41,7 @@ function parseItems(value: unknown): EstamaShiftBatchItem[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 60).map((item) => {
     const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
-    const action = row.action === "delete" ? "delete" : "upsert";
+    const action: EstamaShiftBatchItem["action"] = row.action === "delete" ? "delete" : "upsert";
     return {
       jobId: stringValue(row.jobId),
       shiftId: stringValue(row.shiftId),
