@@ -1294,6 +1294,19 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   const form = scheduleField.locator("xpath=ancestor::form[1]");
   if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
 
+  const preparedFields = await form.locator('[name^="column["]').evaluateAll((elements) =>
+    elements.map((element) => {
+      const field = element as HTMLInputElement | HTMLSelectElement;
+      return {
+        name: field.name,
+        value: field.value,
+        checked: field instanceof HTMLInputElement && field.type === "checkbox"
+          ? field.checked
+          : undefined,
+      };
+    }).filter((field) => field.value || field.checked)
+  );
+
   const saveSelector = [
     'button[type="submit"]',
     'button:not([type])',
@@ -1399,14 +1412,38 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   }
   const [saveResponse] = await Promise.all([saveResponsePromise, navigationPromise]);
   page.off("dialog", acceptDialog);
+  let requestFields: Array<{ name: string; value: string }> = [];
+  let responseSummary = "";
+  if (saveResponse) {
+    const postData = saveResponse.request().postData() || "";
+    try {
+      requestFields = Array.from(new URLSearchParams(postData).entries())
+        .filter(([name]) => name.startsWith("column["))
+        .map(([name, value]) => ({ name, value }));
+    } catch {
+      requestFields = [];
+    }
+    try {
+      const body = (await saveResponse.text()).replace(/\s+/g, " ").trim();
+      responseSummary = body
+        .replace(/[A-Za-z0-9_-]{32,}/g, "[redacted]")
+        .slice(0, 800);
+    } catch {
+      responseSummary = "";
+    }
+  }
   console.log(JSON.stringify({
     level: saveResponse ? "info" : "warning",
     msg: "estama_schedule_save_request",
     dialogAccepted,
+    preparedFields,
+    requestFields,
     response: saveResponse ? {
       status: saveResponse.status(),
       method: saveResponse.request().method(),
       url: saveResponse.url(),
+      contentType: saveResponse.headers()["content-type"] || "",
+      body: responseSummary,
     } : null,
   }));
   await page.waitForTimeout(1_200);
