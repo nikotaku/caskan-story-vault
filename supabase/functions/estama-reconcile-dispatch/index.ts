@@ -34,9 +34,11 @@ const randomToken = () => {
   return hex(bytes);
 };
 
-// エステ魂の管理画面はUTC日付で14日分を切り替えるため、同じ基準日を使う。
-// 通常実行の23:00 JSTではJST日付と一致し、深夜の手動実行でも範囲外送信を防げる。
+// 管理画面はUTC日付で14日分、公開ページはJSTの当日以降を表示する。
+// 深夜の手動実行では両方に存在する日付だけを同期対象にする。
 const estamaAdminDate = () => new Date().toISOString().slice(0, 10);
+const estamaPublicDate = () =>
+  new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
 const addDays = (date: string, days: number) => {
   const value = new Date(date + "T00:00:00.000Z");
@@ -110,8 +112,9 @@ Deno.serve(async (req) => {
       .not("browserbase_context_id", "is", null);
     if (connectionError) throw connectionError;
 
-    const startDate = estamaAdminDate();
-    const endDate = addDays(startDate, 13);
+    const adminStartDate = estamaAdminDate();
+    const startDate = [adminStartDate, estamaPublicDate()].sort().at(-1) || adminStartDate;
+    const endDate = addDays(adminStartDate, 13);
     const reports: Json[] = [];
 
     for (const connection of connections || []) {
