@@ -1,6 +1,6 @@
 import Browserbase from "@browserbasehq/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { chromium, type Browser, type Locator, type Page } from "playwright-core";
+import { chromium, type Browser, type Dialog, type Locator, type Page } from "playwright-core";
 import { createHash } from "node:crypto";
 
 export const ESTAMA_CAST_EDIT_URL = "https://estama.jp/admin/cast_edit/";
@@ -1363,10 +1363,28 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     selectedIndex,
     controls,
   }));
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8_000 }).catch(() => undefined),
-    submit.click(),
-  ]);
+  let dialogAccepted = false;
+  const acceptDialog = async (dialog: Dialog) => {
+    dialogAccepted = true;
+    console.log(JSON.stringify({
+      level: "info",
+      msg: "estama_schedule_dialog_accepted",
+      type: dialog.type(),
+      message: dialog.message().replace(/\s+/g, " ").trim().slice(0, 200),
+    }));
+    await dialog.accept();
+  };
+  page.on("dialog", acceptDialog);
+  const saveResponsePromise = page.waitForResponse((response) => {
+    const method = response.request().method();
+    return /^(?:POST|PUT|PATCH)$/i.test(method) && response.url().includes("estama.jp");
+  }, { timeout: 12_000 }).catch(() => null);
+  const navigationPromise = page.waitForNavigation({
+    waitUntil: "domcontentloaded",
+    timeout: 12_000,
+  }).catch(() => undefined);
+  await submit.click();
+  await page.waitForTimeout(400);
 
   const confirm = page.locator([
     'button:not(#SendWorkSchedule)',
@@ -1377,38 +1395,20 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     hasText: /確定|はい|OK|実行|登録する|保存する|更新する/,
   }).filter({ visible: true }).last();
   if (await confirm.count()) {
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8_000 }).catch(() => undefined),
-      confirm.click().catch(() => undefined),
-    ]);
+    await confirm.click().catch(() => undefined);
   }
-  await page.waitForTimeout(1_200);
-}
-
-async function submitEstamaScheduleFormDirect(page: Page, scheduleField: Locator) {
-  const form = scheduleField.locator("xpath=ancestor::form[1]");
-  if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
-  const formMeta = await form.evaluate((element) => {
-    const typed = element as HTMLFormElement;
-    return {
-      id: typed.id,
-      action: typed.action,
-      method: typed.method,
-      hiddenFields: Array.from(typed.querySelectorAll('input[type="hidden"]')).slice(0, 30)
-        .map((input) => input.getAttribute("name"))
-        .filter(Boolean),
-    };
-  });
+  const [saveResponse] = await Promise.all([saveResponsePromise, navigationPromise]);
+  page.off("dialog", acceptDialog);
   console.log(JSON.stringify({
-    level: "warning",
-    msg: "estama_schedule_direct_submit_fallback",
-    url: page.url(),
-    form: formMeta,
+    level: saveResponse ? "info" : "warning",
+    msg: "estama_schedule_save_request",
+    dialogAccepted,
+    response: saveResponse ? {
+      status: saveResponse.status(),
+      method: saveResponse.request().method(),
+      url: saveResponse.url(),
+    } : null,
   }));
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 12_000 }).catch(() => undefined),
-    form.evaluate((element) => (element as HTMLFormElement).submit()),
-  ]);
   await page.waitForTimeout(1_200);
 }
 
@@ -1792,46 +1792,6 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           await page.reload({ waitUntil: "domcontentloaded" });
           await ensureAdminLogin(page);
           await page.waitForTimeout(600);
-          const uiSaveMismatches: EstamaShiftBatchItem[] = [];
-          for (const item of prepared) {
-            try {
-              await verifyEstamaAdminSchedule(page, item);
-            } catch {
-              uiSaveMismatches.push(item);
-            }
-          }
-
-          if (uiSaveMismatches.length) {
-            for (const item of uiSaveMismatches) {
-              const scheduleName = `column[${item.shiftDate}][select]`;
-              const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
-              const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
-              if (!await start.count() || !await end.count()) {
-                throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
-              }
-              if (item.action === "delete") {
-                await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
-                await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
-              } else {
-                await setEstamaScheduleSelect(start, item.startTime.slice(0, 5), `${item.shiftDate}の出勤時刻`);
-                await setEstamaScheduleSelect(
-                  end,
-                  estamaEndTime(item.startTime, item.endTime),
-                  `${item.shiftDate}の退勤時刻`,
-                );
-              }
-            }
-            const fallbackItem = uiSaveMismatches[0];
-            const fallbackName = `column[${fallbackItem.shiftDate}][select]`;
-            await submitEstamaScheduleFormDirect(
-              page,
-              page.locator(`select[name="${fallbackName}[select_start]"]`).first(),
-            );
-            await page.goto(itemShiftUrl, { waitUntil: "domcontentloaded" });
-            await ensureAdminLogin(page);
-            await page.waitForTimeout(600);
-          }
-
           for (const item of prepared) {
             try {
               await verifyEstamaAdminSchedule(page, item);
