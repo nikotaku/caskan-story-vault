@@ -9,7 +9,6 @@ import {
   Target,
   CalendarClock,
   ReceiptText,
-  Megaphone,
   MinusCircle,
   Gift,
   ClipboardList,
@@ -98,7 +97,6 @@ export default function SalesDashboard() {
       title: "経費",
       modules: [
         { href: "/expenses", label: "経費管理", icon: ClipboardList, description: "店舗経費の登録・管理" },
-        { href: "/sales/advertising-cost", label: "広告費管理", icon: Megaphone, description: "広告費の管理" },
         { href: "/sales/deduction-summary", label: "控除集計", icon: MinusCircle, description: "控除の集計" },
         { href: "/sales/referral-fees", label: "紹介報酬管理", icon: Gift, description: "紹介報酬の管理" },
       ],
