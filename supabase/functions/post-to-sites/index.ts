@@ -106,15 +106,18 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   if (!cast || !post || !external || external.sync_status !== "synced") {
     return json(req, { error: "先にセラピストをエステ魂へ登録してください" }, 409);
   }
-  const soulReady = external.soul_status === "configured";
-  if (!soulReady && (!soulCredential?.login_id || !soulCredential?.password)) {
+  const soulStatus = stringValue(external.soul_status);
+  const soulReady = soulStatus === "configured";
+  const needsSoulSetup = !soulReady && soulStatus !== "issued";
+  if (needsSoulSetup && (!soulCredential?.login_id || !soulCredential?.password)) {
     return json(req, { error: "魂セラピスト本人ログイン情報が未設定です" }, 409);
   }
   return json(req, {
     work: {
       jobId: job.id,
       browserbaseContextId: connection.browserbase_context_id,
-      ...(!soulReady ? { soulCredentials: { email: soulCredential.login_id, password: soulCredential.password } } : {}),
+      soulStatus,
+      ...(needsSoulSetup ? { soulCredentials: { email: soulCredential.login_id, password: soulCredential.password } } : {}),
       cast: { name: cast.name, externalId: external.external_cast_id, remoteName: external.remote_name },
       post: { title: post.title, body: post.body, imageUrls: post.image_urls },
     },
@@ -230,24 +233,28 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
 
   const message = stringValue(workerPayload.error) || "魂セラピスト投稿に失敗しました";
   const loginRequired = workerPayload.loginRequired === true;
-  const retry = !loginRequired && claimed.attempts < claimed.max_attempts;
+  const activationRequired = workerPayload.activationRequired === true;
+  const waitingForLogin = loginRequired || activationRequired;
+  const retry = !waitingForLogin && claimed.attempts < claimed.max_attempts;
   const delayMinutes = Math.min(60, 2 ** Math.max(0, claimed.attempts - 1));
   await Promise.all([
     admin.from("automation_jobs").update({
-      status: loginRequired ? "waiting_for_login" : retry ? "queued" : "failed",
+      status: waitingForLogin ? "waiting_for_login" : retry ? "queued" : "failed",
       error_message: message,
       available_at: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
-      finished_at: loginRequired || retry ? null : new Date().toISOString(),
+      finished_at: waitingForLogin || retry ? null : new Date().toISOString(),
     }).eq("id", claimed.id),
     admin.from("cast_posts").update({
-      esutama_status: loginRequired || retry ? "pending" : "failed",
+      esutama_status: waitingForLogin || retry ? "pending" : "failed",
       esutama_error: message,
     }).eq("id", post.id),
     ...(loginRequired ? [admin.from("automation_connections").update({ status: "expired", last_error: message })
       .eq("store_id", post.store_id).eq("provider", "estama")] : []),
+    ...(activationRequired ? [admin.from("external_cast_profiles").update({ soul_status: "issued", last_error: message })
+      .eq("cast_id", post.cast_id).eq("provider", "estama")] : []),
   ]);
   await updateOverallStatus(admin, post.id);
-  return json(req, { jobId: claimed.id, status: loginRequired || retry ? "pending" : "failed", error: message }, loginRequired ? 409 : 422);
+  return json(req, { jobId: claimed.id, status: waitingForLogin || retry ? "pending" : "failed", error: message }, waitingForLogin ? 409 : 422);
 }
 
 serve(async (req) => {
