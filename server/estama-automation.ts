@@ -994,6 +994,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
     itemCount: String(items.length),
   });
   const { browser, page } = await connectSession(session.connectUrl);
+  page.setDefaultTimeout(8_000);
   const results: Array<{
     jobId: string;
     shiftId: string;
@@ -1048,6 +1049,14 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           shiftDate: item.shiftDate,
           ok: true,
         });
+        console.log(JSON.stringify({
+          level: "info",
+          msg: "estama_shift_item_done",
+          jobId: item.jobId,
+          castName: item.castName,
+          shiftDate: item.shiftDate,
+          action: item.action,
+        }));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         results.push({
@@ -1059,6 +1068,15 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           ok: false,
           error: message,
         });
+        console.warn(JSON.stringify({
+          level: "warning",
+          msg: "estama_shift_item_failed",
+          jobId: item.jobId,
+          castName: item.castName,
+          shiftDate: item.shiftDate,
+          action: item.action,
+          error: message,
+        }));
         if (error instanceof LoginRequiredError) break;
       }
     }
