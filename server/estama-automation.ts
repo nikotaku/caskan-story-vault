@@ -1308,6 +1308,9 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     type: string;
     label: string;
     href: string;
+    id: string;
+    className: string;
+    onclick: string;
     visible: boolean;
   };
   const inspect = (locator: Locator) => locator.evaluateAll((elements) => elements.map((element, index) => {
@@ -1321,6 +1324,9 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
       label: [typed.innerText, typed.value, typed.title, typed.alt]
         .filter(Boolean).join(" ").replace(/\s+/g, " ").trim(),
       href: typed.getAttribute("href") || "",
+      id: typed.id || "",
+      className: typed.className || "",
+      onclick: typed.getAttribute("onclick") || "",
       visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
     };
   })) as Promise<SaveControl[]>;
@@ -1519,10 +1525,10 @@ async function verifyPublicShiftGroup(
   const maxOffset = Math.min(2, Math.max(...weeks.map((week) => week.offset)));
   let finalEvidence: EstamaShiftEvidence[] = [];
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     const attemptEvidence: EstamaShiftEvidence[] = [];
     await page.goto(`${publicUrl}?sync_verify=${Date.now()}`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(attempt === 1 ? 2_500 : 3_000);
+    await page.waitForTimeout(attempt === 1 ? 2_500 : 5_000);
 
     for (let offset = 0; offset <= maxOffset; offset += 1) {
       if (offset > 0) {
@@ -1590,7 +1596,7 @@ async function verifyPublicShiftGroup(
 
     finalEvidence = attemptEvidence;
     if (attemptEvidence.length === weeks.length && attemptEvidence.every((item) => item.verified)) break;
-    if (attempt < 2) await page.waitForTimeout(5_000);
+    if (attempt < 3) await page.waitForTimeout(attempt === 1 ? 15_000 : 30_000);
   }
   return finalEvidence;
 }
@@ -1751,6 +1757,9 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
             `select[name="${firstScheduleName}[select_start]"]`,
           ).first();
           await clickEstamaScheduleSave(page, firstScheduleField);
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await ensureAdminLogin(page);
+          await page.waitForTimeout(600);
           for (const item of prepared) {
             try {
               await verifyEstamaAdminSchedule(page, item);
