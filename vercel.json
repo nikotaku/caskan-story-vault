@@ -1,12 +1,12 @@
 {
-  "crons": [
-    { "path": "/api/cron/estama-reconcile", "schedule": "0 14 * * *" }
-  ],
   "redirects": [
     {
       "source": "/",
       "has": [
-        { "type": "host", "value": "(www\\.)?zenryokuesthe\\.com" }
+        {
+          "type": "host",
+          "value": "(www\\.)?zenryokuesthe\\.com"
+        }
       ],
       "destination": "https://enka-salon.jp/",
       "permanent": true
@@ -14,25 +14,48 @@
     {
       "source": "/:path*",
       "has": [
-        { "type": "host", "value": "(www\\.)?zenryokuesthe\\.com" }
+        {
+          "type": "host",
+          "value": "(www\\.)?zenryokuesthe\\.com"
+        }
       ],
       "destination": "https://enka-salon.jp/:path*",
       "permanent": true
     }
   ],
   "rewrites": [
-    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-    { "source": "/robots.txt", "destination": "/api/robots" },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/robots"
+    },
     {
       "source": "/(.*)",
-      "has": [{ "type": "header", "key": "x-site-brand", "value": "enka" }],
+      "has": [
+        {
+          "type": "header",
+          "key": "x-site-brand",
+          "value": "enka"
+        }
+      ],
       "destination": "/api/spa"
     },
     {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "(www\\.)?enka-salon\\.jp" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "(www\\.)?enka-salon\\.jp"
+        }
+      ],
       "destination": "/api/spa"
     },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
