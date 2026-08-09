@@ -564,9 +564,9 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
     if (await setupEmail.count()) await setupEmail.fill(credentials.email);
     if (await setupPasswords.count()) await setupPasswords.nth(0).fill(credentials.password);
     if (await setupPasswords.count() > 1) await setupPasswords.nth(1).fill(credentials.password);
-    let confirm = setupRoot.getByRole("button", { name: /確定|はい|開始する|登録|保存/, exact: false }).last();
-    if (!await confirm.count()) confirm = setupRoot.getByRole("link", { name: /確定|はい|開始する|登録|保存/, exact: false }).last();
-    if (!await confirm.count()) confirm = setupRoot.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /確定|はい|開始する|登録|保存|始める/ }).last();
+    let confirm = setupRoot.getByRole("button", { name: /確定|はい|開始する|作成する|登録|保存/, exact: false }).last();
+    if (!await confirm.count()) confirm = setupRoot.getByRole("link", { name: /確定|はい|開始する|作成する|登録|保存/, exact: false }).last();
+    if (!await confirm.count()) confirm = setupRoot.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /確定|はい|開始する|作成する|登録|保存|始める/ }).last();
     if (!await confirm.count()) confirm = setupRoot.locator('input[type="submit"]:visible').last();
     if (!await confirm.count()) {
       const setupText = (await setupRoot.innerText()).replace(/\s+/g, " ").trim().slice(0, 300);
