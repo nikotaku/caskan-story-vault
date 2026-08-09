@@ -126,33 +126,17 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       storeId: input.storeId,
       itemCount: input.items.length,
     }));
-    res.status(202).json({
-      ok: true,
-      accepted: true,
+    const result = await syncEstamaShiftBatch(input);
+    console.log(JSON.stringify({
+      level: "info",
+      msg: "estama_shift_worker_done",
       storeId: input.storeId,
       itemCount: input.items.length,
-    });
-
-    try {
-      const result = await syncEstamaShiftBatch(input);
-      console.log(JSON.stringify({
-        level: "info",
-        msg: "estama_shift_worker_done",
-        storeId: input.storeId,
-        itemCount: input.items.length,
-        succeeded: result.results.filter((item) => item.ok).length,
-        failed: result.results.filter((item) => !item.ok).length,
-        ms: Date.now() - startedAt,
-      }));
-    } catch (error) {
-      console.error(JSON.stringify({
-        level: "error",
-        msg: "estama_shift_worker_background_failed",
-        storeId: input.storeId,
-        error: error instanceof Error ? error.message : String(error),
-        ms: Date.now() - startedAt,
-      }));
-    }
+      succeeded: result.results.filter((item) => item.ok).length,
+      failed: result.results.filter((item) => !item.ok).length,
+      ms: Date.now() - startedAt,
+    }));
+    res.status(200).json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(JSON.stringify({
