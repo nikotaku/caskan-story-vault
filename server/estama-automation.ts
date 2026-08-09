@@ -1394,10 +1394,9 @@ async function submitEstamaScheduleFormDirect(page: Page, scheduleField: Locator
       id: typed.id,
       action: typed.action,
       method: typed.method,
-      hiddenFields: Array.from(typed.querySelectorAll('input[type="hidden"]')).slice(0, 30).map((input) => ({
-        name: input.getAttribute("name"),
-        value: (input as HTMLInputElement).value.slice(0, 80),
-      })),
+      hiddenFields: Array.from(typed.querySelectorAll('input[type="hidden"]')).slice(0, 30)
+        .map((input) => input.getAttribute("name"))
+        .filter(Boolean),
     };
   });
   console.log(JSON.stringify({
