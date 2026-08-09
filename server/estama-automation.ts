@@ -1304,18 +1304,18 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
           ? field.checked
           : undefined,
         context: field instanceof HTMLInputElement && field.type === "checkbox"
-          ? (field.parentElement?.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 120)
+          ? (field.parentElement?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 120)
           : undefined,
       };
     });
     const activeDates = new Set(fields
-      .filter((field) => /\\[select_(?:start|end)\\]$/.test(field.name) && field.value)
-      .map((field) => field.name.match(/^column\\[([^\\]]+)\\]/)?.[1])
+      .filter((field) => /\[select_(?:start|end)\]$/.test(field.name) && field.value)
+      .map((field) => field.name.match(/^column\[([^\]]+)\]/)?.[1])
       .filter((date): date is string => Boolean(date)));
     return fields.filter((field) => {
-      const date = field.name.match(/^column\\[([^\\]]+)\\]/)?.[1];
-      return (/\\[select_(?:start|end)\\]$/.test(field.name) && Boolean(field.value))
-        || (/\\[work_status\\]$/.test(field.name) && Boolean(date) && activeDates.has(date));
+      const date = field.name.match(/^column\[([^\]]+)\]/)?.[1];
+      return (/\[select_(?:start|end)\]$/.test(field.name) && Boolean(field.value))
+        || (/\[work_status\]$/.test(field.name) && Boolean(date) && activeDates.has(date));
     });
   });
 
@@ -1431,8 +1431,8 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     try {
       requestFields = Array.from(new URLSearchParams(postData).entries())
         .filter(([name, value]) =>
-          (name.startsWith("column[") && /\\[select_(?:start|end)\\]$/.test(name) && Boolean(value))
-          || /\\[work_status\\]$/.test(name)
+          (name.startsWith("column[") && /\[select_(?:start|end)\]$/.test(name) && Boolean(value))
+          || /\[work_status\]$/.test(name)
         )
         .map(([name, value]) => ({ name, value }));
     } catch {
