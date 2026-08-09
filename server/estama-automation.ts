@@ -554,13 +554,21 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   if (await start.count()) {
     await start.click();
     await page.waitForTimeout(300);
-    const setupEmail = page.locator('input[type="email"]:visible, input[name*="mail" i]:visible').first();
-    const setupPasswords = page.locator('input[type="password"]:visible');
+    const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible').last();
+    const credentialForm = page.locator('form:visible').filter({
+      has: page.locator('input[type="email"], input[name*="mail" i], input[type="password"]'),
+    }).last();
+    const setupRoot = await dialog.count() ? dialog : await credentialForm.count() ? credentialForm : page.locator("body");
+    const setupEmail = setupRoot.locator('input[type="email"]:visible, input[name*="mail" i]:visible').first();
+    const setupPasswords = setupRoot.locator('input[type="password"]:visible');
     if (await setupEmail.count()) await setupEmail.fill(credentials.email);
     if (await setupPasswords.count()) await setupPasswords.nth(0).fill(credentials.password);
     if (await setupPasswords.count() > 1) await setupPasswords.nth(1).fill(credentials.password);
-    const confirm = page.getByText(/確定|はい|開始する/, { exact: false }).last();
-    if (await confirm.count()) await confirm.click();
+    let confirm = setupRoot.getByRole("button", { name: /確定|はい|開始する|登録|保存/, exact: false }).last();
+    if (!await confirm.count()) confirm = setupRoot.getByRole("link", { name: /確定|はい|開始する|登録|保存/, exact: false }).last();
+    if (!await confirm.count()) confirm = setupRoot.locator('input[type="submit"]:visible').last();
+    if (!await confirm.count()) throw new Error("魂セラピスト開始画面の確定ボタンが見つかりません");
+    await confirm.click();
     await page.waitForTimeout(800);
     await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
