@@ -1294,19 +1294,50 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   const form = scheduleField.locator("xpath=ancestor::form[1]");
   if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
 
-  const candidates = form.locator('button[type="submit"], button:not([type]), input[type="submit"]');
+  let candidates = form.locator([
+    'button[type="submit"]',
+    'button:not([type])',
+    'input[type="submit"]',
+    'input[type="button"]',
+    'input[type="image"]',
+    "a",
+  ].join(","));
+  if (!await candidates.count()) {
+    candidates = page.locator([
+      'button[type="submit"]',
+      'button:not([type])',
+      'input[type="submit"]',
+      'input[type="button"]',
+      'input[type="image"]',
+      "a",
+    ].join(","));
+  }
   const count = await candidates.count();
   let selectedIndex = -1;
-  const controls: Array<{ index: number; label: string }> = [];
+  let selectedScore = -1;
+  const controls: Array<{ index: number; tag: string; type: string; label: string; href: string }> = [];
   for (let index = 0; index < count; index += 1) {
     const candidate = candidates.nth(index);
+    if (!await candidate.isVisible().catch(() => false)) continue;
     const label = [
       await candidate.innerText().catch(() => ""),
       await candidate.getAttribute("value").catch(() => ""),
       await candidate.getAttribute("title").catch(() => ""),
+      await candidate.getAttribute("alt").catch(() => ""),
     ].filter(Boolean).join(" ").trim();
-    controls.push({ index, label });
-    if (/保存|登録|更新|変更|設定/.test(label)) selectedIndex = index;
+    const tag = await candidate.evaluate((element) => element.tagName.toLowerCase());
+    const type = await candidate.getAttribute("type").catch(() => "") || "";
+    const href = await candidate.getAttribute("href").catch(() => "") || "";
+    if (/保存|登録|更新|変更|設定/.test(label)) {
+      controls.push({ index, tag, type, label, href });
+      const score = (tag === "a" ? 1 : 10)
+        + (/出勤|シフト/.test(label) ? 10 : 0)
+        + (/保存する|登録する|更新する|変更する/.test(label) ? 5 : 0);
+      if (score >= selectedScore) {
+        selectedIndex = index;
+        selectedScore = score;
+      }
+    }
   }
   if (selectedIndex < 0 && count === 1) selectedIndex = 0;
   if (selectedIndex < 0) {
