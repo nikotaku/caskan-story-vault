@@ -1294,52 +1294,57 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   const form = scheduleField.locator("xpath=ancestor::form[1]");
   if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
 
-  let candidates = form.locator([
+  const saveSelector = [
     'button[type="submit"]',
     'button:not([type])',
     'input[type="submit"]',
     'input[type="button"]',
     'input[type="image"]',
     "a",
-  ].join(","));
-  if (!await candidates.count()) {
-    candidates = page.locator([
-      'button[type="submit"]',
-      'button:not([type])',
-      'input[type="submit"]',
-      'input[type="button"]',
-      'input[type="image"]',
-      "a",
-    ].join(","));
+  ].join(",");
+  type SaveControl = {
+    index: number;
+    tag: string;
+    type: string;
+    label: string;
+    href: string;
+    visible: boolean;
+  };
+  const inspect = (locator: Locator) => locator.evaluateAll((elements) => elements.map((element, index) => {
+    const typed = element as HTMLElement & { value?: string; alt?: string; type?: string };
+    const style = window.getComputedStyle(typed);
+    const box = typed.getBoundingClientRect();
+    return {
+      index,
+      tag: typed.tagName.toLowerCase(),
+      type: typed.getAttribute("type") || "",
+      label: [typed.innerText, typed.value, typed.title, typed.alt]
+        .filter(Boolean).join(" ").replace(/\s+/g, " ").trim(),
+      href: typed.getAttribute("href") || "",
+      visible: style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0,
+    };
+  })) as Promise<SaveControl[]>;
+
+  let candidates = form.locator(saveSelector);
+  let inspected = await inspect(candidates);
+  let controls = inspected.filter((item) => item.visible && /保存|登録|更新|変更|設定/.test(item.label));
+  if (!controls.length) {
+    candidates = page.locator(saveSelector);
+    inspected = await inspect(candidates);
+    controls = inspected.filter((item) => item.visible && /保存|登録|更新|変更|設定/.test(item.label));
   }
-  const count = await candidates.count();
   let selectedIndex = -1;
   let selectedScore = -1;
-  const controls: Array<{ index: number; tag: string; type: string; label: string; href: string }> = [];
-  for (let index = 0; index < count; index += 1) {
-    const candidate = candidates.nth(index);
-    if (!await candidate.isVisible().catch(() => false)) continue;
-    const label = [
-      await candidate.innerText().catch(() => ""),
-      await candidate.getAttribute("value").catch(() => ""),
-      await candidate.getAttribute("title").catch(() => ""),
-      await candidate.getAttribute("alt").catch(() => ""),
-    ].filter(Boolean).join(" ").trim();
-    const tag = await candidate.evaluate((element) => element.tagName.toLowerCase());
-    const type = await candidate.getAttribute("type").catch(() => "") || "";
-    const href = await candidate.getAttribute("href").catch(() => "") || "";
-    if (/保存|登録|更新|変更|設定/.test(label)) {
-      controls.push({ index, tag, type, label, href });
-      const score = (tag === "a" ? 1 : 10)
-        + (/出勤|シフト/.test(label) ? 10 : 0)
-        + (/保存する|登録する|更新する|変更する/.test(label) ? 5 : 0);
-      if (score >= selectedScore) {
-        selectedIndex = index;
-        selectedScore = score;
-      }
+  for (const control of controls) {
+    const score = (control.tag === "a" ? 1 : 10)
+      + (/出勤|シフト/.test(control.label) ? 10 : 0)
+      + (/保存する|登録する|更新する|変更する/.test(control.label) ? 5 : 0);
+    if (score >= selectedScore) {
+      selectedIndex = control.index;
+      selectedScore = score;
     }
   }
-  if (selectedIndex < 0 && count === 1) selectedIndex = 0;
+  if (selectedIndex < 0 && inspected.length === 1) selectedIndex = 0;
   if (selectedIndex < 0) {
     throw new Error(`エステ魂の出勤設定保存ボタンが見つかりません (${JSON.stringify(controls).slice(0, 500)})`);
   }
