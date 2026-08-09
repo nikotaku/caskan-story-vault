@@ -1146,11 +1146,62 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
 
   try {
     const shiftUrl = await discoverShiftAdminUrl(page, input.configuration || null);
+    const recordSuccess = async (item: EstamaShiftBatchItem) => {
+      const result: EstamaShiftBatchResult = {
+        jobId: item.jobId,
+        shiftId: item.shiftId,
+        castId: item.castId,
+        action: item.action,
+        shiftDate: item.shiftDate,
+        ok: true,
+      };
+      results.push(result);
+      await reportResult(result, item.reportToken);
+      console.log(JSON.stringify({
+        level: "info",
+        msg: "estama_shift_item_done",
+        jobId: item.jobId,
+        castName: item.castName,
+        shiftDate: item.shiftDate,
+        action: item.action,
+      }));
+    };
+    const recordFailure = async (item: EstamaShiftBatchItem, error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const result: EstamaShiftBatchResult = {
+        jobId: item.jobId,
+        shiftId: item.shiftId,
+        castId: item.castId,
+        action: item.action,
+        shiftDate: item.shiftDate,
+        ok: false,
+        error: message,
+      };
+      results.push(result);
+      await reportResult(result, item.reportToken);
+      console.warn(JSON.stringify({
+        level: "warning",
+        msg: "estama_shift_item_failed",
+        jobId: item.jobId,
+        castName: item.castName,
+        shiftDate: item.shiftDate,
+        action: item.action,
+        error: message,
+      }));
+    };
+
+    const grouped = new Map<string, EstamaShiftBatchItem[]>();
     for (const item of items) {
+      const key = item.externalId || item.remoteName || item.castName;
+      grouped.set(key, [...(grouped.get(key) || []), item]);
+    }
+
+    for (const group of grouped.values()) {
+      const first = group[0];
+      const itemShiftUrl = first.externalId
+        ? `https://estama.jp/admin/schedule/${encodeURIComponent(first.externalId)}/`
+        : shiftUrl;
       try {
-        const itemShiftUrl = item.externalId
-          ? `https://estama.jp/admin/schedule/${encodeURIComponent(item.externalId)}/`
-          : shiftUrl;
         await page.goto(itemShiftUrl, { waitUntil: "domcontentloaded" });
         await ensureAdminLogin(page);
         if (results.length === 0) {
@@ -1172,69 +1223,45 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
             controls,
           }));
         }
-        await setField(
-          page,
-          'input[type="date"], input[name*="date" i], select[name*="date" i]',
-          item.shiftDate,
-        );
-        await page.waitForTimeout(500);
-        const scheduleName = `column[${item.shiftDate}][select]`;
-        const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
-        const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
-        if (!await start.count() || !await end.count()) {
-          throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
+
+        const prepared: EstamaShiftBatchItem[] = [];
+        for (const item of group) {
+          try {
+            const scheduleName = `column[${item.shiftDate}][select]`;
+            const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
+            const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
+            if (!await start.count() || !await end.count()) {
+              throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
+            }
+            if (item.action === "delete") {
+              await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
+              await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
+            } else {
+              const startValue = item.startTime.slice(0, 5);
+              const endValue = estamaEndTime(item.startTime, item.endTime);
+              await setEstamaScheduleSelect(start, startValue, `${item.shiftDate}の出勤時刻`);
+              await setEstamaScheduleSelect(end, endValue, `${item.shiftDate}の退勤時刻`);
+            }
+            prepared.push(item);
+          } catch (error) {
+            await recordFailure(item, error);
+          }
         }
 
-        if (item.action === "delete") {
-          await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
-          await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
-        } else {
-          const startValue = item.startTime.slice(0, 5);
-          const endValue = estamaEndTime(item.startTime, item.endTime);
-          await setEstamaScheduleSelect(start, startValue, `${item.shiftDate}の出勤時刻`);
-          await setEstamaScheduleSelect(end, endValue, `${item.shiftDate}の退勤時刻`);
+        if (prepared.length) {
+          try {
+            await clickSave(page);
+            for (const item of prepared) await recordSuccess(item);
+          } catch (error) {
+            for (const item of prepared) await recordFailure(item, error);
+          }
         }
-        await clickSave(page);
-        const result: EstamaShiftBatchResult = {
-          jobId: item.jobId,
-          shiftId: item.shiftId,
-          castId: item.castId,
-          action: item.action,
-          shiftDate: item.shiftDate,
-          ok: true,
-        };
-        results.push(result);
-        await reportResult(result, item.reportToken);
-        console.log(JSON.stringify({
-          level: "info",
-          msg: "estama_shift_item_done",
-          jobId: item.jobId,
-          castName: item.castName,
-          shiftDate: item.shiftDate,
-          action: item.action,
-        }));
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const result: EstamaShiftBatchResult = {
-          jobId: item.jobId,
-          shiftId: item.shiftId,
-          castId: item.castId,
-          action: item.action,
-          shiftDate: item.shiftDate,
-          ok: false,
-          error: message,
-        };
-        results.push(result);
-        await reportResult(result, item.reportToken);
-        console.warn(JSON.stringify({
-          level: "warning",
-          msg: "estama_shift_item_failed",
-          jobId: item.jobId,
-          castName: item.castName,
-          shiftDate: item.shiftDate,
-          action: item.action,
-          error: message,
-        }));
+        for (const item of group) {
+          if (!results.some((result) => result.jobId === item.jobId)) {
+            await recordFailure(item, error);
+          }
+        }
         if (error instanceof LoginRequiredError) break;
       }
     }
