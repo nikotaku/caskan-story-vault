@@ -14,7 +14,6 @@ import {
   UserCircle,
   ClipboardList,
   Images,
-  PhoneCall,
   Megaphone,
   Calculator,
   CheckSquare,
@@ -116,11 +115,6 @@ const menuItems: MenuItem[] = [
     href: "/inquiry-stats",
     label: "問い合わせ集計",
     icon: BarChart3,
-  },
-  {
-    href: "/cti-calls",
-    label: "着信履歴",
-    icon: PhoneCall,
   },
   {
     label: "システム",
