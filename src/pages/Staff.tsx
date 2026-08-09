@@ -107,6 +107,7 @@ const BUST_SIZES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 interface Cast {
   id: string;
+  store_id: string;
   name: string;
   name_kana: string | null;
   real_name: string | null;
@@ -303,6 +304,7 @@ export default function Staff() {
   const [estamaCopied, setEstamaCopied] = useState(false);
   const [estamaShowConsole, setEstamaShowConsole] = useState(false);
   const [estamaAutomationOpen, setEstamaAutomationOpen] = useState(false);
+  const [estamaRegisteringCastId, setEstamaRegisteringCastId] = useState<string | null>(null);
   const [addingCast, setAddingCast] = useState(false);
   const [newPhotoUrl, setNewPhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -1233,6 +1235,36 @@ export default function Staff() {
     } catch { /* ダイアログ内ボタンから再コピー可 */ }
   };
 
+  const handleRegisterEstama = async (cast: Cast) => {
+    if (!cast.store_id) {
+      toast({ title: "店舗情報が見つかりません", variant: "destructive" });
+      return;
+    }
+    setEstamaRegisteringCastId(cast.id);
+    try {
+      const result = await runEstamaCastAutomation({ storeId: cast.store_id, castId: cast.id });
+      const completed = (result.results || []).find((item) => item.status === "completed");
+      if (!completed) {
+        throw new Error((result.results || [])[0]?.error || "エスたま自動化設定を確認してください");
+      }
+      const { data: latest } = await supabase.from("casts").select("*").eq("id", cast.id).single();
+      if (latest) setEditingCast(latest as Cast);
+      await fetchCasts();
+      toast({
+        title: "エスたま登録・連携が完了しました",
+        description: "魂セラピストの本人ログイン設定も更新しました",
+      });
+    } catch (error) {
+      toast({
+        title: "エスたま登録・連携に失敗しました",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setEstamaRegisteringCastId(null);
+    }
+  };
+
   const copyShiftLink = (token: string) => {
     const link = `${window.location.origin}/therapist/${token}/shift`;
     navigator.clipboard.writeText(link);
@@ -1864,6 +1896,19 @@ export default function Staff() {
                             <LinkIcon size={13} />専用リンク発行
                           </Button>
                         )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs gap-1 text-violet-600 border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                          onClick={() => handleRegisterEstama(editingCast)}
+                          disabled={estamaRegisteringCastId === editingCast.id}
+                        >
+                          {estamaRegisteringCastId === editingCast.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : <Bot size={13} />}
+                          {estamaRegisteringCastId === editingCast.id ? "登録・連携中" : "エスたま登録・連携"}
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"

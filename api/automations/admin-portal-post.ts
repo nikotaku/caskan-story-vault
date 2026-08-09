@@ -2,7 +2,6 @@ import {
   assertStoreManager,
   authenticateUser,
   enqueueEstamaDiaryJob,
-  getAdminClient,
   processAvailableJobs,
 } from "../../server/estama-automation.js";
 
@@ -36,8 +35,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!postId) throw new Error("投稿IDが必要です");
     if (!["o2", "esutama"].includes(target)) throw new Error("送信先が正しくありません");
 
-    const { user } = await authenticateUser(req);
-    const admin = getAdminClient();
+    const { admin, user } = await authenticateUser(req);
     const { data: post, error } = await admin.from("cast_posts")
       .select("id,cast_id,store_id,o2_status,esutama_status")
       .eq("id", postId)
@@ -60,19 +58,13 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         .maybeSingle();
       if (!cast?.access_token) throw new Error("セラピストの投稿トークンがありません");
 
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       const baseUrl = process.env.SUPABASE_URL
         || process.env.VITE_SUPABASE_URL
         || "https://imrxzkivwrkqbhqfbbes.supabase.co";
-      if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY がVercelに設定されていません");
       const response = await fetch(`${baseUrl}/functions/v1/post-to-sites`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: serviceRoleKey,
-        },
-        body: JSON.stringify({ post_id: post.id, access_token: cast.access_token }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ post_id: post.id, access_token: cast.access_token, target: "o2" }),
         signal: AbortSignal.timeout(60_000),
       });
       const payload = await response.json().catch(() => ({}));

@@ -16,8 +16,8 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.post-to-sites]
-# ブラウザからは直接呼ばず、ポータルトークンを検証したVercel APIだけが呼び出す。
-verify_jwt = true
+# 独自の長いポータルトークン、または一回限りのworker tokenを関数内で検証する。
+verify_jwt = false
 
 
 

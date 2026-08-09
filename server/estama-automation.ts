@@ -109,10 +109,12 @@ const supabasePublishableKey = () =>
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_T0a9mtOIbupU5n_VAe9caw_xlnbbWfB";
 
-export const getAdminClient = () =>
-  createClient(supabaseUrl(), requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+export const createAdminClient = (serviceRoleKey: string) =>
+  createClient(supabaseUrl(), serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+export const getAdminClient = () => createAdminClient(requiredEnv("SUPABASE_SERVICE_ROLE_KEY"));
 
 const getAuthenticatedClient = (token: string) =>
   createClient(supabaseUrl(), supabasePublishableKey(), {
@@ -812,6 +814,84 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   }).eq("id", postId);
   await updatePostOverallStatus(admin, postId);
   return { posted: true, uploadedPhotos, url: accountPage.url() };
+}
+
+export type PreparedEstamaDiary = {
+  jobId: string;
+  browserbaseContextId: string;
+  cast: {
+    name: string;
+    externalId?: string | null;
+    remoteName?: string | null;
+  };
+  post: {
+    title?: string | null;
+    body: string;
+    imageUrls?: string[] | null;
+  };
+};
+
+export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
+  const created = await createBrowserSession(input.browserbaseContextId, false, {
+    action: "portal-diary",
+    jobId: input.jobId,
+  });
+  let browser: Browser | null = null;
+  try {
+    const connected = await connectSession(created.session.connectUrl);
+    browser = connected.browser;
+    const page = connected.page;
+    await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    const row = await findEstamaCastRow(page, {
+      externalId: input.cast.externalId || undefined,
+      remoteName: input.cast.remoteName || undefined,
+      localName: input.cast.name,
+    });
+    const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+    if (!await login.count()) {
+      throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
+    }
+
+    const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
+    await login.click();
+    const popup = await popupPromise;
+    const accountPage = popup || page;
+    await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+    if (await accountPage.locator('input[type="password"]').count()) {
+      throw new LoginRequiredError("エステ魂のセラピスト側ログインが切れています");
+    }
+
+    const diaryLink = accountPage.locator("a, button").filter({ hasText: /写メ日記|写メブログ|日記/ }).first();
+    if (!/diary|blog|photo/i.test(accountPage.url())) {
+      if (!await diaryLink.count()) throw new Error("エステ魂の写メ日記メニューが見つかりません");
+      await diaryLink.click();
+      await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+    }
+    const newPost = accountPage.locator("a, button").filter({ hasText: /新規投稿|日記を書く|投稿する|新規作成/ }).first();
+    if (await newPost.count()) {
+      await newPost.click();
+      await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+    }
+
+    await setField(accountPage, 'input[name*="title" i], input[id*="title" i], input[name*="subject" i]', input.post.title || "写メ日記");
+    await setField(accountPage, 'textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea', input.post.body);
+    const bodyField = accountPage.locator('textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea').first();
+    if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
+    const imageUrls = Array.isArray(input.post.imageUrls)
+      ? input.post.imageUrls.filter((url): url is string => typeof url === "string")
+      : [];
+    const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, 3);
+    await clickSave(accountPage);
+    const visibleError = await accountPage.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible').allTextContents().catch(() => []);
+    if (visibleError.some((value) => value.trim())) {
+      throw new Error(`エステ魂: ${visibleError.join(" / ").slice(0, 300)}`);
+    }
+    return { posted: true, uploadedPhotos, url: accountPage.url() };
+  } finally {
+    if (browser) await disconnect(browser);
+    await releaseSession(created.bb, created.session.id);
+  }
 }
 
 async function claimNextJob(admin: AdminClient, storeId?: string, castId?: string, jobId?: string) {
