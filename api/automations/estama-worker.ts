@@ -114,7 +114,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         ? body.configuration as Record<string, unknown>
         : {},
       items: parseItems(body.items),
-      onResult: reportResult,
+      onResult: (result, reportToken) => reportResult(reportToken, result),
     };
     if (!input.storeId || !input.contextId || !input.items.length) {
       throw new Error("同期対象データが不足しています");
