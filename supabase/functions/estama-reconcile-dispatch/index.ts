@@ -34,7 +34,9 @@ const randomToken = () => {
   return hex(bytes);
 };
 
-const jstDate = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+// エステ魂の管理画面はUTC日付で14日分を切り替えるため、同じ基準日を使う。
+// 通常実行の23:00 JSTではJST日付と一致し、深夜の手動実行でも範囲外送信を防げる。
+const estamaAdminDate = () => new Date().toISOString().slice(0, 10);
 
 const addDays = (date: string, days: number) => {
   const value = new Date(date + "T00:00:00.000Z");
@@ -108,7 +110,7 @@ Deno.serve(async (req) => {
       .not("browserbase_context_id", "is", null);
     if (connectionError) throw connectionError;
 
-    const startDate = jstDate();
+    const startDate = estamaAdminDate();
     const endDate = addDays(startDate, 13);
     const reports: Json[] = [];
 
@@ -180,7 +182,7 @@ Deno.serve(async (req) => {
         const { error: reportTokenError } = await admin.from("estama_sync_tokens").insert({
           token_hash: await sha256(reportToken),
           purpose: "report:" + String(jobId),
-          expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          expires_at: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         });
         if (reportTokenError) throw reportTokenError;
         items.push({
@@ -202,16 +204,15 @@ Deno.serve(async (req) => {
         cast.estama_listed === true && !profileByCast.has(cast.id)
       ).map((cast) => cast.name);
 
-      const notificationToken = randomToken();
-      const notificationBatchId = crypto.randomUUID();
-      const { error: notificationTokenError } = await admin.from("estama_sync_tokens").insert({
-        token_hash: await sha256(notificationToken),
-        purpose: "notify:" + notificationBatchId,
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      });
-      if (notificationTokenError) throw notificationTokenError;
-
       if (!items.length) {
+        const notificationToken = randomToken();
+        const notificationBatchId = crypto.randomUUID();
+        const { error: notificationTokenError } = await admin.from("estama_sync_tokens").insert({
+          token_hash: await sha256(notificationToken),
+          purpose: "notify:" + notificationBatchId,
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        });
+        if (notificationTokenError) throw notificationTokenError;
         const message = missingProfiles.length
           ? "エスたま紐付け未完了: " + missingProfiles.join("、")
           : null;
@@ -245,106 +246,77 @@ Deno.serve(async (req) => {
         status: "ready",
       }).eq("id", connection.id);
 
-      const workerToken = randomToken();
-      await admin.from("estama_sync_tokens").insert({
-        token_hash: await sha256(workerToken),
-        purpose: "worker",
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      });
+      const batches = [...items.reduce((groups, item) => {
+        const key = item.externalId || item.castId;
+        groups.set(key, [...(groups.get(key) || []), item]);
+        return groups;
+      }, new Map<string, BatchItem[]>()).values()];
 
-      const workerResponse = await fetch("https://newkyasukan.vercel.app/api/automations/estama-worker", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      let nextPayload: Record<string, unknown> | null = null;
+      for (let index = batches.length - 1; index >= 0; index -= 1) {
+        const batch = batches[index];
+        const workerToken = randomToken();
+        const notificationToken = randomToken();
+        const notificationBatchId = crypto.randomUUID();
+        const tokenRows = [
+          {
+            token_hash: await sha256(workerToken),
+            purpose: "worker",
+            expires_at: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          },
+          {
+            token_hash: await sha256(notificationToken),
+            purpose: "notify:" + notificationBatchId,
+            expires_at: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          },
+        ];
+
+        let continuation: { token: string; payload: Record<string, unknown> } | undefined;
+        if (nextPayload) {
+          const continuationToken = randomToken();
+          tokenRows.push({
+            token_hash: await sha256(continuationToken),
+            purpose: "continue:" + crypto.randomUUID(),
+            expires_at: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          });
+          continuation = { token: continuationToken, payload: nextPayload };
+        }
+
+        const { error: tokenError } = await admin.from("estama_sync_tokens").insert(tokenRows);
+        if (tokenError) throw tokenError;
+        nextPayload = {
           token: workerToken,
           storeId: connection.store_id,
           shopId: connection.shop_id ? String(connection.shop_id) : "",
           contextId: connection.browserbase_context_id,
           configuration: connection.configuration || {},
           notificationToken,
-          missingProfiles,
-          items,
-        }),
-        signal: AbortSignal.timeout(280000),
-      });
-      const workerText = await workerResponse.text();
-      if (!workerResponse.ok) {
-        const message = "エスたま実行API " + workerResponse.status + ": " + workerText.slice(0, 500);
-        await Promise.all(items.map((item) =>
-          admin!.from("automation_jobs").update({
-            status: "failed",
-            error_message: message,
-            finished_at: new Date().toISOString(),
-          }).eq("id", item.jobId)
-        ));
-        await admin.from("automation_connections").update({
-          last_reconciled_at: new Date().toISOString(),
-          last_error: message,
-        }).eq("id", connection.id);
-        reports.push({
-          storeId: connection.store_id,
-          attempted: items.length,
-          succeeded: 0,
-          failed: items.length,
-          error: message,
-          missingProfiles,
-        });
-        continue;
+          missingProfiles: index === 0 ? missingProfiles : [],
+          items: batch,
+          ...(continuation ? { continuation } : {}),
+        };
       }
 
-      const workerData = JSON.parse(workerText) as {
-        results?: Array<BatchItem & { ok: boolean; error?: string }>;
-      };
-      const results = workerData.results || [];
-      await Promise.all(results.map(async (result) => {
-        const finishedAt = new Date().toISOString();
-        await admin!.from("automation_jobs").update({
-          status: result.ok ? "completed" : "failed",
-          result: result.ok ? {
-            action: result.action,
-            shift_date: result.shiftDate,
-            source: "supabase_cron",
-          } : {},
-          error_message: result.ok ? null : (result.error || "同期に失敗しました"),
-          finished_at: finishedAt,
-        }).eq("id", result.jobId);
-        await admin!.from("shifts").update({
-          estama_registered: result.ok && result.action === "upsert",
-        }).eq("id", result.shiftId);
-      }));
-
-      const successfulCastIds = [...new Set(results.filter((result) => result.ok).map((result) => result.castId))];
-      if (successfulCastIds.length) {
-        await admin.from("external_cast_profiles").update({
-          last_shift_sync_at: new Date().toISOString(),
-          last_error: null,
-        }).in("cast_id", successfulCastIds).eq("provider", "estama");
-      }
-      const failures = results.filter((result) => !result.ok);
-      const errorText = failures.length
-        ? failures.slice(0, 3).map((result) => result.error || "同期失敗").join(" / ")
-        : missingProfiles.length
-          ? "エスたま紐付け未完了: " + missingProfiles.join("、")
-          : null;
-      await admin.from("automation_connections").update({
-        last_reconciled_at: new Date().toISOString(),
-        last_error: errorText,
-        status: failures.some((result) => /再ログイン|ログイン/.test(result.error || ""))
-          ? "expired"
-          : "ready",
-      }).eq("id", connection.id);
+      if (!nextPayload) throw new Error("エスたま同期バッチを作成できませんでした");
+      const { data: requestId, error: dispatchError } = await admin.rpc(
+        "dispatch_estama_worker_request",
+        { p_payload: nextPayload },
+      );
+      if (dispatchError) throw dispatchError;
+      if (!requestId) throw new Error("エスたま同期バッチを開始できませんでした");
 
       reports.push({
         storeId: connection.store_id,
         attempted: items.length,
-        succeeded: results.filter((result) => result.ok).length,
-        failed: failures.length,
+        batches: batches.length,
+        queued: true,
+        requestId,
         missingProfiles,
       });
     }
 
     return json({
-      ok: reports.every((report) => Number(report.failed || 0) === 0),
+      ok: reports.every((report) => !report.error),
       range: { startDate, endDate },
       reports,
       ms: Date.now() - startedAt,

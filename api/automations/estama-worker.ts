@@ -15,6 +15,11 @@ type ResponseLike = {
   setHeader(name: string, value: string): void;
 };
 
+type WorkerContinuation = {
+  token: string;
+  payload: Record<string, unknown>;
+};
+
 const SUPABASE_URL = "https://imrxzkivwrkqbhqfbbes.supabase.co";
 const PUBLISHABLE_KEY =
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
@@ -87,6 +92,37 @@ async function notifyEvidence(token: string, report: EstamaShiftEvidenceReport) 
   return body ? JSON.parse(body) : { success: true };
 }
 
+async function dispatchContinuation(continuation: WorkerContinuation) {
+  if (!continuation.token || continuation.token.length < 48) {
+    throw new Error("次の同期バッチ用トークンがありません");
+  }
+  let lastError = "";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/rpc/dispatch_estama_worker_continuation`,
+        {
+          method: "POST",
+          headers: { apikey: PUBLISHABLE_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_token: continuation.token, p_payload: continuation.payload }),
+          signal: AbortSignal.timeout(15_000),
+        },
+      );
+      const body = await response.text();
+      if (!response.ok) {
+        throw new Error(`次の同期バッチを開始できません (${response.status}): ${body.slice(0, 300)}`);
+      }
+      const requestId = JSON.parse(body);
+      if (!requestId) throw new Error("次の同期バッチの受付番号を取得できませんでした");
+      return requestId;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+  }
+  throw new Error(lastError || "次の同期バッチを開始できませんでした");
+}
+
 function parseItems(value: unknown): EstamaShiftBatchItem[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 60).map((item) => {
@@ -123,17 +159,33 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   let notificationToken = "";
   let storeId = "";
   let shopId = "";
+  let continuation: WorkerContinuation | null = null;
+  let continuationAttempted = false;
+  let parsedItems: EstamaShiftBatchItem[] = [];
+  const reportedResults = new Map<string, EstamaShiftBatchResult>();
   try {
     const body = req.body || {};
     const token = stringValue(body.token);
     notificationToken = stringValue(body.notificationToken);
     storeId = stringValue(body.storeId);
     shopId = stringValue(body.shopId);
+    const continuationValue = body.continuation && typeof body.continuation === "object"
+      ? body.continuation as Record<string, unknown>
+      : null;
+    if (continuationValue) {
+      const payload = continuationValue.payload && typeof continuationValue.payload === "object"
+        ? continuationValue.payload as Record<string, unknown>
+        : null;
+      if (payload) {
+        continuation = { token: stringValue(continuationValue.token), payload };
+      }
+    }
     if (!await claimToken(token)) {
       res.status(401).json({ error: "同期用トークンが無効または使用済みです" });
       return;
     }
 
+    parsedItems = parseItems(body.items);
     const input: EstamaShiftBatchInput = {
       storeId,
       shopId,
@@ -141,11 +193,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       configuration: body.configuration && typeof body.configuration === "object"
         ? body.configuration as Record<string, unknown>
         : {},
-      items: parseItems(body.items),
+      items: parsedItems,
       missingProfiles: Array.isArray(body.missingProfiles)
         ? body.missingProfiles.filter((item): item is string => typeof item === "string").slice(0, 30)
         : [],
-      onResult: (result, reportToken) => reportResult(reportToken, result),
+      onResult: async (result, reportToken) => {
+        await reportResult(reportToken, result);
+        reportedResults.set(result.jobId, result);
+      },
       onEvidence: async (report) => {
         notificationAttempted = true;
         await notifyEvidence(notificationToken, report);
@@ -162,6 +217,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       itemCount: input.items.length,
     }));
     const result = await syncEstamaShiftBatch(input);
+    if (continuation) {
+      continuationAttempted = true;
+      await dispatchContinuation(continuation);
+    }
     console.log(JSON.stringify({
       level: "info",
       msg: "estama_shift_worker_done",
@@ -174,6 +233,38 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     res.status(200).json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const fatalResults: EstamaShiftBatchResult[] = [...reportedResults.values()];
+    for (const item of parsedItems) {
+      if (reportedResults.has(item.jobId)) continue;
+      const result: EstamaShiftBatchResult = {
+        jobId: item.jobId,
+        shiftId: item.shiftId,
+        castId: item.castId,
+        castName: item.castName,
+        action: item.action,
+        shiftDate: item.shiftDate,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        ok: false,
+        publicVerified: false,
+        publicUrl: item.externalId && shopId
+          ? `https://estama.jp/shop/${encodeURIComponent(shopId)}/cast/${encodeURIComponent(item.externalId)}/`
+          : undefined,
+        error: `同期処理中断: ${message}`,
+      };
+      try {
+        await reportResult(item.reportToken, result);
+        reportedResults.set(item.jobId, result);
+      } catch (reportError) {
+        console.error(JSON.stringify({
+          level: "error",
+          msg: "estama_shift_fatal_item_report_failed",
+          jobId: item.jobId,
+          error: reportError instanceof Error ? reportError.message : String(reportError),
+        }));
+      }
+      fatalResults.push(result);
+    }
     if (!notificationAttempted && notificationToken && storeId) {
       notificationAttempted = true;
       try {
@@ -183,7 +274,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           sessionId: "",
           startedAt: new Date(startedAt).toISOString(),
           finishedAt: new Date().toISOString(),
-          results: [],
+          results: fatalResults,
           evidence: [],
           fatalError: message,
         });
@@ -192,6 +283,18 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
           level: "error",
           msg: "estama_shift_fatal_notification_failed",
           error: notifyError instanceof Error ? notifyError.message : String(notifyError),
+        }));
+      }
+    }
+    if (continuation && !continuationAttempted) {
+      continuationAttempted = true;
+      try {
+        await dispatchContinuation(continuation);
+      } catch (continuationError) {
+        console.error(JSON.stringify({
+          level: "error",
+          msg: "estama_shift_continuation_failed",
+          error: continuationError instanceof Error ? continuationError.message : String(continuationError),
         }));
       }
     }

@@ -1290,6 +1290,74 @@ async function setEstamaScheduleSelect(
   });
 }
 
+async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
+  const form = scheduleField.locator("xpath=ancestor::form[1]");
+  if (!await form.count()) throw new Error("エステ魂の出勤設定フォームが見つかりません");
+
+  const candidates = form.locator('button[type="submit"], button:not([type]), input[type="submit"]');
+  const count = await candidates.count();
+  let selectedIndex = -1;
+  const controls: Array<{ index: number; label: string }> = [];
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    const label = [
+      await candidate.innerText().catch(() => ""),
+      await candidate.getAttribute("value").catch(() => ""),
+      await candidate.getAttribute("title").catch(() => ""),
+    ].filter(Boolean).join(" ").trim();
+    controls.push({ index, label });
+    if (/保存|登録|更新|変更|設定/.test(label)) selectedIndex = index;
+  }
+  if (selectedIndex < 0 && count === 1) selectedIndex = 0;
+  if (selectedIndex < 0) {
+    throw new Error(`エステ魂の出勤設定保存ボタンが見つかりません (${JSON.stringify(controls).slice(0, 500)})`);
+  }
+
+  const submit = candidates.nth(selectedIndex);
+  console.log(JSON.stringify({
+    level: "info",
+    msg: "estama_schedule_submit_selected",
+    url: page.url(),
+    selectedIndex,
+    controls,
+  }));
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8_000 }).catch(() => undefined),
+    submit.click(),
+  ]);
+
+  const confirm = page.locator('button, input[type="submit"], a').filter({
+    hasText: /確定|はい|登録する|保存する|更新する/,
+  }).filter({ visible: true }).last();
+  if (await confirm.count()) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 8_000 }).catch(() => undefined),
+      confirm.click().catch(() => undefined),
+    ]);
+  }
+  await page.waitForTimeout(1_200);
+}
+
+async function verifyEstamaAdminSchedule(page: Page, item: EstamaShiftBatchItem) {
+  const scheduleName = `column[${item.shiftDate}][select]`;
+  const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
+  const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
+  if (!await start.count() || !await end.count()) {
+    throw new Error(`保存後の${item.shiftDate}の出退勤欄が見つかりません`);
+  }
+
+  const expectedStart = item.action === "delete" ? "" : item.startTime.slice(0, 5);
+  const expectedEnd = item.action === "delete" ? "" : estamaEndTime(item.startTime, item.endTime);
+  const [actualStart, actualEnd] = await Promise.all([start.inputValue(), end.inputValue()]);
+  if (actualStart !== expectedStart || actualEnd !== expectedEnd) {
+    throw new Error(
+      `管理画面への保存不一致: ${item.shiftDate} `
+      + `${expectedStart || "未出勤"}～${expectedEnd || "未出勤"} `
+      + `(保存値 ${actualStart || "未出勤"}～${actualEnd || "未出勤"})`,
+    );
+  }
+}
+
 const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
   `https://estama.jp/shop/${encodeURIComponent(shopId)}/cast/${encodeURIComponent(externalId)}/`;
 
@@ -1354,10 +1422,25 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
 }
 
 async function clickNextPublicScheduleWeek(page: Page) {
-  const next = page.locator("a, button").filter({ hasText: "次の1週間" }).filter({ visible: true }).first();
-  if (!await next.count()) throw new Error("公開ページの「次の1週間」が見つかりません");
-  await next.click();
-  await page.waitForTimeout(600);
+  const candidates = page.locator('a:has-text("次の1週間"), button:has-text("次の1週間"), input[value*="次の1週間"]');
+  const count = await candidates.count();
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    if (await candidate.isVisible().catch(() => false)) {
+      await candidate.click();
+      await page.waitForTimeout(600);
+      return;
+    }
+  }
+  if (count) {
+    const href = await candidates.first().getAttribute("href").catch(() => null);
+    if (href && !href.startsWith("javascript:")) {
+      await page.goto(new URL(href, page.url()).toString(), { waitUntil: "domcontentloaded" });
+      await page.waitForTimeout(600);
+      return;
+    }
+  }
+  throw new Error("公開ページの「次の1週間」が見つかりません");
 }
 
 async function capturePublicScheduleScreenshot(page: Page) {
@@ -1403,10 +1486,41 @@ async function verifyPublicShiftGroup(
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     const attemptEvidence: EstamaShiftEvidence[] = [];
     await page.goto(`${publicUrl}?sync_verify=${Date.now()}`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(attempt === 1 ? 500 : 1_500);
+    await page.waitForTimeout(attempt === 1 ? 2_500 : 3_000);
 
     for (let offset = 0; offset <= maxOffset; offset += 1) {
-      if (offset > 0) await clickNextPublicScheduleWeek(page);
+      if (offset > 0) {
+        try {
+          await clickNextPublicScheduleWeek(page);
+        } catch (error) {
+          const screenshotBase64 = await capturePublicScheduleScreenshot(page);
+          const message = error instanceof Error ? error.message : String(error);
+          for (const remaining of weeks.filter((candidate) => candidate.offset >= offset)) {
+            attemptEvidence.push({
+              castId: first.castId,
+              castName: first.castName,
+              externalId: first.externalId,
+              weekStart: remaining.weekStart,
+              publicUrl: page.url(),
+              capturedAt: new Date().toISOString(),
+              verified: false,
+              expected: remaining.expected.map((item) => ({
+                jobId: item.jobId,
+                action: item.action,
+                shiftDate: item.shiftDate,
+                startTime: item.startTime,
+                endTime: item.endTime,
+                verified: false,
+                error: message,
+              })),
+              screenshotBase64,
+              mimeType: "image/jpeg",
+              error: message,
+            });
+          }
+          break;
+        }
+      }
       const week = weeks.find((candidate) => candidate.offset === offset);
       if (!week) continue;
       const rawText = await page.locator("body").innerText();
@@ -1440,7 +1554,7 @@ async function verifyPublicShiftGroup(
 
     finalEvidence = attemptEvidence;
     if (attemptEvidence.length === weeks.length && attemptEvidence.every((item) => item.verified)) break;
-    if (attempt < 2) await page.waitForTimeout(1_500);
+    if (attempt < 2) await page.waitForTimeout(5_000);
   }
   return finalEvidence;
 }
@@ -1595,7 +1709,19 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         }
 
         if (prepared.length) {
-          await clickSave(page);
+          const firstPrepared = prepared[0];
+          const firstScheduleName = `column[${firstPrepared.shiftDate}][select]`;
+          const firstScheduleField = page.locator(
+            `select[name="${firstScheduleName}[select_start]"]`,
+          ).first();
+          await clickEstamaScheduleSave(page, firstScheduleField);
+          for (const item of prepared) {
+            try {
+              await verifyEstamaAdminSchedule(page, item);
+            } catch (error) {
+              await recordFailure(item, error);
+            }
+          }
         }
       } catch (error) {
         adminError = error;
