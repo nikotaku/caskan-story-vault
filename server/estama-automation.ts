@@ -1277,14 +1277,9 @@ async function setEstamaScheduleSelect(
   value: string,
   label: string,
 ) {
-  await locator.evaluate((element, nextValue) => {
-    const select = element as HTMLSelectElement;
-    const option = Array.from(select.options).find((item) => item.value === nextValue);
-    if (!option) throw new Error(`option_not_found:${nextValue}`);
-    select.value = nextValue;
-    select.dispatchEvent(new Event("input", { bubbles: true }));
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  }, value).catch((error) => {
+  await locator.selectOption({ value }).then((selected) => {
+    if (!selected.length) throw new Error(`option_not_found:${value}`);
+  }).catch((error) => {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`エステ魂の${label}に${value || "未出勤"}を設定できません: ${detail}`);
   });
@@ -1318,6 +1313,18 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
         || (/\[work_status\]$/.test(field.name) && Boolean(date) && activeDates.has(date));
     });
   });
+  const activePeriodFields = await form.locator('[name*="[period]"]').evaluateAll((elements) =>
+    elements.map((element) => {
+      const field = element as HTMLInputElement;
+      return {
+        name: field.name,
+        type: field.type,
+        value: field.value,
+        checked: field.checked,
+        className: field.className,
+      };
+    }).filter((field) => (field.value !== "" && field.value !== "0") || field.checked)
+  );
 
   const saveSelector = [
     'button[type="submit"]',
@@ -1452,6 +1459,7 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
     msg: "estama_schedule_save_request",
     dialogAccepted,
     preparedFields,
+    activePeriodFields,
     requestFields,
     response: saveResponse ? {
       status: saveResponse.status(),
