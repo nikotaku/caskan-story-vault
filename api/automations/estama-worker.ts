@@ -2,6 +2,7 @@ import {
   syncEstamaShiftBatch,
   type EstamaShiftBatchInput,
   type EstamaShiftBatchItem,
+  type EstamaShiftBatchResult,
 } from "../../server/estama-automation.js";
 
 export const config = { maxDuration: 300 };
@@ -37,6 +38,35 @@ async function claimToken(token: string) {
   return await response.json() === true;
 }
 
+async function reportResult(token: string, result: EstamaShiftBatchResult) {
+  if (!token || token.length < 48) throw new Error("同期結果トークンがありません");
+  let lastError = "";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/report_estama_shift_result`, {
+        method: "POST",
+        headers: {
+          apikey: PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          p_token: token,
+          p_job_id: result.jobId,
+          p_result: result,
+        }),
+      });
+      const body = await response.text();
+      if (!response.ok) throw new Error(`同期結果の保存に失敗しました (${response.status}): ${body.slice(0, 300)}`);
+      if (JSON.parse(body) !== true) throw new Error("同期結果トークンが無効または使用済みです");
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  }
+  throw new Error(lastError || "同期結果を保存できませんでした");
+}
+
 function parseItems(value: unknown): EstamaShiftBatchItem[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 60).map((item) => {
@@ -49,13 +79,14 @@ function parseItems(value: unknown): EstamaShiftBatchItem[] {
       castName: stringValue(row.castName),
       externalId: stringValue(row.externalId) || null,
       remoteName: stringValue(row.remoteName) || null,
+      reportToken: stringValue(row.reportToken),
       action,
       shiftDate: stringValue(row.shiftDate).slice(0, 10),
       startTime: stringValue(row.startTime).slice(0, 8),
       endTime: stringValue(row.endTime).slice(0, 8),
     };
   }).filter((item) =>
-    item.jobId && item.shiftId && item.castId && item.castName && item.shiftDate
+    item.jobId && item.shiftId && item.castId && item.castName && item.shiftDate && item.reportToken
     && (item.action === "delete" || (item.startTime && item.endTime))
   );
 }
@@ -83,6 +114,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         ? body.configuration as Record<string, unknown>
         : {},
       items: parseItems(body.items),
+      onResult: reportResult,
     };
     if (!input.storeId || !input.contextId || !input.items.length) {
       throw new Error("同期対象データが不足しています");
