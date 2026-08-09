@@ -1087,7 +1087,8 @@ const estamaEndTime = (startTime: string, endTime: string) => {
   if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || endHour > startHour) {
     return endTime.slice(0, 5);
   }
-  return `${String(endHour + 24).padStart(2, "0")}:${endTime.slice(3, 5)}`;
+  const overnightHour = Math.min(endHour + 24, 25);
+  return `${String(overnightHour).padStart(2, "0")}:${endTime.slice(3, 5)}`;
 };
 
 async function setEstamaScheduleSelect(
