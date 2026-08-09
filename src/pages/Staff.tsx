@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { runEstamaCastAutomation } from "@/lib/estamaAutomation";
+import { runEstamaCastAutomation, runEstamaProfileSync } from "@/lib/estamaAutomation";
 
 const THERAPIST_FEATURES = [
   "新人", "経験豊富", "業界未経験", "施術上手", "上品", "甘えん坊", "おとなしい", "おっとり",
@@ -791,10 +791,7 @@ export default function Staff() {
           ...(skebiyIconUrl ? { skebiy_icon: skebiyIconUrl } : {}),
         },
       };
-      const { error: baseError } = await supabase.from('casts').update(basePayload).eq('id', editingCast.id);
-      if (baseError) throw baseError;
-
-      // Step 2: update new profile fields (requires migration SQL) — silent fail if columns missing
+      // 公開プロフィールに使う項目も同じ更新にまとめ、エスたま同期を1回だけ起動する。
       const profilePayload: Record<string, any> = {
         name_kana: editingCast.name_kana || null,
         real_name: editingCast.real_name || null,
@@ -826,15 +823,32 @@ export default function Staff() {
         instagram_url: editingCast.instagram_url || null,
         profile_format: editingCast.profile_format || null,
       };
-      const { error: profileError } = await supabase.from('casts').update(profilePayload).eq('id', editingCast.id);
-      if (profileError) {
-        console.warn('Profile fields not saved (migration may be needed):', profileError.message);
-        toast({
-          title: "基本情報を保存しました",
-          description: "新プロフィール項目の保存にはDBマイグレーションが必要です",
+      const { error: updateError } = await supabase.from('casts')
+        .update({ ...basePayload, ...profilePayload })
+        .eq('id', editingCast.id);
+      if (updateError) throw updateError;
+
+      toast({ title: "保存しました", description: "セラピスト情報を更新しました" });
+
+      if (editingCast.estama_listed || editingCast.estama_profile_url) {
+        const syncTarget = { storeId: editingCast.store_id, castId: editingCast.id };
+        void runEstamaProfileSync(syncTarget).then((result) => {
+          if (result.skipped) return;
+          const first = result.results?.[0];
+          if (first?.status === "completed") {
+            toast({ title: "エスたまへ自動同期しました" });
+          } else if (first) {
+            toast({
+              title: "エスたま同期は再試行待ちです",
+              description: first.error || "自動で再実行します",
+            });
+          }
+        }).catch((syncError) => {
+          toast({
+            title: "エスたま同期は再試行待ちです",
+            description: syncError instanceof Error ? syncError.message : String(syncError),
+          });
         });
-      } else {
-        toast({ title: "保存しました", description: "セラピスト情報を更新しました" });
       }
 
       setIsEditDialogOpen(false);

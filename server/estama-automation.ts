@@ -11,7 +11,11 @@ type AdminClient = SupabaseClient;
 
 type CastRecord = {
   name: string;
+  bust?: number | null;
   bust_size?: string | null;
+  cup_size?: string | null;
+  waist?: number | null;
+  hip?: number | null;
   body_size?: string | null;
   features?: string[] | null;
   photos?: string[] | null;
@@ -19,7 +23,9 @@ type CastRecord = {
   shop_comment?: string | null;
   therapist_comment?: string | null;
   profile?: string | null;
+  message?: string | null;
   therapist_years?: number | null;
+  therapist_experience?: string | null;
   age?: number | null;
   height?: number | null;
   blood_type?: string | null;
@@ -302,7 +308,7 @@ const FEATURE_MAP: Record<string, string> = {
 function castToEstama(cast: CastRecord) {
   let sizeB = "";
   let sizeCup = "";
-  const bust = String(cast.bust_size || "").trim();
+  const bust = String(cast.bust_size || `${cast.bust || ""}${cast.cup_size || ""}`).trim();
   const bustFirst = bust.match(/^(\d+)\s*([A-La-l])$/);
   const cupFirst = bust.match(/^([A-La-l])\s*(\d+)$/);
   if (bustFirst) [sizeB, sizeCup] = [bustFirst[1], bustFirst[2].toUpperCase()];
@@ -310,7 +316,10 @@ function castToEstama(cast: CastRecord) {
   else if (/^[A-La-l]$/.test(bust)) sizeCup = bust.toUpperCase();
   else sizeB = bust.replace(/\D/g, "").slice(0, 3);
 
-  const bodyParts = String(cast.body_size || "").split(/[-–/／]/);
+  const fallbackBodySize = [cast.bust, cast.waist, cast.hip].every((value) => value !== null && value !== undefined)
+    ? `${cast.bust}/${cast.waist}/${cast.hip}`
+    : "";
+  const bodyParts = String(cast.body_size || fallbackBodySize).split(/[-–/／]/);
   const numeric = bodyParts.map((part) => part.replace(/\D/g, ""));
   if (!sizeB && numeric.length >= 3) sizeB = numeric[0];
   const sizeW = numeric.length >= 3 ? numeric[1] : numeric[0] || "";
@@ -318,14 +327,19 @@ function castToEstama(cast: CastRecord) {
   const types = Array.isArray(cast.features)
     ? cast.features.map((feature: string) => FEATURE_MAP[feature]).filter(Boolean).slice(0, 4)
     : [];
-  const photos = (Array.isArray(cast.photos) && cast.photos.length ? cast.photos : cast.photo ? [cast.photo] : [])
-    .filter(Boolean).slice(0, 6);
+  const gallery = Array.isArray(cast.photos) ? cast.photos.filter(Boolean) : [];
+  const photos = [cast.photo, ...gallery]
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, 6);
+  const experience = String(cast.therapist_years ?? cast.therapist_experience ?? "")
+    .match(/\d+/)?.[0] || "";
 
   return {
     name: cut(cast.name, 10),
     description: cut(cast.shop_comment, 500),
-    cast_pr: cut(cast.therapist_comment || cast.profile, 500),
-    experience: String(cast.therapist_years ?? "").replace(/\D/g, "").slice(0, 2),
+    cast_pr: cut(cast.therapist_comment || cast.profile || cast.message, 500),
+    experience: experience.slice(0, 2),
     age: cut(cast.age, 2), tall: cut(cast.height, 3),
     size_b: sizeB.slice(0, 3), size_cup: sizeCup,
     size_w: sizeW.slice(0, 3), size_h: sizeH.slice(0, 3),
@@ -342,12 +356,17 @@ function castToEstama(cast: CastRecord) {
 }
 
 async function setField(page: Page, selector: string, value: unknown) {
-  if (value === null || value === undefined || value === "") return;
   const locator = page.locator(selector).first();
   if (!await locator.count()) return;
+  const normalized = value === null || value === undefined ? "" : String(value);
   const tag = await locator.evaluate((element) => element.tagName.toLowerCase()).catch(() => "");
-  if (tag === "select") await locator.selectOption(String(value)).catch(async () => locator.selectOption({ label: String(value) }));
-  else await locator.fill(String(value));
+  if (tag === "select") {
+    if (!normalized) {
+      if (await locator.locator('option[value=""]').count()) await locator.selectOption("");
+      return;
+    }
+    await locator.selectOption(normalized).catch(async () => locator.selectOption({ label: normalized }));
+  } else await locator.fill(normalized);
 }
 
 async function ensureAdminLogin(page: Page, requiredSelector?: string) {
@@ -376,10 +395,14 @@ function normalizePhotoUrl(raw: string) {
   return url.toString();
 }
 
-async function uploadPhotos(page: Page, urls: string[], maxPhotos = 6) {
+async function uploadPhotos(page: Page, urls: string[], maxPhotos = 6, strict = false) {
   const inputs = page.locator('input[type="file"]');
   const count = Math.min(await inputs.count(), urls.length, maxPhotos);
   let uploaded = 0;
+  const errors: string[] = [];
+  if (count < Math.min(urls.length, maxPhotos)) {
+    errors.push(`写真入力欄が${count}枠しか見つかりません`);
+  }
   for (let index = 0; index < count; index += 1) {
     try {
       const response = await fetch(normalizePhotoUrl(urls[index]), { signal: AbortSignal.timeout(20_000) });
@@ -398,9 +421,38 @@ async function uploadPhotos(page: Page, urls: string[], maxPhotos = 6) {
       uploaded += 1;
     } catch (error) {
       console.warn("Estama photo upload skipped", index, error);
+      errors.push(`${index + 1}枚目: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  if (strict && errors.length) throw new Error(`エステ魂の写真同期に失敗しました（${errors.join(" / ")}）`);
   return uploaded;
+}
+
+async function markRemovedPhotoSlots(page: Page, desiredCount: number, previousCount: number) {
+  if (desiredCount >= previousCount) return { requested: 0, marked: 0 };
+  const requested = previousCount - desiredCount;
+  const controls = page.locator([
+    'input[type="checkbox"][name*="photo" i][name*="delete" i]',
+    'input[type="checkbox"][name*="photo" i][name*="remove" i]',
+    'input[type="checkbox"][name*="image" i][name*="delete" i]',
+    'input[type="checkbox"][name*="image" i][name*="remove" i]',
+    'input[type="checkbox"][name*="pic" i][name*="delete" i]',
+    'input[type="checkbox"][name*="pic" i][name*="remove" i]',
+    'input[type="checkbox"][id*="photo" i][id*="delete" i]',
+    'input[type="checkbox"][id*="photo" i][id*="remove" i]',
+    'input[type="checkbox"][id*="image" i][id*="delete" i]',
+    'input[type="checkbox"][id*="image" i][id*="remove" i]',
+    'input[type="checkbox"][id*="pic" i][id*="delete" i]',
+    'input[type="checkbox"][id*="pic" i][id*="remove" i]',
+  ].join(","));
+  const total = await controls.count();
+  let marked = 0;
+  for (let index = desiredCount; index < Math.min(previousCount, total); index += 1) {
+    const control = controls.nth(index);
+    if (!await control.isChecked()) await control.check();
+    marked += 1;
+  }
+  return { requested, marked };
 }
 
 async function clickSave(page: Page) {
@@ -492,6 +544,18 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
   const { data: current } = await admin.from("external_cast_profiles").select("*")
     .eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle();
   const editUrl = current?.admin_edit_url || ESTAMA_CAST_EDIT_URL;
+  const data = castToEstama(cast as CastRecord);
+  const profileHash = createHash("sha256").update(JSON.stringify(data)).digest("hex");
+  const photoHash = createHash("sha256").update(JSON.stringify(data.photos)).digest("hex");
+
+  if (
+    !soul
+    && current?.sync_status === "synced"
+    && current?.last_profile_hash === profileHash
+    && current?.last_photo_hash === photoHash
+  ) {
+    return { externalId: current.external_cast_id || null, publicUrl: current.public_profile_url || null, unchanged: true };
+  }
 
   await admin.from("external_cast_profiles").upsert({
     store_id: job.store_id, cast_id: job.cast_id, provider: "estama",
@@ -500,7 +564,6 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
 
   await page.goto(editUrl, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page, "#Name");
-  const data = castToEstama(cast as CastRecord);
   const fields: Array<[string, unknown]> = [
     ["#Name", data.name], ["#Description", data.description], ["#CastPr", data.cast_pr],
     ['[name="experience"]', data.experience], ['[name="age"]', data.age], ['[name="tall"]', data.tall],
@@ -511,11 +574,20 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
     ["#Blog", data.blog], ["#Twitter", data.twitter], ["#Instagram", data.instagram],
   ];
   for (const [selector, value] of fields) await setField(page, selector, value);
-  for (const type of data.types) {
+  const selectedTypes = new Set(data.types);
+  for (const type of Object.values(FEATURE_MAP)) {
     const checkbox = page.locator(`#type_${type}`);
-    if (await checkbox.count() && !await checkbox.isChecked()) await checkbox.check();
+    if (await checkbox.count() && await checkbox.isChecked() !== selectedTypes.has(type)) {
+      await checkbox.setChecked(selectedTypes.has(type));
+    }
   }
-  const uploadedPhotos = await uploadPhotos(page, data.photos);
+  const shouldSyncPhotos = current?.last_photo_hash !== photoHash;
+  const uploadedPhotos = shouldSyncPhotos ? await uploadPhotos(page, data.photos, 6, true) : 0;
+  const previousPhotoCount = Number(current?.last_photo_count || 0);
+  const photoRemoval = shouldSyncPhotos
+    ? await markRemovedPhotoSlots(page, data.photos.length, previousPhotoCount)
+    : { requested: 0, marked: 0 };
+  const photoRemovalPending = photoRemoval.marked < photoRemoval.requested;
   await clickSave(page);
 
   const savedEditUrl = page.url();
@@ -533,7 +605,11 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
   const profilePatch = {
     store_id: job.store_id, cast_id: job.cast_id, provider: "estama",
     external_cast_id: externalId, admin_edit_url: savedEditUrl, public_profile_url: publicUrl,
-    remote_name: data.name, sync_status: "synced", last_profile_sync_at: new Date().toISOString(), last_error: null,
+    remote_name: data.name, sync_status: "synced", last_profile_sync_at: new Date().toISOString(),
+    last_profile_hash: profileHash,
+    last_photo_hash: photoRemovalPending ? current?.last_photo_hash || null : photoHash,
+    last_photo_count: photoRemovalPending ? previousPhotoCount : data.photos.length,
+    last_error: photoRemovalPending ? "エステ魂の削除対象写真を自動判別できませんでした" : null,
     ...(soul ? {
       soul_status: soulResult.status === "configured" ? "configured" : soulResult.status === "issued" ? "issued" : "error",
       soul_login_url: soulResult.loginUrl || null,
@@ -543,7 +619,7 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
   const { error: profileError } = await admin.from("external_cast_profiles").upsert(profilePatch, { onConflict: "cast_id,provider" });
   if (profileError) throw profileError;
   await admin.from("casts").update({ estama_profile_url: publicUrl, estama_listed: true }).eq("id", job.cast_id);
-  return { externalId, publicUrl, uploadedPhotos, soul: soulResult };
+  return { externalId, publicUrl, uploadedPhotos, photoRemoval, soul: soulResult };
 }
 
 async function setupSoulTherapist(page: Page, castName: string, credentials: SoulCredentials) {
@@ -1027,13 +1103,14 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
   }
 }
 
-async function claimNextJob(admin: AdminClient, storeId?: string, castId?: string, jobId?: string) {
+async function claimNextJob(admin: AdminClient, storeId?: string, castId?: string, jobId?: string, jobType?: AutomationJob["job_type"]) {
   let query = admin.from("automation_jobs").select("*")
     .eq("provider", "estama").eq("status", "queued").lte("available_at", new Date().toISOString())
     .order("created_at", { ascending: true }).limit(1);
   if (storeId) query = query.eq("store_id", storeId);
   if (castId) query = query.eq("cast_id", castId);
   if (jobId) query = query.eq("id", jobId);
+  if (jobType) query = query.eq("job_type", jobType);
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -1055,10 +1132,18 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
     ? job.payload.post_id
     : null;
   if (error instanceof LoginRequiredError) {
+    const isProfileUpdate = job.job_type === "estama_register_cast"
+      && job.payload?.source === "profile_update";
     await Promise.all([
       admin.from("automation_jobs").update({ status: "waiting_for_login", error_message: message }).eq("id", job.id),
       admin.from("automation_connections").update({ status: "expired", last_error: message }).eq("store_id", job.store_id).eq("provider", "estama"),
       ...(postId ? [admin.from("cast_posts").update({ esutama_status: "pending", esutama_error: message }).eq("id", postId)] : []),
+      ...(job.cast_id && job.job_type === "estama_register_cast"
+        ? [admin.from("external_cast_profiles").update({
+          sync_status: isProfileUpdate ? "synced" : "error",
+          last_error: message,
+        }).eq("cast_id", job.cast_id).eq("provider", "estama")]
+        : []),
     ]);
     if (postId) await updatePostOverallStatus(admin, postId);
     return;
@@ -1080,8 +1165,12 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
     await updatePostOverallStatus(admin, postId);
   }
   if (job.cast_id) {
+    const isProfileUpdate = job.job_type === "estama_register_cast"
+      && job.payload?.source === "profile_update";
     await admin.from("external_cast_profiles").update({
-      ...(job.job_type === "estama_register_cast" ? { sync_status: "error" } : {}),
+      ...(job.job_type === "estama_register_cast"
+        ? { sync_status: isProfileUpdate ? "synced" : "error" }
+        : {}),
       last_error: message,
     }).eq("cast_id", job.cast_id).eq("provider", "estama");
   }
@@ -1304,7 +1393,14 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
 
 export async function processAvailableJobs(
   admin: AdminClient,
-  options: { storeId?: string; castId?: string; jobId?: string; limit?: number; soulCredentials?: SoulCredentials } = {},
+  options: {
+    storeId?: string;
+    castId?: string;
+    jobId?: string;
+    jobType?: AutomationJob["job_type"];
+    limit?: number;
+    soulCredentials?: SoulCredentials;
+  } = {},
 ) {
   const limit = Math.max(1, Math.min(options.limit || 20, 60));
   const results: Array<{ id: string; status: string; result?: Json; error?: string }> = [];
@@ -1317,7 +1413,7 @@ export async function processAvailableJobs(
 
   try {
     for (let index = 0; index < limit; index += 1) {
-      const job = await claimNextJob(admin, options.storeId, options.castId, options.jobId);
+      const job = await claimNextJob(admin, options.storeId, options.castId, options.jobId, options.jobType);
       if (!job) break;
       try {
         const skippedShift = await skipOutsideShiftWindow(admin, job);
@@ -1361,10 +1457,10 @@ export async function processAvailableJobs(
   return results;
 }
 
-export async function enqueueCastJob(admin: AdminClient, storeId: string, castId: string) {
+export async function enqueueCastJob(admin: AdminClient, storeId: string, castId: string, source = "manual_run") {
   const { data, error } = await admin.rpc("enqueue_estama_job", {
     p_store_id: storeId, p_job_type: "estama_register_cast", p_cast_id: castId, p_shift_id: null,
-    p_dedupe_key: `estama:cast:${castId}`, p_payload: { source: "manual_run" },
+    p_dedupe_key: `estama:cast:${castId}`, p_payload: { source },
   });
   if (error) throw error;
   return data as string;
