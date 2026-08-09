@@ -1109,8 +1109,30 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
     const shiftUrl = await discoverShiftAdminUrl(page, input.configuration || null);
     for (const item of items) {
       try {
-        await page.goto(shiftUrl, { waitUntil: "domcontentloaded" });
+        const itemShiftUrl = item.externalId
+          ? `https://estama.jp/admin/schedule/${encodeURIComponent(item.externalId)}/`
+          : shiftUrl;
+        await page.goto(itemShiftUrl, { waitUntil: "domcontentloaded" });
         await ensureAdminLogin(page);
+        if (results.length === 0) {
+          const controls = await page.locator("input, select, button").evaluateAll((elements) =>
+            elements.slice(0, 80).map((element) => ({
+              tag: element.tagName.toLowerCase(),
+              name: element.getAttribute("name"),
+              id: element.getAttribute("id"),
+              type: element.getAttribute("type"),
+              value: (element as HTMLInputElement).value,
+              text: (element.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
+            }))
+          );
+          console.log(JSON.stringify({
+            level: "info",
+            msg: "estama_shift_form_controls",
+            itemShiftUrl,
+            title: await page.title(),
+            controls,
+          }));
+        }
         await setField(
           page,
           'input[type="date"], input[name*="date" i], select[name*="date" i]',
