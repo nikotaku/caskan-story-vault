@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.daily-kintore-advice]
 verify_jwt = true
+
+[functions.notify-estama-shift-sync]
+verify_jwt = true
