@@ -874,6 +874,121 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
   }
 }
 
+export type EstamaShiftBatchItem = {
+  jobId: string;
+  shiftId: string;
+  castId: string;
+  castName: string;
+  externalId: string | null;
+  remoteName: string | null;
+  action: "upsert" | "delete";
+  shiftDate: string;
+  startTime: string;
+  endTime: string;
+};
+
+export type EstamaShiftBatchInput = {
+  storeId: string;
+  contextId: string;
+  configuration?: Json | null;
+  items: EstamaShiftBatchItem[];
+};
+
+const estamaEndTime = (startTime: string, endTime: string) => {
+  const startHour = Number(startTime.slice(0, 2));
+  const endHour = Number(endTime.slice(0, 2));
+  if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || endHour > startHour) {
+    return endTime.slice(0, 5);
+  }
+  return `${String(endHour + 24).padStart(2, "0")}:${endTime.slice(3, 5)}`;
+};
+
+export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
+  const items = input.items.slice(0, 60);
+  if (!input.contextId) throw new Error("Browserbaseの保存済みログイン情報がありません");
+  if (!items.length) return { sessionId: null, shiftUrl: null, results: [] };
+
+  const { bb, session } = await createBrowserSession(input.contextId, false, {
+    action: "edge-shift-worker",
+    storeId: input.storeId,
+    itemCount: items.length,
+  });
+  const { browser, page } = await connectSession(session.connectUrl);
+  const results: Array<{
+    jobId: string;
+    shiftId: string;
+    castId: string;
+    action: "upsert" | "delete";
+    shiftDate: string;
+    ok: boolean;
+    error?: string;
+  }> = [];
+
+  try {
+    const shiftUrl = await discoverShiftAdminUrl(page, input.configuration || null);
+    for (const item of items) {
+      try {
+        await page.goto(shiftUrl, { waitUntil: "domcontentloaded" });
+        await ensureAdminLogin(page);
+        await setField(
+          page,
+          'input[type="date"], input[name*="date" i], select[name*="date" i]',
+          item.shiftDate,
+        );
+        await page.waitForTimeout(500);
+        const row = await findEstamaCastRow(page, {
+          externalId: item.externalId,
+          remoteName: item.remoteName,
+          localName: item.castName,
+        });
+
+        if (item.action === "delete") {
+          const off = row.getByText(/休み|非出勤|削除/, { exact: false }).first();
+          if (await off.count()) await off.click();
+          else {
+            const checkbox = row.locator('input[type="checkbox"]').first();
+            if (await checkbox.count() && await checkbox.isChecked()) await checkbox.uncheck();
+            const timeInputs = row.locator('input[type="time"], input[name*="time" i]');
+            for (let index = 0; index < await timeInputs.count(); index += 1) {
+              await timeInputs.nth(index).fill("");
+            }
+          }
+        } else {
+          const checkbox = row.locator('input[type="checkbox"]').first();
+          if (await checkbox.count() && !await checkbox.isChecked()) await checkbox.check();
+          await setTimeInRow(row, "start", item.startTime);
+          await setTimeInRow(row, "end", estamaEndTime(item.startTime, item.endTime));
+        }
+        await clickSave(page);
+        results.push({
+          jobId: item.jobId,
+          shiftId: item.shiftId,
+          castId: item.castId,
+          action: item.action,
+          shiftDate: item.shiftDate,
+          ok: true,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({
+          jobId: item.jobId,
+          shiftId: item.shiftId,
+          castId: item.castId,
+          action: item.action,
+          shiftDate: item.shiftDate,
+          ok: false,
+          error: message,
+        });
+        if (error instanceof LoginRequiredError) break;
+      }
+    }
+    return { sessionId: session.id, shiftUrl, results };
+  } finally {
+    await disconnect(browser);
+    await releaseSession(bb, session.id);
+  }
+}
+
 export async function processAvailableJobs(
   admin: AdminClient,
   options: { storeId?: string; castId?: string; jobId?: string; limit?: number; soulCredentials?: SoulCredentials } = {},
