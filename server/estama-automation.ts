@@ -1866,6 +1866,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         ? `https://estama.jp/admin/schedule/${encodeURIComponent(first.externalId)}/`
         : shiftUrl;
       const prepared: EstamaShiftBatchItem[] = [];
+      let requiresSave = false;
       let adminError: unknown = null;
       try {
         await page.goto(itemShiftUrl, { waitUntil: "domcontentloaded" });
@@ -1898,16 +1899,32 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
             if (!await start.count() || !await end.count()) {
               throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
             }
-            if (item.action === "delete") {
-              await setEstamaScheduleSelect(start, "", `${item.shiftDate}の出勤時刻`);
-              await setEstamaScheduleSelect(end, "", `${item.shiftDate}の退勤時刻`);
-              await setEstamaSchedulePeriods(start, item.shiftDate, "", "");
-            } else {
-              const startValue = item.startTime.slice(0, 5);
-              const endValue = estamaEndTime(item.startTime, item.endTime);
-              await setEstamaScheduleSelect(start, startValue, `${item.shiftDate}の出勤時刻`);
-              await setEstamaScheduleSelect(end, endValue, `${item.shiftDate}の退勤時刻`);
-              await setEstamaSchedulePeriods(start, item.shiftDate, startValue, endValue);
+            const expectedStart = item.action === "delete" ? "" : item.startTime.slice(0, 5);
+            const expectedEnd = item.action === "delete"
+              ? ""
+              : estamaEndTime(item.startTime, item.endTime);
+            const [currentStart, currentEnd] = await Promise.all([
+              start.inputValue(),
+              end.inputValue(),
+            ]);
+            if (currentStart !== expectedStart || currentEnd !== expectedEnd) {
+              await setEstamaScheduleSelect(
+                start,
+                expectedStart,
+                `${item.shiftDate}の出勤時刻`,
+              );
+              await setEstamaScheduleSelect(
+                end,
+                expectedEnd,
+                `${item.shiftDate}の退勤時刻`,
+              );
+              await setEstamaSchedulePeriods(
+                start,
+                item.shiftDate,
+                expectedStart,
+                expectedEnd,
+              );
+              requiresSave = true;
             }
             prepared.push(item);
           } catch (error) {
@@ -1916,15 +1933,24 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         }
 
         if (prepared.length) {
-          const firstPrepared = prepared[0];
-          const firstScheduleName = `column[${firstPrepared.shiftDate}][select]`;
-          const firstScheduleField = page.locator(
-            `select[name="${firstScheduleName}[select_start]"]`,
-          ).first();
-          await clickEstamaScheduleSave(page, firstScheduleField);
-          await page.reload({ waitUntil: "domcontentloaded" });
-          await ensureAdminLogin(page);
-          await page.waitForTimeout(600);
+          if (requiresSave) {
+            const firstPrepared = prepared[0];
+            const firstScheduleName = `column[${firstPrepared.shiftDate}][select]`;
+            const firstScheduleField = page.locator(
+              `select[name="${firstScheduleName}[select_start]"]`,
+            ).first();
+            await clickEstamaScheduleSave(page, firstScheduleField);
+            await page.reload({ waitUntil: "domcontentloaded" });
+            await ensureAdminLogin(page);
+            await page.waitForTimeout(600);
+          } else {
+            console.log(JSON.stringify({
+              level: "info",
+              msg: "estama_schedule_already_current",
+              castName: first.castName,
+              itemCount: prepared.length,
+            }));
+          }
           for (const item of prepared) {
             try {
               await verifyEstamaAdminSchedule(page, item);
