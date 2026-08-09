@@ -566,6 +566,7 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
     if (await setupPasswords.count() > 1) await setupPasswords.nth(1).fill(credentials.password);
     let confirm = setupRoot.getByRole("button", { name: /確定|はい|開始する|登録|保存/, exact: false }).last();
     if (!await confirm.count()) confirm = setupRoot.getByRole("link", { name: /確定|はい|開始する|登録|保存/, exact: false }).last();
+    if (!await confirm.count()) confirm = setupRoot.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /確定|はい|開始する|登録|保存|始める/ }).last();
     if (!await confirm.count()) confirm = setupRoot.locator('input[type="submit"]:visible').last();
     if (!await confirm.count()) throw new Error("魂セラピスト開始画面の確定ボタンが見つかりません");
     await confirm.click();
