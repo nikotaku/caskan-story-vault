@@ -578,9 +578,30 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
     await ensureAdminLogin(page);
     row = await findEstamaCastRow(page, { localName: castName });
   }
-  const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+  let login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
   if (!await login.count()) return { status: "issued" };
-  const loginClass = await login.getAttribute("class") || "";
+  let loginClass = await login.getAttribute("class") || "";
+  if (loginClass.includes("disabled") || !await login.isEnabled()) {
+    const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).first();
+    if (await sendLogin.count()) {
+      await sendLogin.click();
+      await page.waitForTimeout(300);
+      const sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, .p-tamathera-confirm-modal:visible').last();
+      if (await sendDialog.count()) {
+        let sendConfirm = sendDialog.getByRole("button", { name: /送信する|送る|はい|確定/, exact: false }).last();
+        if (!await sendConfirm.count()) sendConfirm = sendDialog.getByRole("link", { name: /送信する|送る|はい|確定/, exact: false }).last();
+        if (!await sendConfirm.count()) sendConfirm = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /送信する|送る|はい|確定/ }).last();
+        if (await sendConfirm.count()) await sendConfirm.click();
+      }
+      await page.waitForTimeout(800);
+      await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+      await ensureAdminLogin(page);
+      row = await findEstamaCastRow(page, { localName: castName });
+      login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+      if (!await login.count()) return { status: "issued" };
+      loginClass = await login.getAttribute("class") || "";
+    }
+  }
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
     const actions = [...new Set((await row.locator("a, button, .btn, .btn-wrap").allTextContents())
       .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
