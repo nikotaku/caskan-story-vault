@@ -581,11 +581,62 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
 async function discoverShiftAdminUrl(page: Page, configuration: Json | null) {
   const configured = typeof configuration?.shift_admin_url === "string" ? configuration.shift_admin_url : null;
   if (configured) return configured;
+
   await page.goto("https://estama.jp/admin/", { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
-  const link = page.locator("a").filter({ hasText: /出勤|シフト|スケジュール/ }).first();
-  const href = await link.getAttribute("href").catch(() => null);
-  return href ? new URL(href, page.url()).toString() : "https://estama.jp/admin/schedule/";
+  const menuLink = page.locator("a").filter({ hasText: /出勤|シフト|スケジュール/ }).first();
+  const menuHref = await menuLink.getAttribute("href").catch(() => null);
+  const listUrl = menuHref
+    ? new URL(menuHref, page.url()).toString()
+    : "https://estama.jp/admin/schedule/list/";
+
+  await page.goto(listUrl, { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page);
+  const candidates = await page.locator("a[href], button, input[type=\"submit\"]").evaluateAll((elements) =>
+    elements.map((element) => ({
+      text: ((element.textContent || element.getAttribute("value") || "") as string).trim().replace(/\s+/g, " "),
+      href: element.getAttribute("href") || "",
+      formAction: (element.closest("form")?.getAttribute("action") || ""),
+      tag: element.tagName.toLowerCase(),
+    })).filter((item) =>
+      /出勤|シフト|スケジュール|schedule/i.test(item.text + " " + item.href + " " + item.formAction)
+    )
+  );
+  console.log(JSON.stringify({
+    level: "info",
+    msg: "estama_shift_route_candidates",
+    listUrl,
+    candidates: candidates.slice(0, 20),
+  }));
+
+  const absolute = candidates.map((candidate) => ({
+    ...candidate,
+    url: candidate.href
+      ? new URL(candidate.href, page.url()).toString()
+      : candidate.formAction
+        ? new URL(candidate.formAction, page.url()).toString()
+        : "",
+  }));
+  const preferred = absolute.find((candidate) =>
+    candidate.url && candidate.url !== listUrl && (
+      /\/schedule\/(?:edit|register|form|input|setting|create|add)/i.test(candidate.url)
+      || /出勤.*(?:登録|編集|入力|設定)|シフト.*(?:登録|編集|入力|設定)/.test(candidate.text)
+    )
+  );
+  if (preferred?.url) return preferred.url;
+
+  const action = page.locator("a, button").filter({
+    hasText: /出勤.*(?:登録|編集|入力|設定)|シフト.*(?:登録|編集|入力|設定)/,
+  }).filter({ visible: true }).first();
+  if (await action.count()) {
+    const href = await action.getAttribute("href").catch(() => null);
+    if (href) return new URL(href, page.url()).toString();
+    await action.click();
+    await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+    if (page.url() !== listUrl) return page.url();
+  }
+
+  return listUrl;
 }
 
 async function setTimeInRow(row: ReturnType<Page["locator"]>, kind: "start" | "end", value: string) {
