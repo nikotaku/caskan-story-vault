@@ -582,16 +582,20 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   if (!await login.count()) return { status: "issued" };
   let loginClass = await login.getAttribute("class") || "";
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
-    const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).first();
+    const sendLogin = row.getByText("ログイン情報を送る", { exact: true }).last();
     if (await sendLogin.count()) {
       await sendLogin.click();
       await page.waitForTimeout(300);
-      const sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, .p-tamathera-confirm-modal:visible').last();
+      const sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
       if (await sendDialog.count()) {
         let sendConfirm = sendDialog.getByRole("button", { name: /送信する|送る|はい|確定/, exact: false }).last();
         if (!await sendConfirm.count()) sendConfirm = sendDialog.getByRole("link", { name: /送信する|送る|はい|確定/, exact: false }).last();
         if (!await sendConfirm.count()) sendConfirm = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /送信する|送る|はい|確定/ }).last();
         if (await sendConfirm.count()) await sendConfirm.click();
+        else {
+          const sendText = (await sendDialog.innerText()).replace(/\s+/g, " ").trim().slice(0, 300);
+          throw new Error(`魂セラピストのログイン情報送信を確定できません（画面: ${sendText || "表示なし"}）`);
+        }
       }
       await page.waitForTimeout(800);
       await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
