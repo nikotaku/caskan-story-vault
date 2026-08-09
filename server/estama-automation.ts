@@ -1305,7 +1305,7 @@ async function setEstamaSchedulePeriods(
     let count = 0;
     for (const element of elements) {
       const field = element as HTMLInputElement;
-      const slot = field.name.match(/\\[period\\]\\[([^\\]]+)\\]$/)?.[1] || "";
+      const slot = field.name.match(/\[period\]\[([^\]]+)\]$/)?.[1] || "";
       const slotMinutes = slot ? toMinutes(slot) : -1;
       const active = start >= 0 && end > start && slotMinutes >= start && slotMinutes < end;
       field.value = active ? "1" : "0";
