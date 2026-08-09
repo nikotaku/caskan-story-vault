@@ -2141,19 +2141,31 @@ export type Database = {
       }
       hp_analytics_traffic: {
         Row: {
+          campaign: string
+          content: string
           date: string
+          landing_path: string
+          medium: string
           source: string
           store_id: string
           visits: number
         }
         Insert: {
+          campaign?: string
+          content?: string
           date: string
+          landing_path?: string
+          medium?: string
           source: string
           store_id?: string
           visits?: number
         }
         Update: {
+          campaign?: string
+          content?: string
           date?: string
+          landing_path?: string
+          medium?: string
           source?: string
           store_id?: string
           visits?: number
@@ -3736,7 +3748,20 @@ export type Database = {
         Returns: undefined
       }
       norm_phone: { Args: { p: string }; Returns: string }
-      record_page_view: { Args: { p_path: string }; Returns: undefined }
+      record_page_view: {
+        Args: {
+          p_is_new_daily_visitor?: boolean
+          p_is_new_session?: boolean
+          p_path: string
+          p_referrer_host?: string | null
+          p_store_id: string
+          p_utm_campaign?: string | null
+          p_utm_content?: string | null
+          p_utm_medium?: string | null
+          p_utm_source?: string | null
+        }
+        Returns: undefined
+      }
       refresh_monthly_report:
         | { Args: { p_month: string }; Returns: undefined }
         | { Args: { p_month: string; p_store: string }; Returns: undefined }

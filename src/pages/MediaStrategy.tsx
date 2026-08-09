@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { TrafficAnalytics } from "@/components/marketing/TrafficAnalytics";
 import { toast } from "sonner";
 import {
   Loader2, Upload, Trash2, X, Megaphone, Plus, Save,
@@ -466,7 +467,7 @@ function CouponTable({ mediaList, onUpdated }: { mediaList: MediaSetting[]; onUp
 
 export default function MediaStrategy() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [tab, setTab] = useState<"guide" | "sheet" | "coupons">("guide");
+  const [tab, setTab] = useState<"guide" | "sheet" | "coupons" | "traffic">("guide");
   const [mediaList, setMediaList] = useState<MediaSetting[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -524,7 +525,7 @@ export default function MediaStrategy() {
 
           {/* タブ */}
           <div className="flex gap-1 border-b mb-5">
-            {([["guide", "エスたま攻略"], ["sheet", "媒体設定シート"], ["coupons", "クーポン一覧"]] as const).map(([key, label]) => (
+            {([["guide", "エスたま攻略"], ["sheet", "媒体設定シート"], ["coupons", "クーポン一覧"], ["traffic", "流入元分析"]] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
@@ -586,12 +587,14 @@ export default function MediaStrategy() {
                 </>
               )}
             </div>
-          ) : loading ? (
+          ) : tab === "coupons" && loading ? (
             <div className="text-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
             </div>
-          ) : (
+          ) : tab === "coupons" ? (
             <CouponTable mediaList={mediaList} onUpdated={fetchMedia} />
+          ) : (
+            <TrafficAnalytics store={adminStore} />
           )}
         </div>
       </main>
