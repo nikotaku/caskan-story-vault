@@ -11,6 +11,7 @@ import { useStoreContact } from "@/hooks/useStoreContact";
 import { useStore } from "@/hooks/useStore";
 import { getBookingKey } from "@/lib/bookingUrl";
 import { ReviewStars } from "@/components/public/ReviewStars";
+import { ReviewCategoryScores } from "@/components/public/ReviewCategoryScores";
 
 interface Cast {
   id: string;
@@ -69,6 +70,7 @@ interface Review {
   title: string | null;
   source_provider: string | null;
   source_url: string | null;
+  source_details: unknown;
 }
 
 interface CustomerReviewRow {
@@ -82,6 +84,7 @@ interface CustomerReviewRow {
   reviewed_at: string | null;
   source_provider: string | null;
   source_url: string | null;
+  source_details: unknown;
 }
 
 interface ProfileJson {
@@ -133,7 +136,7 @@ const CastDetail = () => {
       const castKey = (castRes.data.name ?? "").replace(/\s/g, "");
       const { data: allRev } = await supabase
         .from("customer_reviews")
-        .select("id, rating, therapist_name, review_text, created_at, reviewer_name, review_title, reviewed_at, source_provider, source_url")
+        .select("id, rating, therapist_name, review_text, created_at, reviewer_name, review_title, reviewed_at, source_provider, source_url, source_details")
         .eq("is_published", true)
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
@@ -153,6 +156,7 @@ const CastDetail = () => {
         title: r.review_title ?? null,
         source_provider: r.source_provider ?? null,
         source_url: r.source_url ?? null,
+        source_details: r.source_details,
       })));
     } catch {
       navigate("/casts");
@@ -573,6 +577,7 @@ const CastDetail = () => {
                         )}
                       </div>
                       {r.title && <h3 className="text-sm font-bold mb-1" style={{ color: "var(--pub-text,#f0e6d2)" }}>{r.title}</h3>}
+                      <ReviewCategoryScores details={r.source_details} />
                       <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--pub-text,#f0e6d2)" }}>{r.body}</p>
                     </div>
                   ))}
