@@ -8,6 +8,7 @@ import { FixedBottomBar } from "@/components/public/FixedBottomBar";
 import { useStore } from "@/hooks/useStore";
 import { driveImgUrl } from "@/lib/drive";
 import { ReviewStars } from "@/components/public/ReviewStars";
+import { ReviewCategoryScores } from "@/components/public/ReviewCategoryScores";
 
 interface Review {
   id: string;
@@ -20,6 +21,7 @@ interface Review {
   reviewed_at: string | null;
   source_provider: string | null;
   source_url: string | null;
+  source_details: unknown;
 }
 
 interface CastLite {
@@ -58,7 +60,7 @@ export default function Voice() {
     Promise.all([
       supabase
         .from("customer_reviews")
-        .select("id, rating, therapist_name, review_text, created_at, reviewer_name, review_title, reviewed_at, source_provider, source_url")
+        .select("id, rating, therapist_name, review_text, created_at, reviewer_name, review_title, reviewed_at, source_provider, source_url, source_details")
         .eq("is_published", true)
         .eq("store_id", storeId)
         .order("created_at", { ascending: false }),
@@ -154,6 +156,7 @@ export default function Voice() {
                     {r.review_title && (
                       <h2 className="text-base font-bold mb-1.5" style={{ color: "var(--pub-text,#f0e6d2)" }}>{r.review_title}</h2>
                     )}
+                    <ReviewCategoryScores details={r.source_details} />
                     <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--pub-text-mid,#d9cdb4)" }}>{r.review_text}</p>
 
                     {/* 担当セラピストパネル（在籍キャストに一致した場合のみ） */}
