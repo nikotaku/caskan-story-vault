@@ -19,6 +19,10 @@ interface Review {
   allow_publish: boolean;
   is_published: boolean;
   created_at: string;
+  reviewer_name: string | null;
+  review_title: string | null;
+  reviewed_at: string | null;
+  source_provider: string | null;
 }
 
 export default function ReviewsAdmin() {
@@ -62,7 +66,7 @@ export default function ReviewsAdmin() {
 
   const displayed = filter === "published" ? reviews.filter((r) => r.is_published) : reviews;
   const avg = reviews.length
-    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+    ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1)
     : "-";
   const publishedCount = reviews.filter((r) => r.is_published).length;
 
@@ -136,8 +140,9 @@ export default function ReviewsAdmin() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
                           <span className="font-bold">
-                            <span className="text-yellow-400">{"★".repeat(r.rating)}</span>
-                            <span className="text-gray-300">{"★".repeat(5 - r.rating)}</span>
+                            <span className="text-yellow-400">{"★".repeat(Math.round(Number(r.rating)))}</span>
+                            <span className="text-gray-300">{"★".repeat(5 - Math.round(Number(r.rating)))}</span>
+                            <span className="ml-1 text-xs text-muted-foreground">{Number(r.rating).toFixed(1)}</span>
                           </span>
                           {r.therapist_name && (
                             <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
@@ -149,10 +154,21 @@ export default function ReviewsAdmin() {
                               掲載許可あり
                             </Badge>
                           )}
+                          {r.source_provider === "estama" && (
+                            <Badge variant="outline" className="text-xs text-pink-600 border-pink-200">
+                              エスたま同期
+                            </Badge>
+                          )}
                           <span className="text-xs text-muted-foreground ml-auto">
                             {format(new Date(r.created_at), "M/d(E) HH:mm", { locale: ja })}
                           </span>
                         </div>
+                        {(r.reviewer_name || r.reviewed_at) && (
+                          <p className="text-xs text-muted-foreground mb-1">
+                            {r.reviewer_name || "お客様"}{r.reviewed_at ? ` ・ ${r.reviewed_at.replace(/-/g, "/")}` : ""}
+                          </p>
+                        )}
+                        {r.review_title && <p className="text-sm font-bold mb-1">{r.review_title}</p>}
                         <p className="text-sm whitespace-pre-wrap">{r.review_text}</p>
                       </div>
                       <div className="shrink-0 flex flex-col items-center gap-1">

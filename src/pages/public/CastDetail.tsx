@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
-import { ArrowLeft, Phone, Calendar, Star, Camera } from "lucide-react";
+import { ArrowLeft, Phone, Calendar, Camera } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import { driveImgUrl } from "@/lib/drive";
 import { useStoreContact } from "@/hooks/useStoreContact";
 import { useStore } from "@/hooks/useStore";
 import { getBookingKey } from "@/lib/bookingUrl";
+import { ReviewStars } from "@/components/public/ReviewStars";
 
 interface Cast {
   id: string;
@@ -65,6 +66,29 @@ interface Review {
   visit_date: string | null;
   course: string | null;
   created_at: string;
+  title: string | null;
+  source_provider: string | null;
+  source_url: string | null;
+}
+
+interface CustomerReviewRow {
+  id: string;
+  rating: number | string | null;
+  therapist_name: string | null;
+  review_text: string | null;
+  created_at: string;
+  reviewer_name: string | null;
+  review_title: string | null;
+  reviewed_at: string | null;
+  source_provider: string | null;
+  source_url: string | null;
+}
+
+interface ProfileJson {
+  age?: number;
+  height?: number;
+  weight?: number;
+  blood_type?: string;
 }
 
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
@@ -72,19 +96,6 @@ const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   waiting: { text: "待機中", color: "#22c55e" },
   offline: { text: "退勤", color: "#9ca3af" },
 };
-
-const Stars = ({ rating }: { rating: number }) => (
-  <div className="flex gap-0.5">
-    {[1, 2, 3, 4, 5].map((i) => (
-      <Star
-        key={i}
-        size={14}
-        fill={i <= rating ? "var(--pub-accent,#c6a15b)" : "none"}
-        stroke={i <= rating ? "var(--pub-accent,#c6a15b)" : "var(--pub-border,#3a2f1c)"}
-      />
-    ))}
-  </div>
-);
 
 const SectionHeader = ({ label, sub }: { label: string; sub?: string }) => (
   <div className="px-5 py-3 border-b border-[var(--pub-border,#3a2f1c)]" style={{ background: "#2a2320" }}>
@@ -105,19 +116,7 @@ const CastDetail = () => {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  useEffect(() => {
-    if (id) fetchAll();
-  }, [id]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
-    emblaApi.on("select", onSelect);
-    onSelect();
-    return () => { emblaApi.off("select", onSelect); };
-  }, [emblaApi]);
-
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     try {
       const [castRes, profileRes] = await Promise.all([
         supabase.from("casts").select("id,name,age,height,bust_size,body_size,blood_type,therapist_years,type,status,photo,photos,profile,message,favorite_techniques,favorite_food,celebrity_lookalike,day_off_activities,hobbies,ideal_type,room,x_account,instagram_url,line_url,litlink_url,o2_url,estama_profile_url,blog_url,skebiy_url,tags,shop_comment").eq("id", id).eq("store_id", storeId).single(),
@@ -134,30 +133,45 @@ const CastDetail = () => {
       const castKey = (castRes.data.name ?? "").replace(/\s/g, "");
       const { data: allRev } = await supabase
         .from("customer_reviews")
-        .select("id, rating, therapist_name, review_text, created_at")
+        .select("id, rating, therapist_name, review_text, created_at, reviewer_name, review_title, reviewed_at, source_provider, source_url")
         .eq("is_published", true)
         .eq("store_id", storeId)
         .order("created_at", { ascending: false });
-      const revData = (allRev ?? []).filter((r: any) => {
+      const revData = ((allRev ?? []) as CustomerReviewRow[]).filter((r) => {
         const t = (r.therapist_name ?? "").replace(/\s/g, "");
         if (!t) return false;
         return castKey === t || castKey.includes(t) || t.includes(castKey);
       });
-      setReviews((revData ?? []).map((r: any) => ({
+      setReviews(revData.map((r) => ({
         id: r.id,
-        reviewer_name: "お客様",
-        rating: r.rating ?? 5,
+        reviewer_name: r.reviewer_name || "お客様",
+        rating: Number(r.rating ?? 5),
         body: r.review_text ?? "",
-        visit_date: null,
+        visit_date: r.reviewed_at ?? null,
         course: null,
         created_at: r.created_at,
+        title: r.review_title ?? null,
+        source_provider: r.source_provider ?? null,
+        source_url: r.source_url ?? null,
       })));
     } catch {
       navigate("/casts");
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate, store?.name, storeId]);
+
+  useEffect(() => {
+    if (id) void fetchAll();
+  }, [fetchAll, id]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
+    emblaApi.on("select", onSelect);
+    onSelect();
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi]);
 
   if (loading) {
     return (
@@ -173,10 +187,10 @@ const CastDetail = () => {
   const bookingPath = isPairCast ? `/r/${getBookingKey(cast.id)}` : "/booking";
 
   // Parse profile JSON if stored as JSON in the profile field
-  let profileJson: Record<string, any> | null = null;
+  let profileJson: ProfileJson | null = null;
   let profileText: string | null = cast.profile;
   if (cast.profile && cast.profile.trimStart().startsWith("{")) {
-    try { profileJson = JSON.parse(cast.profile); profileText = null; } catch { /* keep as text */ }
+    try { profileJson = JSON.parse(cast.profile) as ProfileJson; profileText = null; } catch { /* keep as text */ }
   }
 
   const displayAge    = cast.age    ?? profileJson?.age    ?? null;
@@ -222,7 +236,7 @@ const CastDetail = () => {
 
   // Average rating
   const avgRating = reviews.length > 0
-    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+    ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1)
     : null;
 
   return (
@@ -312,7 +326,7 @@ const CastDetail = () => {
                 <div className="flex items-center gap-3">
                   {avgRating && (
                     <div className="flex items-center gap-1">
-                      <Stars rating={Math.round(Number(avgRating))} />
+                      <ReviewStars rating={Number(avgRating)} size={14} mutedColor="var(--pub-border,#3a2f1c)" />
                       <span className="text-sm font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{avgRating}</span>
                     </div>
                   )}
@@ -541,14 +555,24 @@ const CastDetail = () => {
                   {reviews.map((r) => (
                     <div key={r.id} className="px-5 py-4">
                       <div className="flex items-center gap-2 mb-1">
-                        <Stars rating={r.rating} />
-                        <span className="text-xs font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{r.rating}.0</span>
+                        <ReviewStars rating={Number(r.rating)} size={14} mutedColor="var(--pub-border,#3a2f1c)" />
+                        <span className="text-xs font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{Number(r.rating).toFixed(1)}</span>
                         <span className="text-xs" style={{ color: "var(--pub-text-muted,#a3987f)" }}>
                           {r.reviewer_name}
-                          {r.visit_date && ` · ${r.visit_date}`}
+                          {r.visit_date && ` · ${r.visit_date.replace(/-/g, "/")}`}
                           {r.course && ` · ${r.course}`}
                         </span>
+                        {r.source_provider === "estama" && (
+                          r.source_url ? (
+                            <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="ml-auto text-xs hover:underline" style={{ color: "var(--pub-accent,#c6a15b)" }}>
+                              エスたま掲載
+                            </a>
+                          ) : (
+                            <span className="ml-auto text-xs" style={{ color: "var(--pub-accent,#c6a15b)" }}>エスたま掲載</span>
+                          )
+                        )}
                       </div>
+                      {r.title && <h3 className="text-sm font-bold mb-1" style={{ color: "var(--pub-text,#f0e6d2)" }}>{r.title}</h3>}
                       <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--pub-text,#f0e6d2)" }}>{r.body}</p>
                     </div>
                   ))}
