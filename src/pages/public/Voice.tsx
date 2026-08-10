@@ -7,6 +7,7 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
 import { useStore } from "@/hooks/useStore";
 import { driveImgUrl } from "@/lib/drive";
+import { ReviewStars } from "@/components/public/ReviewStars";
 
 interface Review {
   id: string;
@@ -14,6 +15,11 @@ interface Review {
   therapist_name: string | null;
   review_text: string;
   created_at: string;
+  reviewer_name: string | null;
+  review_title: string | null;
+  reviewed_at: string | null;
+  source_provider: string | null;
+  source_url: string | null;
 }
 
 interface CastLite {
@@ -34,13 +40,11 @@ const matchCast = (therapistName: string | null, casts: CastLite[]): CastLite | 
   );
 };
 
-const Stars = ({ rating, size = 16 }: { rating: number; size?: number }) => (
-  <div className="flex gap-0.5">
-    {[1, 2, 3, 4, 5].map((i) => (
-      <Star key={i} size={size} fill={i <= rating ? "var(--pub-accent,#c6a15b)" : "none"} stroke={i <= rating ? "var(--pub-accent,#c6a15b)" : "var(--pub-text-muted,#a3987f)"} />
-    ))}
-  </div>
-);
+const reviewDate = (review: Review) => {
+  const raw = review.reviewed_at ?? review.created_at.slice(0, 10);
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日` : "";
+};
 
 export default function Voice() {
   const { store, storeId } = useStore();
@@ -54,7 +58,7 @@ export default function Voice() {
     Promise.all([
       supabase
         .from("customer_reviews")
-        .select("id, rating, therapist_name, review_text, created_at")
+        .select("id, rating, therapist_name, review_text, created_at, reviewer_name, review_title, reviewed_at, source_provider, source_url")
         .eq("is_published", true)
         .eq("store_id", storeId)
         .order("created_at", { ascending: false }),
@@ -70,7 +74,7 @@ export default function Voice() {
     });
   }, [storeId, storeName]);
 
-  const avg = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
+  const avg = reviews.length ? reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length : 0;
 
   return (
     <div className="min-h-screen pb-14 md:pb-0" style={{ backgroundColor: "var(--pub-bg,#0f0c09)" }}>
@@ -90,12 +94,12 @@ export default function Voice() {
             <div className="bg-[var(--pub-card,#1a150f)] rounded-lg shadow-sm border border-[var(--pub-border,#3a2f1c)] p-5 mb-6 flex items-center gap-6">
               <div className="text-center shrink-0">
                 <p className="text-4xl font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{avg.toFixed(1)}</p>
-                <div className="flex justify-center mt-1"><Stars rating={Math.round(avg)} /></div>
+                <div className="flex justify-center mt-1"><ReviewStars rating={avg} /></div>
                 <p className="text-xs mt-1" style={{ color: "var(--pub-text-muted,#a3987f)" }}>平均評価</p>
               </div>
               <div className="flex-1">
                 {[5, 4, 3, 2, 1].map((s) => {
-                  const count = reviews.filter((r) => r.rating === s).length;
+                  const count = reviews.filter((r) => Math.round(Number(r.rating)) === s).length;
                   const pct = reviews.length ? Math.round((count / reviews.length) * 100) : 0;
                   return (
                     <div key={s} className="flex items-center gap-2 text-xs mb-0.5">
@@ -125,8 +129,8 @@ export default function Voice() {
                   <div key={r.id} className="bg-[var(--pub-card,#1a150f)] rounded-lg shadow-sm border border-[var(--pub-border,#3a2f1c)] p-5">
                     <div className="flex items-center justify-between mb-2.5 gap-2">
                       <div className="flex items-center gap-2">
-                        <Stars rating={r.rating} />
-                        <span className="text-xs font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{r.rating}.0</span>
+                        <ReviewStars rating={Number(r.rating)} />
+                        <span className="text-xs font-bold" style={{ color: "var(--pub-accent,#c6a15b)" }}>{Number(r.rating).toFixed(1)}</span>
                       </div>
                       {r.therapist_name && !cast && (
                         <span className="text-xs px-2 py-0.5 rounded-full border" style={{ color: "var(--pub-accent,#c6a15b)", borderColor: "var(--pub-border,#3a2f1c)", background: "var(--pub-card2,#221b12)" }}>
@@ -134,6 +138,22 @@ export default function Voice() {
                         </span>
                       )}
                     </div>
+                    <div className="flex items-center gap-2 mb-2 text-xs" style={{ color: "var(--pub-text-muted,#a3987f)" }}>
+                      <span>{r.reviewer_name || "お客様"}</span>
+                      {reviewDate(r) && <span>・{reviewDate(r)}</span>}
+                      {r.source_provider === "estama" && (
+                        r.source_url ? (
+                          <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="ml-auto hover:underline" style={{ color: "var(--pub-accent,#c6a15b)" }}>
+                            エスたま掲載
+                          </a>
+                        ) : (
+                          <span className="ml-auto" style={{ color: "var(--pub-accent,#c6a15b)" }}>エスたま掲載</span>
+                        )
+                      )}
+                    </div>
+                    {r.review_title && (
+                      <h2 className="text-base font-bold mb-1.5" style={{ color: "var(--pub-text,#f0e6d2)" }}>{r.review_title}</h2>
+                    )}
                     <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--pub-text-mid,#d9cdb4)" }}>{r.review_text}</p>
 
                     {/* 担当セラピストパネル（在籍キャストに一致した場合のみ） */}

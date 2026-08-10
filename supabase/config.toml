@@ -15,6 +15,9 @@ verify_jwt = true
 [functions.import-estama-profile]
 verify_jwt = true
 
+[functions.sync-estama-reviews]
+verify_jwt = true
+
 [functions.post-to-sites]
 # 独自の長いポータルトークン、または一回限りのworker tokenを関数内で検証する。
 verify_jwt = false
