@@ -32,6 +32,12 @@ interface ShiftRow {
   casts: { id: string; name: string; photo: string | null; age: number | null } | null;
 }
 
+interface ReservationRow {
+  cast_id: string;
+  start_time: string;
+  duration: number;
+}
+
 interface HpArticle {
   id: string;
   title: string;
@@ -113,6 +119,8 @@ export default function EnkaHome() {
         (value): value is string => typeof value === "string" && value.trim().length > 0,
       )
     : [];
+  // PLANにはプランに関係する3枚目以降だけを表示する。
+  const planBanners = banners.slice(2);
 
   // イベント動画を既定表示し、stores.settings.hero_video でURLや表示可否を上書きできる。
   // イベント終了後は { enabled: false } にするだけで通常のバナーへ戻せる。
@@ -130,6 +138,7 @@ export default function EnkaHome() {
   const [slide, setSlide] = useState(0);
   const [failedHeroVideoUrl, setFailedHeroVideoUrl] = useState<string | null>(null);
   const [todayShifts, setTodayShifts] = useState<ShiftRow[]>([]);
+  const [reservations, setReservations] = useState<ReservationRow[]>([]);
   const [newFaces, setNewFaces] = useState<CastRow[]>([]);
   const [articles, setArticles] = useState<HpArticle[]>([]);
   const [activeDiscounts, setActiveDiscounts] = useState<ActiveDiscount[]>([]);
@@ -152,13 +161,16 @@ export default function EnkaHome() {
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
 
-    supabase
-      .from("shifts")
-      .select("id, cast_id, start_time, end_time, casts (id, name, photo, age)")
-      .eq("shift_date", today)
-      .eq("store_id", storeId)
-      .order("start_time")
-      .then(({ data }) => {
+    Promise.all([
+      supabase
+        .from("shifts")
+        .select("id, cast_id, start_time, end_time, casts (id, name, photo, age)")
+        .eq("shift_date", today)
+        .eq("store_id", storeId)
+        .order("start_time"),
+      supabase.rpc("get_reservation_slots", { p_date: today, p_cast_id: null }),
+    ]).then(([shiftResult, reservationResult]) => {
+        const data = shiftResult.data;
         const seen = new Set<string>();
         setTodayShifts(
           ((data ?? []) as unknown as ShiftRow[]).filter((s) => {
@@ -166,6 +178,13 @@ export default function EnkaHome() {
             seen.add(s.cast_id);
             return true;
           }),
+        );
+        setReservations(
+          ((reservationResult.data as any[]) ?? []).map((reservation) => ({
+            cast_id: reservation.cast_id,
+            start_time: reservation.start_time,
+            duration: reservation.duration,
+          })),
         );
       });
 
@@ -199,6 +218,45 @@ export default function EnkaHome() {
 
   const featuredDiscount = activeDiscounts[0] ?? null;
 
+  const nextAvailable = (shift: ShiftRow): string | null => {
+    const now = new Date();
+    const [startHour, startMinute] = shift.start_time.split(":").map(Number);
+    const [endHour, endMinute] = shift.end_time.split(":").map(Number);
+    const start = startHour * 60 + startMinute;
+    const endRaw = endHour * 60 + endMinute;
+    const end = endRaw <= start ? endRaw + 24 * 60 : endRaw;
+    const currentRaw = now.getHours() * 60 + now.getMinutes();
+    const current = endRaw <= start && currentRaw < endRaw ? currentRaw + 24 * 60 : currentRaw;
+    let cursor = Math.max(start, Math.ceil(current / 30) * 30);
+
+    const reservedBlocks = reservations
+      .filter((reservation) => reservation.cast_id === shift.cast_id)
+      .map((reservation) => {
+        const [hour, minute] = reservation.start_time.split(":").map(Number);
+        const rawStart = hour * 60 + minute;
+        const reservedStart = rawStart < start ? rawStart + 24 * 60 : rawStart;
+        return {
+          start: reservedStart,
+          end: reservedStart + reservation.duration + 30,
+        };
+      });
+
+    while (cursor + 60 <= end) {
+      const conflict = reservedBlocks.find(
+        (block) => cursor < block.end && cursor + 60 > block.start,
+      );
+      if (!conflict) {
+        const normalized = cursor % (24 * 60);
+        const hour = String(Math.floor(normalized / 60)).padStart(2, "0");
+        const minute = String(normalized % 60).padStart(2, "0");
+        return `${hour}:${minute}`;
+      }
+      cursor = Math.ceil(conflict.end / 30) * 30;
+    }
+
+    return null;
+  };
+
   const Heading = ({ en, ja }: { en: string; ja: string }) => (
     <div className="text-center mb-6">
       <h2
@@ -215,19 +273,27 @@ export default function EnkaHome() {
     </div>
   );
 
-  const CastCard = ({ id, name, age, photo, time }: { id: string; name: string; age: number | null; photo: string | null; time?: string }) => (
+  const CastCard = ({ id, name, age, photo, time, nextTime }: { id: string; name: string; age: number | null; photo: string | null; time?: string; nextTime?: string | null }) => (
     <Link to={`/casts/${id}`} className="shrink-0 w-36 md:w-44">
       <div
         className="rounded-xl overflow-hidden border"
         style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "var(--pub-card,#211320)" }}
       >
-        <div className="aspect-[3/4] overflow-hidden">
+        <div className="relative aspect-[3/4] overflow-hidden">
           {photo ? (
             <img src={driveImgUrl(photo, 400)} alt={name} loading="lazy" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: "var(--pub-card2,#2b1a28)" }}>
               <Sparkles size={22} style={{ color: "var(--pub-accent,#d4547a)" }} />
             </div>
+          )}
+          {nextTime && (
+            <span
+              className="absolute right-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-lg"
+              style={{ backgroundColor: "var(--pub-accent,#d4547a)" }}
+            >
+              最短 {nextTime}
+            </span>
           )}
         </div>
         <div className="px-2.5 py-2 text-center">
@@ -478,6 +544,7 @@ export default function EnkaHome() {
                   age={s.casts!.age}
                   photo={s.casts!.photo}
                   time={`${hhmm(s.start_time)} - ${hhmm(s.end_time)}`}
+                  nextTime={nextAvailable(s)}
                 />
               ))}
             </div>
@@ -497,12 +564,12 @@ export default function EnkaHome() {
       </section>
 
       {/* 3. おすすめプラン（バナー縦積み） */}
-      {banners.length > 1 && (
+      {planBanners.length > 0 && (
         <section className="py-8 px-4" style={{ backgroundColor: "var(--pub-card,#211320)" }}>
           <div className="container mx-auto max-w-2xl">
             <Heading en="PLAN" ja="おすすめプラン" />
             <div className="space-y-4">
-              {banners.map((b, i) => (
+              {planBanners.map((b, i) => (
                 <Link key={i} to="/booking" className="block rounded-xl overflow-hidden border" style={{ borderColor: "var(--pub-border,#4a2740)" }}>
                   <img src={b} alt={`${storeName} プラン${i + 1}`} loading="lazy" className="w-full h-auto" />
                 </Link>
