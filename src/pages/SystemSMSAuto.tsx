@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { Plus, Trash2, Pencil, X } from "lucide-react";
 
 interface SMSTemplate {
@@ -26,6 +27,7 @@ interface SMSTemplate {
   timing_minutes: number;
   message: string;
   is_active: boolean;
+  store_id: string;
 }
 
 const EMPTY_FORM = {
@@ -55,6 +57,7 @@ export default function SystemSMSAuto() {
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
 
   const { user, loading: authLoading } = useAuth();
+  const { store: adminStore, loading: adminStoreLoading } = useAdminStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -62,13 +65,18 @@ export default function SystemSMSAuto() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (user) fetchTemplates();
-  }, [user]);
+    if (user && adminStore?.id) fetchTemplates();
+  }, [user, adminStore?.id]);
 
   const fetchTemplates = async () => {
+    if (!adminStore?.id) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("sms_auto_templates").select("*").order("name");
+      const { data, error } = await supabase
+        .from("sms_auto_templates")
+        .select("*")
+        .eq("store_id", adminStore.id)
+        .order("name");
       if (error && error.code !== "PGRST116") throw error;
       setTemplates(data || []);
     } catch (error) {
@@ -98,12 +106,19 @@ export default function SystemSMSAuto() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!adminStore?.id) return;
     try {
       if (editingId) {
-        const { error } = await supabase.from("sms_auto_templates").update(formData).eq("id", editingId);
+        const { error } = await supabase
+          .from("sms_auto_templates")
+          .update(formData)
+          .eq("id", editingId)
+          .eq("store_id", adminStore.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("sms_auto_templates").insert([formData]);
+        const { error } = await supabase
+          .from("sms_auto_templates")
+          .insert([{ ...formData, store_id: adminStore.id }]);
         if (error) throw error;
       }
       closeForm();
@@ -114,8 +129,13 @@ export default function SystemSMSAuto() {
   };
 
   const handleToggle = async (id: string, is_active: boolean) => {
+    if (!adminStore?.id) return;
     try {
-      const { error } = await supabase.from("sms_auto_templates").update({ is_active }).eq("id", id);
+      const { error } = await supabase
+        .from("sms_auto_templates")
+        .update({ is_active })
+        .eq("id", id)
+        .eq("store_id", adminStore.id);
       if (error) throw error;
       fetchTemplates();
     } catch (error) {
@@ -125,8 +145,13 @@ export default function SystemSMSAuto() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("削除しますか？")) return;
+    if (!adminStore?.id) return;
     try {
-      const { error } = await supabase.from("sms_auto_templates").delete().eq("id", id);
+      const { error } = await supabase
+        .from("sms_auto_templates")
+        .delete()
+        .eq("id", id)
+        .eq("store_id", adminStore.id);
       if (error) throw error;
       if (editingId === id) closeForm();
       fetchTemplates();
@@ -213,7 +238,7 @@ export default function SystemSMSAuto() {
             </Card>
           )}
 
-          {loading ? (
+          {loading || adminStoreLoading ? (
             <div className="text-center text-muted-foreground">読み込み中...</div>
           ) : templates.length === 0 ? (
             <Card><CardContent className="pt-12 pb-12 text-center text-muted-foreground">テンプレートがありません</CardContent></Card>

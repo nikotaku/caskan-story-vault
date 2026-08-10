@@ -5,10 +5,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Camera, Ticket } from "lucide-react";
+import { useStore } from "@/hooks/useStore";
 
 const STARS = [1, 2, 3, 4, 5];
 
 export default function Survey() {
+  const { store, storeId } = useStore();
+  const storeName = store?.name ?? "全力エステ";
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [therapistName, setTherapistName] = useState("");
@@ -31,7 +34,8 @@ export default function Survey() {
         therapist_name: therapistName || null,
         good_points: goodPoints || null,
         improvement_points: improvement || null,
-      }]);
+        store_id: storeId,
+      } as any]);
       if (err) throw err;
       // 発行番号（スタッフ確認用の識別子）と発行日時
       const now = new Date();
@@ -59,7 +63,7 @@ export default function Survey() {
           {/* 券ヘッダー */}
           <div className="bg-gradient-to-r from-rose-500 to-pink-500 text-white text-center py-4 px-5">
             <div className="flex items-center justify-center gap-1.5 text-xs tracking-widest opacity-90">
-              <Ticket size={14} /> COUPON ｜ 全力エステ 仙台
+              <Ticket size={14} /> COUPON ｜ {storeName}
             </div>
             <p className="mt-1 text-sm font-semibold">アンケートご回答特典</p>
           </div>
@@ -112,7 +116,7 @@ export default function Survey() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-rose-50 to-white">
       <header className="bg-white border-b py-4 px-4 text-center">
-        <p className="text-xs text-muted-foreground">全力エステ</p>
+        <p className="text-xs text-muted-foreground">{storeName}</p>
         <h1 className="text-lg font-bold mt-0.5">ご利用アンケート</h1>
       </header>
 

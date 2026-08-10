@@ -342,13 +342,14 @@ export default function Schedule() {
   }, [backRates]);
 
   useEffect(() => {
-    if (user) {
+    if (user && adminStore?.id) {
       fetchData();
       fetchFormData();
     }
-  }, [user, selectedDate]);
+  }, [user, selectedDate, adminStore?.id]);
 
   const fetchFormData = async () => {
+    if (!adminStore?.id) return;
     const [{ data: c }, { data: r }, { data: b }, { data: o }, { data: n }, { data: d }, { data: p }, { data: t }, { data: cp }] = await Promise.all([
       supabase.from("casts").select("id, name").order("name"),
       supabase.from("rooms").select("id, name, address, sms_text, map_url, caution_text").eq("is_active", true).order("name"),
@@ -357,8 +358,8 @@ export default function Schedule() {
       supabase.from("nomination_rates").select("*"),
       supabase.from("discounts").select("id, name, discount_type, discount_value, is_active").eq("is_active", true).order("name"),
       supabase.from("payment_settings").select("id, payment_method, payment_link, fee_percentage"),
-      supabase.from("sms_auto_templates").select("message").eq("trigger", "thanks").eq("is_active", true).limit(1),
-      supabase.from("sms_auto_templates").select("message").eq("trigger", "coupon").eq("is_active", true).limit(1),
+      supabase.from("sms_auto_templates").select("message").eq("store_id", adminStore.id).eq("trigger", "thanks").eq("is_active", true).limit(1),
+      supabase.from("sms_auto_templates").select("message").eq("store_id", adminStore.id).eq("trigger", "coupon").eq("is_active", true).limit(1),
     ]);
     if (c) setCasts(c);
     if (r) setRooms(r);
