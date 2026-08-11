@@ -491,8 +491,16 @@ export default function Staff() {
 
     if (!!formData.estama_account_login_id !== !!formData.estama_account_password) {
       toast({
-        title: "O2・魂共通設定を確認してください",
-        description: "共通IDとパスワードは両方入力するか、両方空欄にしてください",
+        title: "魂セラピスト初回設定を確認してください",
+        description: "ログイン用メールアドレスとパスワードは両方入力するか、両方空欄にしてください",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (formData.estama_account_login_id && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.estama_account_login_id)) {
+      toast({
+        title: "魂セラピスト初回設定を確認してください",
+        description: "有効なログイン用メールアドレスを入力してください",
         variant: "destructive",
       });
       return;
@@ -573,7 +581,7 @@ export default function Staff() {
       if (inserted?.id && formData.estama_auto_register) {
         try {
           const soulCredentials = formData.estama_account_login_id && formData.estama_account_password
-            ? { loginId: formData.estama_account_login_id, password: formData.estama_account_password }
+            ? { loginId: formData.estama_account_login_id, password: formData.estama_account_password, email: formData.estama_account_login_id }
             : undefined;
           const result = await runEstamaCastAutomation({
             storeId: inserted.store_id,
@@ -1817,17 +1825,18 @@ export default function Staff() {
                         {formData.estama_auto_register && (
                           <div className="grid grid-cols-1 gap-3 border-t border-blue-100 pt-3 sm:grid-cols-2">
                             <div>
-                              <Label htmlFor="add-estama-login-id" className="text-xs">O2・魂共通ID（任意）</Label>
+                              <Label htmlFor="add-estama-login-id" className="text-xs">魂ログイン用メール（任意）</Label>
                               <Input
                                 id="add-estama-login-id"
                                 autoComplete="off"
-                                placeholder="O2と同じID"
+                                type="email"
+                                placeholder="therapist@example.jp"
                                 value={formData.estama_account_login_id}
                                 onChange={(e) => setFormData({ ...formData, estama_account_login_id: e.target.value })}
                               />
                             </div>
                             <div>
-                              <Label htmlFor="add-estama-password" className="text-xs">O2・魂共通パスワード（任意）</Label>
+                              <Label htmlFor="add-estama-password" className="text-xs">魂ログイン用パスワード（任意）</Label>
                               <Input
                                 id="add-estama-password"
                                 type="password"
@@ -1836,7 +1845,7 @@ export default function Staff() {
                                 onChange={(e) => setFormData({ ...formData, estama_account_password: e.target.value })}
                               />
                             </div>
-                            <p className="text-[11px] text-muted-foreground sm:col-span-2">O2に登録したものと同じID・パスワードを入力します。魂セラピストの初回ログイン画面で設定し、次回以降も共通で使用します。この画面では保存しません。</p>
+                            <p className="text-[11px] text-muted-foreground sm:col-span-2">魂セラピストはメールアドレスとパスワードで初回設定します。O2設定済みの場合は登録メールと同じパスワードを使います。この画面では保存しません。</p>
                           </div>
                         )}
                       </div>

@@ -660,10 +660,26 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
   if (!await loginId.count()) loginId = page.getByLabel(/ログインID|ユーザーID|アカウントID|ID/, { exact: false }).first();
   if (!await loginId.count()) loginId = page.locator('input[type="text"]:visible').first();
   if (!await loginId.count()) loginId = page.locator('input[type="email"]:visible').first();
-  if (!await loginId.count()) throw new Error("魂セラピストの初回ログインID入力欄が見つかりません");
+  if (!await loginId.count()) throw new Error("魂セラピストの初回ログイン用メールアドレス入力欄が見つかりません");
 
   await loginId.evaluate((element) => element.setAttribute("data-enka-soul-login-id", "true"));
-  await loginId.fill(credentials.loginId);
+  const loginDescriptor = await loginId.evaluate((element) => {
+    const input = element as HTMLInputElement;
+    return [
+      input.type,
+      input.name,
+      input.id,
+      input.getAttribute("aria-label"),
+      input.getAttribute("placeholder"),
+      ...Array.from(input.labels || []).map((label) => label.textContent),
+      input.closest("label")?.textContent,
+    ].filter(Boolean).join(" ");
+  });
+  const loginUsesEmail = /email|mail|メール/i.test(loginDescriptor);
+  if (loginUsesEmail && !credentials.email) {
+    throw new Error("魂セラピストの初回設定に使う登録メールアドレスがありません");
+  }
+  await loginId.fill(loginUsesEmail ? credentials.email! : credentials.loginId);
   if (credentials.email) {
     const emails = page.locator([
       'input[type="email"]:visible:not([data-enka-soul-login-id])',
@@ -894,7 +910,7 @@ async function trySoulDialogSetup(page: Page, root: Locator, credentials: SoulCr
   if (!target) return null;
   await page.goto(target, { waitUntil: "domcontentloaded" });
   const configured = await configureSoulLogin(page, credentials);
-  if (!configured) throw new Error("魂セラピストの初回設定URLにID・パスワード入力欄が見つかりません");
+  if (!configured) throw new Error("魂セラピストの初回設定URLにメールアドレス・パスワード入力欄が見つかりません");
   return { status: "configured", loginUrl: page.url() };
 }
 

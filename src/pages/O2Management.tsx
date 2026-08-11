@@ -145,8 +145,8 @@ export default function O2Management() {
     const o2Email = editForm.o2Email.trim();
     const o2LoginId = normalizeO2Id(editForm.o2LoginId);
     const xLoginId = normalizeXId(editForm.xLoginId);
-    if (o2Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o2Email)) {
-      toast.error("O2の登録メールアドレスを確認してください");
+    if (o2LoginId && (!o2Email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o2Email))) {
+      toast.error("O2・魂セラピストで使う登録メールアドレスを確認してください");
       return;
     }
     if (o2LoginId && !/^[A-Za-z0-9_]+$/.test(o2LoginId)) {
@@ -223,7 +223,7 @@ export default function O2Management() {
           </div>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            O2のメールアドレス・ID・パスワードを登録すると、魂セラピストの初回設定にも同じID・パスワードを使用します。公開URLはセラピストカードと詳細ページへ反映されます。パスワードは保存後に再表示しません。
+            O2のメールアドレス・ID・パスワードを登録すると、魂セラピストの初回設定には登録メールアドレスと同じパスワードを使用します。公開URLはセラピストカードと詳細ページへ反映されます。パスワードは保存後に再表示しません。
           </div>
 
           <div className="grid gap-3 md:hidden">
@@ -301,11 +301,11 @@ export default function O2Management() {
 
             <section className="rounded-xl border p-4 space-y-3">
               <div className="flex items-center justify-between"><h3 className="font-semibold">魂セラピスト</h3>{editing?.estama_credential_configured && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
-              <div className="rounded-lg bg-muted/60 p-3 text-sm"><p className="font-medium">ID・パスワードはO2と共通</p><p className="mt-1 text-xs text-muted-foreground">上のO2欄へ登録した内容を、魂セラピストの初回ログイン設定にも自動で使用します。</p></div>
+              <div className="rounded-lg bg-muted/60 p-3 text-sm"><p className="font-medium">登録メール・パスワードを自動使用</p><p className="mt-1 text-xs text-muted-foreground">魂セラピストはO2登録メールアドレスでログインし、パスワードはO2と共通で設定します。</p></div>
               <div><Label htmlFor="estama-profile-url">プロフィールURL</Label><Input id="estama-profile-url" type="url" placeholder="https://estama.jp/shop/..." value={editForm.estamaProfileUrl} onChange={(event) => setEditForm({ ...editForm, estamaProfileUrl: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">公開側のセラピストカードと詳細ページへ自動反映されます。</p></div>
             </section>
 
-            <p className="text-xs text-muted-foreground">O2とXはIDから公開URLを自動生成します。魂セラピストはO2と同じID・パスワードを使い、入力したプロフィールURLを公開側へ反映します。</p>
+            <p className="text-xs text-muted-foreground">O2とXはIDから公開URLを自動生成します。魂セラピストはO2登録メールアドレスと共通パスワードを使い、入力したプロフィールURLを公開側へ反映します。</p>
             <Button className="w-full" onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="mr-1 animate-spin" />}保存</Button>
           </div>
         </DialogContent>
