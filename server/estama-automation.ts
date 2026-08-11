@@ -762,6 +762,7 @@ async function soulSetupTargetFromDialog(page: Page, root: Locator) {
     "input[value]",
     "textarea",
     "img[src]",
+    "iframe[src]",
     "[data-url]",
     "[data-href]",
     "[data-text]",
@@ -778,6 +779,7 @@ async function soulSetupTargetFromDialog(page: Page, root: Locator) {
     element.getAttribute("data-qrcode"),
     element.getAttribute("data-qr"),
     element.getAttribute("onclick"),
+    element.getAttribute("style"),
     element instanceof HTMLTextAreaElement ? element.value : null,
     element.textContent,
   ].filter((value): value is string => Boolean(value)))).catch(() => [] as string[]);
@@ -816,6 +818,14 @@ async function trySoulDialogSetup(page: Page, root: Locator, credentials: SoulCr
   const configured = await configureSoulLogin(page, credentials);
   if (!configured) throw new Error("魂セラピストの初回設定URLにID・パスワード入力欄が見つかりません");
   return { status: "configured", loginUrl: page.url() };
+}
+
+async function trySoulInfoPage(page: Page, credentials: SoulCredentials) {
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+  if (await configureSoulLogin(page, credentials)) {
+    return { status: "configured", loginUrl: page.url() };
+  }
+  return trySoulDialogSetup(page, page.locator("body"), credentials);
 }
 
 async function setupSoulTherapist(
@@ -861,18 +871,31 @@ async function setupSoulTherapist(
     const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).last();
     if (await sendLogin.count()) {
       setupDiagnostics.push("ログイン情報操作あり");
+      const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
       await sendLogin.click();
-      await page.waitForTimeout(300);
+      const infoPage = await popupPromise;
+      if (infoPage) {
+        setupDiagnostics.push("別画面あり");
+        const setupFromPopup = await trySoulInfoPage(infoPage, credentials);
+        if (setupFromPopup) return setupFromPopup;
+        await infoPage.close().catch(() => undefined);
+      }
+      await page.waitForTimeout(1_000);
       let sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
       if (await sendDialog.count()) {
-        const [dialogText, qrCount, linkCount] = await Promise.all([
+        const [dialogText, qrCount, linkCount, frameCount] = await Promise.all([
           sendDialog.innerText().catch(() => ""),
           sendDialog.locator('canvas, img, svg, [class*="qr" i], [id*="qr" i]').count(),
           sendDialog.locator("a[href]").count(),
+          sendDialog.locator("iframe").count(),
         ]);
-        setupDiagnostics.push(`画面=${safeSoulDiagnosticText(dialogText) || "文字なし"},QR候補=${qrCount},リンク=${linkCount}`);
+        setupDiagnostics.push(`画面=${safeSoulDiagnosticText(dialogText) || "文字なし"},QR候補=${qrCount},リンク=${linkCount},埋込=${frameCount}`);
         const setupFromDialog = await trySoulDialogSetup(page, sendDialog, credentials);
         if (setupFromDialog) return setupFromDialog;
+        for (const frame of page.frames().slice(1)) {
+          const setupFromFrame = await trySoulDialogSetup(page, frame.locator("body"), credentials);
+          if (setupFromFrame) return setupFromFrame;
+        }
 
         let reveal = sendDialog.getByRole("button", { name: /URL.*コピー|コピー.*URL/, exact: false }).last();
         if (!await reveal.count()) reveal = sendDialog.getByRole("link", { name: /URL.*コピー|コピー.*URL/, exact: false }).last();
