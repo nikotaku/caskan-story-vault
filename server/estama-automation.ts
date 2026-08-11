@@ -16,6 +16,7 @@ const decodeQr = jsQR as unknown as QrDecoder;
 export const ESTAMA_CAST_EDIT_URL = "https://estama.jp/admin/cast_edit/";
 export const ESTAMA_SOUL_URL = "https://estama.jp/admin/tamathera/therapist/";
 const ESTAMA_SOUL_WAITING_URL = `${ESTAMA_SOUL_URL}?status=waiting_initial_setup`;
+const ESTAMA_SOUL_LOGIN_URL = "https://estama.jp/tamathera/login/";
 
 type Json = Record<string, unknown>;
 type AdminClient = SupabaseClient;
@@ -732,6 +733,13 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
   return true;
 }
 
+async function trySoulDirectLogin(page: Page, credentials: SoulCredentials) {
+  if (!credentials.email) return null;
+  await page.goto(ESTAMA_SOUL_LOGIN_URL, { waitUntil: "domcontentloaded" });
+  const loggedIn = await configureSoulLogin(page, credentials);
+  return loggedIn ? { status: "configured", loginUrl: page.url() } : null;
+}
+
 async function soulLoginTarget(page: Page, login: Locator) {
   const rawValues = await login.evaluate((element) => [
     element.getAttribute("href"),
@@ -957,6 +965,8 @@ async function setupSoulTherapist(
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
     const directSetup = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
     if (directSetup) return directSetup;
+    const directLogin = await trySoulDirectLogin(page, credentials).catch(() => null);
+    if (directLogin) return directLogin;
     await page.goto(ESTAMA_SOUL_WAITING_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
     row = await findEstamaCastRow(page, { localName: castName });
@@ -1412,29 +1422,37 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     browser = connected.browser;
     const page = connected.page;
     let soulResult: Json | undefined;
+    let accountPage: Page | null = null;
     if (input.soulCredentials && input.soulStatus !== "configured") {
       soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials);
+      if (soulResult.status === "configured"
+        && !/\/admin\//i.test(page.url())
+        && !await page.locator('input[type="password"]:visible').count()) {
+        accountPage = page;
+      }
     }
-    await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
-    await ensureAdminLogin(page);
-    const row = await findEstamaCastRow(page, {
-      externalId: input.cast.externalId || undefined,
-      remoteName: input.cast.remoteName || undefined,
-      localName: input.cast.name,
-    });
-    const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
-    if (!await login.count()) {
-      throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
-    }
-    const loginClass = await login.getAttribute("class") || "";
-    if (loginClass.includes("disabled") || !await login.isEnabled()) {
-      throw new SoulActivationRequiredError();
-    }
+    if (!accountPage) {
+      await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+      await ensureAdminLogin(page);
+      const row = await findEstamaCastRow(page, {
+        externalId: input.cast.externalId || undefined,
+        remoteName: input.cast.remoteName || undefined,
+        localName: input.cast.name,
+      });
+      const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+      if (!await login.count()) {
+        throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
+      }
+      const loginClass = await login.getAttribute("class") || "";
+      if (loginClass.includes("disabled") || !await login.isEnabled()) {
+        throw new SoulActivationRequiredError();
+      }
 
-    const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-    await login.click();
-    const popup = await popupPromise;
-    const accountPage = popup || page;
+      const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
+      await login.click();
+      const popup = await popupPromise;
+      accountPage = popup || page;
+    }
     await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
     if (await accountPage.locator('input[type="password"]').count()) {
       throw new LoginRequiredError("エステ魂のセラピスト側ログインが切れています");
