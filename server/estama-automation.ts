@@ -749,6 +749,44 @@ async function soulClipboardValue(page: Page) {
   return page.evaluate(() => navigator.clipboard?.readText()).catch(() => "");
 }
 
+async function installSoulShareCapture(page: Page) {
+  await page.evaluate(() => {
+    const state = globalThis as typeof globalThis & { __enkaSoulSharedValues?: string[] };
+    state.__enkaSoulSharedValues = [];
+    const capture = (value: unknown) => {
+      if (typeof value === "string") state.__enkaSoulSharedValues?.push(value);
+      else {
+        try { state.__enkaSoulSharedValues?.push(JSON.stringify(value)); }
+        catch { /* 共有データを文字列化できない場合は無視する */ }
+      }
+    };
+    try {
+      Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    } catch { /* canShareを差し替えられない場合もshareの取得は試す */ }
+    try {
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: async (data: ShareData) => { capture(data); },
+      });
+    } catch { /* Web Share APIを差し替えられないブラウザでは他の経路を使う */ }
+    try {
+      if (navigator.clipboard) {
+        Object.defineProperty(navigator.clipboard, "writeText", {
+          configurable: true,
+          value: async (value: string) => { capture(value); },
+        });
+      }
+    } catch { /* Clipboard APIを差し替えられないブラウザでは読取を使う */ }
+  }).catch(() => undefined);
+}
+
+async function soulSharedValues(page: Page) {
+  return page.evaluate(() => {
+    const state = globalThis as typeof globalThis & { __enkaSoulSharedValues?: string[] };
+    return state.__enkaSoulSharedValues || [];
+  }).catch(() => [] as string[]);
+}
+
 const safeSoulDiagnosticText = (value: string) => value
   .replace(/https?:\/\/\S+/gi, "[URL]")
   .replace(/[A-Za-z0-9_-]{20,}/g, "[値]")
@@ -879,12 +917,16 @@ async function setupSoulTherapist(
     const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).last();
     if (await sendLogin.count()) {
       setupDiagnostics.push("ログイン情報操作あり");
+      const setupFromRow = await trySoulDialogSetup(page, row, credentials);
+      if (setupFromRow) return setupFromRow;
+      await installSoulShareCapture(page);
       const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
       const responsePromise = page.waitForResponse((response) => {
         try {
           const url = new URL(response.url());
+          const resourceType = response.request().resourceType();
           return (url.hostname === "estama.jp" || url.hostname === "www.estama.jp")
-            && /\/tamathera\//i.test(url.pathname);
+            && ["document", "fetch", "xhr"].includes(resourceType);
         } catch { return false; }
       }, { timeout: 5_000 }).catch(() => null);
       await sendLogin.click();
@@ -892,13 +934,25 @@ async function setupSoulTherapist(
       if (infoResponse) {
         setupDiagnostics.push(`通信あり(${infoResponse.request().method()}:${infoResponse.status()})`);
         const responseBody = await infoResponse.text().catch(() => "");
-        const responseTarget = soulSetupTargetFromValues(page, [infoResponse.url(), responseBody]);
+        const responseTarget = soulSetupTargetFromValues(page, [
+          infoResponse.url(),
+          infoResponse.request().postData() || "",
+          responseBody,
+        ]);
         if (responseTarget) {
           await page.goto(responseTarget, { waitUntil: "domcontentloaded" });
           const configured = await configureSoulLogin(page, credentials);
           if (configured) return { status: "configured", loginUrl: page.url() };
         }
       } else setupDiagnostics.push("対象通信なし");
+      const sharedValues = await soulSharedValues(page);
+      setupDiagnostics.push(`共有候補=${sharedValues.length}`);
+      const sharedTarget = soulSetupTargetFromValues(page, sharedValues);
+      if (sharedTarget) {
+        await page.goto(sharedTarget, { waitUntil: "domcontentloaded" });
+        const configured = await configureSoulLogin(page, credentials);
+        if (configured) return { status: "configured", loginUrl: page.url() };
+      }
       if (infoPage) {
         setupDiagnostics.push("別画面あり");
         const setupFromPopup = await trySoulInfoPage(infoPage, credentials);
@@ -906,6 +960,12 @@ async function setupSoulTherapist(
         await infoPage.close().catch(() => undefined);
       }
       await page.waitForTimeout(1_000);
+      const pageTarget = soulSetupTargetFromValues(page, [await page.content().catch(() => "")]);
+      if (pageTarget) {
+        await page.goto(pageTarget, { waitUntil: "domcontentloaded" });
+        const configured = await configureSoulLogin(page, credentials);
+        if (configured) return { status: "configured", loginUrl: page.url() };
+      }
       let sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
       if (await sendDialog.count()) {
         const [dialogText, qrCount, linkCount, frameCount] = await Promise.all([
