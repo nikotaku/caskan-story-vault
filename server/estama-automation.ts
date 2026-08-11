@@ -890,8 +890,29 @@ function soulSetupTargetFromValues(page: Page, rawValues: string[]) {
 }
 
 async function soulSetupTargetFromDialog(page: Page, root: Locator) {
-  const rawValues = await root.locator("*").evaluateAll((elements) => elements.flatMap((element) => [
-    ...Array.from(element.attributes).map((attribute) => attribute.value),
+  const rawValues = await root.locator([
+    "a[href]",
+    "input[value]",
+    "textarea",
+    "img[src]",
+    "iframe[src]",
+    "[data-url]",
+    "[data-href]",
+    "[data-text]",
+    "[data-qrcode]",
+    "[data-qr]",
+    "[onclick]",
+  ].join(",")).evaluateAll((elements) => elements.flatMap((element) => [
+    element.getAttribute("href"),
+    element.getAttribute("value"),
+    element.getAttribute("src"),
+    element.getAttribute("data-url"),
+    element.getAttribute("data-href"),
+    element.getAttribute("data-text"),
+    element.getAttribute("data-qrcode"),
+    element.getAttribute("data-qr"),
+    element.getAttribute("onclick"),
+    element.getAttribute("style"),
     element instanceof HTMLTextAreaElement ? element.value : null,
     element.textContent,
   ].filter((value): value is string => Boolean(value)))).catch(() => [] as string[]);
