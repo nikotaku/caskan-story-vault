@@ -2,6 +2,16 @@ import Browserbase from "@browserbasehq/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { chromium, type Browser, type Dialog, type Locator, type Page } from "playwright-core";
 import { createHash } from "node:crypto";
+import jsQR from "jsqr";
+import { PNG } from "pngjs";
+
+type QrDecoder = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { inversionAttempts?: "dontInvert" | "onlyInvert" | "attemptBoth" | "invertFirst" },
+) => { data: string } | null;
+const decodeQr = jsQR as unknown as QrDecoder;
 
 export const ESTAMA_CAST_EDIT_URL = "https://estama.jp/admin/cast_edit/";
 export const ESTAMA_SOUL_URL = "https://estama.jp/admin/tamathera/therapist/";
@@ -700,6 +710,38 @@ async function trySoulCredentialSetup(page: Page, login: Locator, credentials: S
   return configured ? { status: "configured", loginUrl: page.url() } : null;
 }
 
+async function soulQrValues(root: Locator) {
+  const screenshots: Buffer[] = [];
+  const qrElements = root.locator([
+    "canvas",
+    "img",
+    "svg",
+    '[class*="qr" i]',
+    '[id*="qr" i]',
+  ].join(","));
+  const count = Math.min(await qrElements.count(), 8);
+  for (let index = 0; index < count; index += 1) {
+    const element = qrElements.nth(index);
+    if (!await element.isVisible().catch(() => false)) continue;
+    const screenshot = await element.screenshot({ type: "png" }).catch(() => null);
+    if (screenshot) screenshots.push(screenshot);
+  }
+  const dialogScreenshot = await root.screenshot({ type: "png" }).catch(() => null);
+  if (dialogScreenshot) screenshots.push(dialogScreenshot);
+
+  const values: string[] = [];
+  for (const screenshot of screenshots) {
+    try {
+      const image = PNG.sync.read(screenshot);
+      const code = decodeQr(Uint8ClampedArray.from(image.data), image.width, image.height, {
+        inversionAttempts: "attemptBoth",
+      });
+      if (code?.data) values.push(code.data);
+    } catch { /* QRコードではない画像は無視する */ }
+  }
+  return values;
+}
+
 async function soulSetupTargetFromDialog(page: Page, root: Locator) {
   const rawValues = await root.locator([
     "a[href]",
@@ -725,6 +767,7 @@ async function soulSetupTargetFromDialog(page: Page, root: Locator) {
     element instanceof HTMLTextAreaElement ? element.value : null,
     element.textContent,
   ].filter((value): value is string => Boolean(value)))).catch(() => [] as string[]);
+  rawValues.push(...await soulQrValues(root));
   rawValues.push(await root.innerText().catch(() => ""));
 
   const checked = new Set<string>();
