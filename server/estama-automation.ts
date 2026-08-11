@@ -954,10 +954,15 @@ async function resetPendingSoulTherapist(page: Page, row: Locator, castName: str
   if (!nativeConfirmed) {
     const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
     if (await dialog.count()) {
-      let confirm = dialog.getByRole("button", { name: /利用をやめる|停止する|解除する|はい|確定|OK/, exact: false }).last();
-      if (!await confirm.count()) confirm = dialog.getByRole("link", { name: /利用をやめる|停止する|解除する|はい|確定|OK/, exact: false }).last();
-      if (!await confirm.count()) confirm = dialog.locator('button:visible, input[type="submit"]:visible, .btn:visible, [role="button"]:visible').filter({ hasText: /利用をやめる|停止する|解除する|はい|確定|OK/ }).last();
-      if (!await confirm.count()) throw new Error("魂セラピスト保留登録の解除確認ボタンが見つかりません");
+      const destructiveLabel = /利用をやめる|やめる|停止|解除|削除|はい|確定|OK/;
+      let confirm = dialog.getByRole("button", { name: destructiveLabel, exact: false }).last();
+      if (!await confirm.count()) confirm = dialog.getByRole("link", { name: destructiveLabel, exact: false }).last();
+      if (!await confirm.count()) confirm = dialog.locator('button:visible, input[type="submit"]:visible, input[type="button"]:visible, .btn:visible, [role="button"]:visible').filter({ hasText: destructiveLabel }).last();
+      if (!await confirm.count()) confirm = dialog.locator('button.btn-danger:visible, input.btn-danger:visible, [class*="delete"]:visible, [data-action*="delete"]:visible, input[type="submit"]:visible').last();
+      if (!await confirm.count()) {
+        const dialogText = safeSoulDiagnosticText(await dialog.innerText().catch(() => ""));
+        throw new Error(`魂セラピスト保留登録の解除確認ボタンが見つかりません（画面=${dialogText || "表示なし"}）`);
+      }
       await confirm.click();
     }
   }
