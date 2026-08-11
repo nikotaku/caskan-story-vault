@@ -64,27 +64,33 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (action === "run-cast") {
       const castId = stringValue(source.castId);
       if (!castId) throw new Error("castId が必要です");
-      const { data: cast } = await admin.from("casts").select("id,store_id").eq("id", castId).eq("store_id", storeId).maybeSingle();
+      const { data: cast } = await admin.from("casts").select("id,store_id,o2_login_email").eq("id", castId).eq("store_id", storeId).maybeSingle();
       if (!cast) throw new Error("対象セラピストが見つかりません");
       const jobId = await enqueueCastJob(admin, storeId, castId);
       const rawCredentials = source.soulCredentials && typeof source.soulCredentials === "object"
         ? source.soulCredentials as Record<string, unknown>
         : {};
       let soulCredentials: SoulCredentials | undefined =
-        stringValue(rawCredentials.email) && stringValue(rawCredentials.password)
-          ? { email: stringValue(rawCredentials.email), password: stringValue(rawCredentials.password) }
+        stringValue(rawCredentials.loginId) && stringValue(rawCredentials.password)
+          ? {
+            loginId: stringValue(rawCredentials.loginId),
+            password: stringValue(rawCredentials.password),
+            email: stringValue(rawCredentials.email) || stringValue(cast.o2_login_email) || undefined,
+          }
           : undefined;
       if (!soulCredentials) {
         const { data: storedCredentials, error: credentialsError } = await admin.from("cast_site_credentials")
           .select("login_id,password")
           .eq("store_id", storeId)
           .eq("cast_id", castId)
-          .eq("site", "esutama")
+          .eq("site", "o2")
           .maybeSingle();
         if (credentialsError) throw credentialsError;
-        const email = stringValue(storedCredentials?.login_id);
+        const loginId = stringValue(storedCredentials?.login_id);
         const password = stringValue(storedCredentials?.password);
-        if (email && password) soulCredentials = { email, password };
+        if (loginId && password) {
+          soulCredentials = { loginId, password, email: stringValue(cast.o2_login_email) || undefined };
+        }
       }
       const results = await processAvailableJobs(admin, { jobId, limit: 1, soulCredentials });
       res.status(200).json({ results });

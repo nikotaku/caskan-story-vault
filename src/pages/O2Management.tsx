@@ -22,12 +22,12 @@ type O2Row = {
   profile_url: string | null;
   credential_configured: boolean;
   login_id: string | null;
+  o2_login_email: string | null;
   x_profile_url: string | null;
   x_credential_configured: boolean;
   x_login_id: string | null;
   estama_profile_url: string | null;
   estama_credential_configured: boolean;
-  estama_login_id: string | null;
   last_o2_status: string | null;
   last_o2_error: string | null;
   last_posted_at: string | null;
@@ -36,12 +36,11 @@ type O2Row = {
 type EditForm = {
   created: boolean;
   linkageRequested: boolean;
+  o2Email: string;
   o2LoginId: string;
   o2Password: string;
   xLoginId: string;
   xPassword: string;
-  estamaLoginId: string;
-  estamaPassword: string;
   estamaProfileUrl: string;
 };
 
@@ -84,10 +83,9 @@ export default function O2Management() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<O2Row | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2LoginId: "", o2Password: "", xLoginId: "", xPassword: "", estamaLoginId: "", estamaPassword: "", estamaProfileUrl: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2Email: "", o2LoginId: "", o2Password: "", xLoginId: "", xPassword: "", estamaProfileUrl: "" });
   const [showO2Password, setShowO2Password] = useState(false);
   const [showXPassword, setShowXPassword] = useState(false);
-  const [showEstamaPassword, setShowEstamaPassword] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const { storeId, store, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
@@ -99,7 +97,7 @@ export default function O2Management() {
   const load = useCallback(async () => {
     if (!user || storeLoading) return;
     setLoading(true);
-    const { data, error } = await rpc("get_sns_connection_overview_v3", { p_store_id: storeId });
+    const { data, error } = await rpc("get_sns_connection_overview_v4", { p_store_id: storeId });
     if (error) toast.error(error.message);
     setRows((data || []) as O2Row[]);
     setLoading(false);
@@ -130,24 +128,27 @@ export default function O2Management() {
     setEditing(row);
     setShowO2Password(false);
     setShowXPassword(false);
-    setShowEstamaPassword(false);
     setEditForm({
       created: row.o2_created,
       linkageRequested: row.o2_linkage_requested,
+      o2Email: row.o2_login_email || "",
       o2LoginId: row.login_id || normalizeO2Id(row.profile_url || ""),
       o2Password: "",
       xLoginId: row.x_login_id || normalizeXId(row.x_profile_url || ""),
       xPassword: "",
-      estamaLoginId: row.estama_login_id || "",
-      estamaPassword: "",
       estamaProfileUrl: row.estama_profile_url || "",
     });
   };
 
   const save = async () => {
     if (!editing) return;
+    const o2Email = editForm.o2Email.trim();
     const o2LoginId = normalizeO2Id(editForm.o2LoginId);
     const xLoginId = normalizeXId(editForm.xLoginId);
+    if (o2Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o2Email)) {
+      toast.error("O2の登録メールアドレスを確認してください");
+      return;
+    }
     if (o2LoginId && !/^[A-Za-z0-9_]+$/.test(o2LoginId)) {
       toast.error("O2のIDは半角英数字とアンダーバーで入力してください");
       return;
@@ -172,32 +173,22 @@ export default function O2Management() {
       toast.error("Xの初回設定ではパスワードも入力してください");
       return;
     }
-    const estamaLoginId = editForm.estamaLoginId.trim();
     const estamaProfileUrl = editForm.estamaProfileUrl.trim();
-    if (editForm.estamaPassword && !estamaLoginId) {
-      toast.error("魂セラピストのIDを入力してください");
-      return;
-    }
-    if (!editing.estama_credential_configured && estamaLoginId && !editForm.estamaPassword) {
-      toast.error("魂セラピストの初回設定ではパスワードも入力してください");
-      return;
-    }
     if (estamaProfileUrl && !/^https:\/\/(?:www\.)?estama\.jp\//i.test(estamaProfileUrl)) {
       toast.error("魂セラピストのプロフィールURLを入力してください");
       return;
     }
     setSaving(true);
-    const { error } = await rpc("save_sns_connection_admin_v3", {
+    const { error } = await rpc("save_sns_connection_admin_v4", {
       p_store_id: storeId,
       p_cast_id: editing.cast_id,
       p_o2_created: editForm.created,
       p_o2_linkage_requested: editForm.linkageRequested,
+      p_o2_login_email: o2Email || null,
       p_login_id: o2LoginId || null,
       p_password: editForm.o2Password || null,
       p_x_login_id: xLoginId || null,
       p_x_password: editForm.xPassword || null,
-      p_estama_login_id: estamaLoginId || null,
-      p_estama_password: editForm.estamaPassword || null,
       p_estama_profile_url: estamaProfileUrl || null,
     });
     setSaving(false);
@@ -232,7 +223,7 @@ export default function O2Management() {
           </div>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            管理者が本人に代わってO2・X・魂セラピストのID、パスワード、プロフィールURLを登録できます。公開URLはセラピストカードと詳細ページへ反映されます。パスワードは保存後に再表示しません。
+            O2のメールアドレス・ID・パスワードを登録すると、魂セラピストの初回設定にも同じID・パスワードを使用します。公開URLはセラピストカードと詳細ページへ反映されます。パスワードは保存後に再表示しません。
           </div>
 
           <div className="grid gap-3 md:hidden">
@@ -283,6 +274,7 @@ export default function O2Management() {
           <div className="space-y-4 mt-2">
             <section className="rounded-xl border p-4 space-y-3">
               <div className="flex items-center justify-between"><h3 className="font-semibold">O2</h3>{editing?.credential_configured && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
+              <div><Label htmlFor="o2-email">登録メールアドレス</Label><Input id="o2-email" type="email" autoComplete="email" placeholder="therapist@example.jp" value={editForm.o2Email} onChange={(event) => setEditForm({ ...editForm, o2Email: event.target.value })} /></div>
               <div><Label htmlFor="o2-login-id">ID</Label><Input id="o2-login-id" autoComplete="off" placeholder="例: enka_asami" value={editForm.o2LoginId} onChange={(event) => setEditForm({ ...editForm, o2LoginId: event.target.value })} /></div>
               <div>
                 <Label htmlFor="o2-password">パスワード</Label>
@@ -309,16 +301,11 @@ export default function O2Management() {
 
             <section className="rounded-xl border p-4 space-y-3">
               <div className="flex items-center justify-between"><h3 className="font-semibold">魂セラピスト</h3>{editing?.estama_credential_configured && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
-              <div><Label htmlFor="estama-login-id">ID</Label><Input id="estama-login-id" autoComplete="off" placeholder="魂セラピストのログインID" value={editForm.estamaLoginId} onChange={(event) => setEditForm({ ...editForm, estamaLoginId: event.target.value })} /></div>
-              <div>
-                <Label htmlFor="estama-password">パスワード</Label>
-                <div className="relative"><Input id="estama-password" className="pr-10" type={showEstamaPassword ? "text" : "password"} autoComplete="new-password" placeholder={editing?.estama_credential_configured ? "変更する場合のみ入力" : "魂セラピストのパスワード"} value={editForm.estamaPassword} onChange={(event) => setEditForm({ ...editForm, estamaPassword: event.target.value })} /><button type="button" aria-label={showEstamaPassword ? "魂セラピストのパスワードを隠す" : "魂セラピストのパスワードを表示"} className="absolute right-0 top-0 h-full px-3 text-muted-foreground" onClick={() => setShowEstamaPassword((value) => !value)}>{showEstamaPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
-                {editing?.estama_credential_configured && <p className="mt-1 text-xs text-muted-foreground">現在のパスワードは表示されません。空欄なら変更しません。</p>}
-              </div>
+              <div className="rounded-lg bg-muted/60 p-3 text-sm"><p className="font-medium">ID・パスワードはO2と共通</p><p className="mt-1 text-xs text-muted-foreground">上のO2欄へ登録した内容を、魂セラピストの初回ログイン設定にも自動で使用します。</p></div>
               <div><Label htmlFor="estama-profile-url">プロフィールURL</Label><Input id="estama-profile-url" type="url" placeholder="https://estama.jp/shop/..." value={editForm.estamaProfileUrl} onChange={(event) => setEditForm({ ...editForm, estamaProfileUrl: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">公開側のセラピストカードと詳細ページへ自動反映されます。</p></div>
             </section>
 
-            <p className="text-xs text-muted-foreground">O2とXはIDから公開URLを自動生成します。魂セラピストは入力したプロフィールURLをそのまま公開側へ反映します。</p>
+            <p className="text-xs text-muted-foreground">O2とXはIDから公開URLを自動生成します。魂セラピストはO2と同じID・パスワードを使い、入力したプロフィールURLを公開側へ反映します。</p>
             <Button className="w-full" onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="mr-1 animate-spin" />}保存</Button>
           </div>
         </DialogContent>

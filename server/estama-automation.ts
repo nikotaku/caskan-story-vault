@@ -75,7 +75,7 @@ type AutomationJob = {
   max_attempts: number;
 };
 
-export type SoulCredentials = { email: string; password: string };
+export type SoulCredentials = { loginId: string; password: string; email?: string };
 
 const ESTAMA_SHIFT_DAYS = 14;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1_000;
@@ -101,7 +101,7 @@ export class LoginRequiredError extends Error {
 }
 
 export class SoulActivationRequiredError extends Error {
-  constructor(message = "エステ魂から送信されたログイン情報で初回ログインを完了してください") {
+  constructor(message = "魂セラピストの初回ログイン画面がまだ有効化されていません") {
     super(message);
     this.name = "SoulActivationRequiredError";
   }
@@ -606,7 +606,12 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
   let soulResult: Json = {};
   if (soul) {
     try { soulResult = await setupSoulTherapist(page, data.name, soul); }
-    catch (error) { soulResult = { status: "error", error: error instanceof Error ? error.message : String(error) }; }
+    catch (error) {
+      soulResult = {
+        status: error instanceof SoulActivationRequiredError ? "issued" : "error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   const profilePatch = {
@@ -620,7 +625,7 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
     ...(soul ? {
       soul_status: soulResult.status === "configured" ? "configured" : soulResult.status === "issued" ? "issued" : "error",
       soul_login_url: soulResult.loginUrl || null,
-      soul_account_email: soul.email,
+      soul_account_email: soul.email || current?.soul_account_email || null,
     } : {}),
   };
   const { error: profileError } = await admin.from("external_cast_profiles").upsert(profilePatch, { onConflict: "cast_id,provider" });
@@ -629,7 +634,78 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
   return { externalId, publicUrl, uploadedPhotos, photoRemoval, soul: soulResult };
 }
 
-async function setupSoulTherapist(page: Page, castName: string, credentials: SoulCredentials) {
+async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
+  const passwords = page.locator('input[type="password"]:visible');
+  if (!await passwords.count()) return false;
+
+  const loginId = page.locator([
+    'input[name*="login" i]:visible:not([type="password"])',
+    'input[id*="login" i]:visible:not([type="password"])',
+    'input[name*="user" i]:visible:not([type="password"])',
+    'input[id*="user" i]:visible:not([type="password"])',
+    'input[name*="account" i]:visible:not([type="password"])',
+    'input[id*="account" i]:visible:not([type="password"])',
+    'input[type="email"]:visible',
+    'input[type="text"]:visible',
+  ].join(",")).first();
+  if (!await loginId.count()) throw new Error("魂セラピストの初回ログインID入力欄が見つかりません");
+
+  await loginId.fill(credentials.loginId);
+  await passwords.nth(0).fill(credentials.password);
+  if (await passwords.count() > 1) await passwords.nth(1).fill(credentials.password);
+
+  const form = loginId.locator("xpath=ancestor::form[1]");
+  const root = await form.count() ? form : page.locator("body");
+  let submit = root.getByRole("button", { name: /設定する|登録する|保存する|確定|次へ|ログイン/, exact: false }).last();
+  if (!await submit.count()) submit = root.locator('input[type="submit"]:visible').last();
+  if (!await submit.count()) throw new Error("魂セラピストの初回ログイン確定ボタンが見つかりません");
+
+  await submit.click();
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+  await page.waitForTimeout(800);
+  const visibleErrors = await page.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible')
+    .allTextContents().catch(() => [] as string[]);
+  const errorMessage = visibleErrors.map((value) => value.trim()).filter(Boolean).join(" / ");
+  if (errorMessage) throw new Error(`魂セラピスト: ${errorMessage.slice(0, 300)}`);
+  if (await page.locator('input[type="password"]:visible').count()) {
+    throw new Error("魂セラピストの初回ログイン設定を完了できませんでした");
+  }
+  return true;
+}
+
+async function soulLoginTarget(page: Page, login: Locator) {
+  const rawValues = await login.evaluate((element) => [
+    element.getAttribute("href"),
+    element.getAttribute("data-url"),
+    element.getAttribute("data-href"),
+    element.getAttribute("formaction"),
+    element.getAttribute("onclick"),
+  ].filter((value): value is string => Boolean(value))).catch(() => [] as string[]);
+  for (const raw of rawValues) {
+    const match = raw.match(/https?:\/\/[^'"\s)]+|\/[^'"\s)]+/i)?.[0];
+    if (!match) continue;
+    const target = new URL(match, page.url());
+    if ((target.hostname === "estama.jp" || target.hostname === "www.estama.jp")
+      && /\/tamathera\//i.test(target.pathname)
+      && target.toString() !== ESTAMA_SOUL_URL) return target.toString();
+  }
+  return null;
+}
+
+async function trySoulCredentialSetup(page: Page, login: Locator, credentials: SoulCredentials) {
+  const target = await soulLoginTarget(page, login);
+  if (!target) return null;
+  await page.goto(target, { waitUntil: "domcontentloaded" });
+  const configured = await configureSoulLogin(page, credentials);
+  return configured ? { status: "configured", loginUrl: page.url() } : null;
+}
+
+async function setupSoulTherapist(
+  page: Page,
+  castName: string,
+  credentials: SoulCredentials,
+  options: { sendLoginInfo?: boolean } = {},
+) {
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
   let row = await findEstamaCastRow(page, { localName: castName });
@@ -638,15 +714,7 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
     await start.click();
     await page.waitForTimeout(300);
     const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, #createAccountModal:visible, .p-tamathera-confirm-modal:visible').last();
-    const credentialForm = page.locator('form:visible').filter({
-      has: page.locator('input[type="email"], input[name*="mail" i], input[type="password"]'),
-    }).last();
-    const setupRoot = await dialog.count() ? dialog : await credentialForm.count() ? credentialForm : page.locator("body");
-    const setupEmail = setupRoot.locator('input[type="email"]:visible, input[name*="mail" i]:visible').first();
-    const setupPasswords = setupRoot.locator('input[type="password"]:visible');
-    if (await setupEmail.count()) await setupEmail.fill(credentials.email);
-    if (await setupPasswords.count()) await setupPasswords.nth(0).fill(credentials.password);
-    if (await setupPasswords.count() > 1) await setupPasswords.nth(1).fill(credentials.password);
+    const setupRoot = await dialog.count() ? dialog : page.locator("body");
     let confirm = setupRoot.getByRole("button", { name: /確定|はい|開始する|作成する|登録|保存/, exact: false }).last();
     if (!await confirm.count()) confirm = setupRoot.getByRole("link", { name: /確定|はい|開始する|作成する|登録|保存/, exact: false }).last();
     if (!await confirm.count()) confirm = setupRoot.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /確定|はい|開始する|作成する|登録|保存|始める/ }).last();
@@ -665,8 +733,15 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   if (!await login.count()) return { status: "issued" };
   let loginClass = await login.getAttribute("class") || "";
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
+    const directSetup = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
+    if (directSetup) return directSetup;
+    await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    row = await findEstamaCastRow(page, { localName: castName });
+    login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+    loginClass = await login.getAttribute("class") || "";
     const sendLogin = row.getByText("ログイン情報を送る", { exact: true }).last();
-    if (await sendLogin.count()) {
+    if (options.sendLoginInfo !== false && await sendLogin.count()) {
       await sendLogin.click();
       await page.waitForTimeout(300);
       const sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
@@ -688,12 +763,12 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
       login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
       if (!await login.count()) return { status: "issued" };
       loginClass = await login.getAttribute("class") || "";
+      const setupAfterSend = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
+      if (setupAfterSend) return setupAfterSend;
     }
   }
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
-    const actions = [...new Set((await row.locator("a, button, .btn, .btn-wrap").allTextContents())
-      .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
-    throw new Error(`魂セラピスト本人ログインがまだ有効化されていません（表示操作: ${actions.join(" / ") || "なし"}）`);
+    throw new SoulActivationRequiredError();
   }
   const context = page.context();
   const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
@@ -701,14 +776,8 @@ async function setupSoulTherapist(page: Page, castName: string, credentials: Sou
   const popup = await popupPromise;
   const accountPage = popup || page;
   await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
-  const loginUrl = accountPage.url();
-  const email = accountPage.locator('input[type="email"], input[name*="mail" i]').first();
-  const passwords = accountPage.locator('input[type="password"]');
-  if (await email.count()) await email.fill(credentials.email);
-  if (await passwords.count()) await passwords.nth(0).fill(credentials.password);
-  if (await passwords.count() > 1) await passwords.nth(1).fill(credentials.password);
-  if (await email.count() || await passwords.count()) await clickSave(accountPage);
-  return { status: "configured", loginUrl };
+  await configureSoulLogin(accountPage, credentials);
+  return { status: "configured", loginUrl: accountPage.url() };
 }
 
 async function discoverShiftAdminUrl(page: Page, configuration: Json | null) {
@@ -1050,8 +1119,10 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     browser = connected.browser;
     const page = connected.page;
     let soulResult: Json | undefined;
-    if (input.soulCredentials && input.soulStatus !== "issued") {
-      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials);
+    if (input.soulCredentials && input.soulStatus !== "configured") {
+      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials, {
+        sendLoginInfo: input.soulStatus !== "issued",
+      });
     }
     await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
