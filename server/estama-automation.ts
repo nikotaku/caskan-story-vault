@@ -516,17 +516,19 @@ async function findEstamaCastRow(
       "td, th, .name, .cast-name, .therapist-name, strong, b, span, a",
     )).map((node) => node.textContent || "");
     const text = (element.textContent || "").trim();
+    const style = window.getComputedStyle(element);
     return {
       index,
       identity,
       values: [...values, ...text.split(/\r?\n/)],
       textLength: text.length,
       controls: element.querySelectorAll("input, select, button").length,
+      visible: element.getClientRects().length > 0 && style.display !== "none" && style.visibility !== "hidden",
     };
   }));
 
   const rank = (matches: typeof rowData) => matches.sort((left, right) =>
-    right.controls - left.controls || left.textLength - right.textLength
+    Number(right.visible) - Number(left.visible) || right.controls - left.controls || left.textLength - right.textLength
   );
 
   if (options.externalId) {
@@ -555,6 +557,11 @@ async function findEstamaCastRow(
     + `（画面: ${page.url()} / 候補: ${observed.join("、") || "なし"}）`,
   );
 }
+
+const visibleSoulAction = (root: Locator, label: RegExp) => root
+  .locator('a:visible, button:visible, input[type="button"]:visible, input[type="submit"]:visible, .btn:visible, [role="button"]:visible')
+  .filter({ hasText: label })
+  .last();
 
 async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, soul?: SoulCredentials) {
   if (!job.cast_id) throw new Error("登録対象のセラピストがありません");
@@ -931,7 +938,7 @@ async function trySoulInfoPage(page: Page, credentials: SoulCredentials) {
 }
 
 async function resetPendingSoulTherapist(page: Page, row: Locator, castName: string) {
-  const stop = row.getByText(/利用をやめる/, { exact: false }).last();
+  const stop = visibleSoulAction(row, /利用をやめる/);
   if (!await stop.count()) return false;
 
   let nativeConfirmed = false;
@@ -959,7 +966,7 @@ async function resetPendingSoulTherapist(page: Page, row: Locator, castName: str
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
   const refreshedRow = await findEstamaCastRow(page, { localName: castName });
-  return await refreshedRow.getByText(/魂セラピストを始める/, { exact: false }).count() > 0;
+  return await visibleSoulAction(refreshedRow, /魂セラピストを始める/).count() > 0;
 }
 
 async function setupSoulTherapist(
@@ -972,7 +979,7 @@ async function setupSoulTherapist(
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
   let row = await findEstamaCastRow(page, { localName: castName });
-  const start = row.getByText(/魂セラピストを始める/, { exact: false }).first();
+  const start = visibleSoulAction(row, /魂セラピストを始める/);
   if (await start.count()) {
     await start.click();
     await page.waitForTimeout(300);
@@ -992,7 +999,7 @@ async function setupSoulTherapist(
     await ensureAdminLogin(page);
     row = await findEstamaCastRow(page, { localName: castName });
   }
-  let login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+  let login = visibleSoulAction(row, /本人の代わりにログイン/);
   if (!await login.count()) return { status: "issued" };
   let loginClass = await login.getAttribute("class") || "";
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
@@ -1003,9 +1010,9 @@ async function setupSoulTherapist(
     await page.goto(ESTAMA_SOUL_WAITING_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
     row = await findEstamaCastRow(page, { localName: castName });
-    login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+    login = visibleSoulAction(row, /本人の代わりにログイン/);
     loginClass = await login.count() ? await login.getAttribute("class") || "" : "disabled";
-    const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).last();
+    const sendLogin = visibleSoulAction(row, /ログイン情報を送る/);
     if (await sendLogin.count()) {
       setupDiagnostics.push("ログイン情報操作あり");
       const setupFromRow = await trySoulDialogSetup(page, row, credentials);
@@ -1051,9 +1058,9 @@ async function setupSoulTherapist(
         await infoPage.close().catch(() => undefined);
       }
       await page.waitForTimeout(1_000);
-      const pageTarget = soulSetupTargetFromValues(page, [await page.content().catch(() => "")]);
-      if (pageTarget) {
-        await page.goto(pageTarget, { waitUntil: "domcontentloaded" });
+      const refreshedRowTarget = soulSetupTargetFromValues(page, [await row.evaluate((element) => element.outerHTML).catch(() => "")]);
+      if (refreshedRowTarget) {
+        await page.goto(refreshedRowTarget, { waitUntil: "domcontentloaded" });
         const configured = await configureSoulLogin(page, credentials);
         if (configured) return { status: "configured", loginUrl: page.url() };
       }
@@ -1092,7 +1099,7 @@ async function setupSoulTherapist(
       await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
       await ensureAdminLogin(page);
       row = await findEstamaCastRow(page, { localName: castName });
-      login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+      login = visibleSoulAction(row, /本人の代わりにログイン/);
       if (!await login.count()) return { status: "issued" };
       loginClass = await login.getAttribute("class") || "";
       const setupAfterSend = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
@@ -1387,7 +1394,7 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
     remoteName: external.remote_name,
     localName: cast.name,
   });
-  const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+  const login = visibleSoulAction(row, /本人の代わりにログイン/);
   if (!await login.count()) throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
 
   const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
@@ -1476,7 +1483,7 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
         remoteName: input.cast.remoteName || undefined,
         localName: input.cast.name,
       });
-      const login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
+      const login = visibleSoulAction(row, /本人の代わりにログイン/);
       if (!await login.count()) {
         throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
       }
