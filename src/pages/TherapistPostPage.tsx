@@ -221,8 +221,8 @@ export default function TherapistPostPage() {
       return;
     }
     const email = credential.email.trim();
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error("O2の登録メールアドレスを確認してください");
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("O2・魂セラピストで使う登録メールアドレスを確認してください");
       return;
     }
     setSubmitting(true);
@@ -237,7 +237,7 @@ export default function TherapistPostPage() {
       setCredential({ email: "", loginId: "", password: "" });
       setShowCreds(false);
       await fetchConnections();
-      toast.success("O2・魂セラピスト共通のログイン情報を保存しました");
+      toast.success("O2と魂セラピストのログイン情報を保存しました");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存に失敗しました");
     } finally {
@@ -337,10 +337,10 @@ export default function TherapistPostPage() {
           <div className="space-y-4 mt-2">
             <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><ShieldAlert size={17} className="shrink-0" /><p>O2は本人運用が原則です。セラピスト本人だけが設定・投稿し、認証情報をスタッフへ共有しないでください。</p></div>
             <a href="https://m-sns.net/cast/login/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">O2ログイン画面を確認 <ExternalLink size={14} /></a>
-            <div><Label htmlFor="o2-email">O2登録メールアドレス（任意）</Label><Input id="o2-email" type="email" autoComplete="email" placeholder="therapist@example.jp" value={credential.email} onChange={(event) => setCredential({ ...credential, email: event.target.value })} /></div>
+            <div><Label htmlFor="o2-email">O2登録メールアドレス（魂ログインにも使用）</Label><Input id="o2-email" type="email" autoComplete="email" placeholder="therapist@example.jp" value={credential.email} onChange={(event) => setCredential({ ...credential, email: event.target.value })} /></div>
             <div><Label htmlFor="o2-id">O2ユーザー名（@なし）</Label><Input id="o2-id" autoComplete="username" value={credential.loginId} onChange={(event) => setCredential({ ...credential, loginId: event.target.value })} /></div>
             <div><Label htmlFor="o2-password">O2パスワード</Label><Input id="o2-password" type="password" autoComplete="current-password" value={credential.password} onChange={(event) => setCredential({ ...credential, password: event.target.value })} /></div>
-            <p className="text-xs text-muted-foreground">ここで登録したID・パスワードを、魂セラピストの初回ログイン設定にも共通で使います。保存済みのパスワードは画面へ再表示しません。</p>
+            <p className="text-xs text-muted-foreground">魂セラピストは登録メールアドレスでログインし、パスワードはO2と共通で使います。保存済みのパスワードは画面へ再表示しません。</p>
             <Button className="w-full" onClick={handleSaveCredential} disabled={submitting}>{submitting && <Loader2 size={14} className="mr-1 animate-spin" />}保存</Button>
           </div>
         </DialogContent>
