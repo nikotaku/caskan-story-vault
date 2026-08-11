@@ -649,29 +649,46 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
   const passwords = page.locator('input[type="password"]:visible');
   if (!await passwords.count()) return false;
 
-  const loginId = page.locator([
+  let loginId = page.locator([
     'input[name*="login" i]:visible:not([type="password"])',
     'input[id*="login" i]:visible:not([type="password"])',
     'input[name*="user" i]:visible:not([type="password"])',
     'input[id*="user" i]:visible:not([type="password"])',
     'input[name*="account" i]:visible:not([type="password"])',
     'input[id*="account" i]:visible:not([type="password"])',
-    'input[type="email"]:visible',
-    'input[type="text"]:visible',
   ].join(",")).first();
+  if (!await loginId.count()) loginId = page.getByLabel(/ログインID|ユーザーID|アカウントID|ID/, { exact: false }).first();
+  if (!await loginId.count()) loginId = page.locator('input[type="text"]:visible').first();
+  if (!await loginId.count()) loginId = page.locator('input[type="email"]:visible').first();
   if (!await loginId.count()) throw new Error("魂セラピストの初回ログインID入力欄が見つかりません");
 
+  await loginId.evaluate((element) => element.setAttribute("data-enka-soul-login-id", "true"));
   await loginId.fill(credentials.loginId);
+  if (credentials.email) {
+    const emails = page.locator([
+      'input[type="email"]:visible:not([data-enka-soul-login-id])',
+      'input[name*="mail" i]:visible:not([data-enka-soul-login-id])',
+      'input[id*="mail" i]:visible:not([data-enka-soul-login-id])',
+    ].join(","));
+    for (let index = 0; index < await emails.count(); index += 1) {
+      await emails.nth(index).fill(credentials.email);
+    }
+  }
   await passwords.nth(0).fill(credentials.password);
   if (await passwords.count() > 1) await passwords.nth(1).fill(credentials.password);
 
   const form = loginId.locator("xpath=ancestor::form[1]");
   const root = await form.count() ? form : page.locator("body");
+  const requiredChecks = root.locator('input[type="checkbox"]:visible[required]');
+  for (let index = 0; index < await requiredChecks.count(); index += 1) {
+    await requiredChecks.nth(index).check();
+  }
   const submitLabel = /設定|登録|保存|確定|次へ|ログイン|送信|決定|作成|開始|同意|完了/;
   let submit = root.getByRole("button", { name: submitLabel, exact: false }).last();
   if (!await submit.count()) submit = root.getByRole("link", { name: submitLabel, exact: false }).last();
   if (!await submit.count()) submit = root.locator('button[type="submit"]:visible, input[type="submit"]:visible, input[type="image"]:visible').last();
   if (!await submit.count()) submit = root.locator('button:visible, [role="button"]:visible, a.btn:visible').filter({ hasText: submitLabel }).last();
+  if (!await submit.count()) submit = root.locator('input[type="button"]:visible, [onclick]:visible').last();
 
   if (await submit.count()) await submit.click();
   else if (await form.count()) {
@@ -687,7 +704,14 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
   const errorMessage = visibleErrors.map((value) => value.trim()).filter(Boolean).join(" / ");
   if (errorMessage) throw new Error(`魂セラピスト: ${errorMessage.slice(0, 300)}`);
   if (await page.locator('input[type="password"]:visible').count()) {
-    throw new Error("魂セラピストの初回ログイン設定を完了できませんでした");
+    const invalidFields = await page.locator('input:invalid:visible, select:invalid:visible, textarea:invalid:visible')
+      .evaluateAll((elements) => elements.slice(0, 6).map((element) => {
+        const input = element as HTMLInputElement;
+        return [input.tagName.toLowerCase(), input.type, input.name || input.id || "名称なし", input.validationMessage || "入力不備"]
+          .filter(Boolean).join(":");
+      })).catch(() => [] as string[]);
+    const screenText = safeSoulDiagnosticText(await page.locator("body").innerText().catch(() => ""));
+    throw new Error(`魂セラピストの初回ログイン設定を完了できませんでした（入力確認=${invalidFields.join(" / ") || "検出なし"}、画面=${screenText || "表示なし"}）`);
   }
   return true;
 }
