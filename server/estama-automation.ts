@@ -15,6 +15,7 @@ const decodeQr = jsQR as unknown as QrDecoder;
 
 export const ESTAMA_CAST_EDIT_URL = "https://estama.jp/admin/cast_edit/";
 export const ESTAMA_SOUL_URL = "https://estama.jp/admin/tamathera/therapist/";
+const ESTAMA_SOUL_WAITING_URL = `${ESTAMA_SOUL_URL}?status=waiting_initial_setup`;
 
 type Json = Record<string, unknown>;
 type AdminClient = SupabaseClient;
@@ -837,12 +838,12 @@ async function setupSoulTherapist(
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
     const directSetup = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
     if (directSetup) return directSetup;
-    await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+    await page.goto(ESTAMA_SOUL_WAITING_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
     row = await findEstamaCastRow(page, { localName: castName });
     login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
-    loginClass = await login.getAttribute("class") || "";
-    const sendLogin = row.getByText("ログイン情報を送る", { exact: true }).last();
+    loginClass = await login.count() ? await login.getAttribute("class") || "" : "disabled";
+    const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).last();
     if (await sendLogin.count()) {
       await sendLogin.click();
       await page.waitForTimeout(300);
@@ -876,7 +877,11 @@ async function setupSoulTherapist(
     }
   }
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
-    throw new SoulActivationRequiredError();
+    const actions = [...new Set((await row.locator("a, button, .btn, [role=button]").allTextContents())
+      .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
+    throw new SoulActivationRequiredError(
+      `魂セラピストの初回ログイン画面がまだ有効化されていません（利用可能な操作: ${actions.join(" / ") || "なし"}）`,
+    );
   }
   const context = page.context();
   const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
