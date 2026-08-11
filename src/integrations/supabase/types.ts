@@ -2611,6 +2611,122 @@ export type Database = {
           },
         ]
       }
+      promotion_plan_tasks: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          group_label: string
+          id: string
+          is_completed: boolean
+          label: string
+          plan_id: string
+          scheduled_on: string | null
+          sort_order: number
+          store_id: string
+          task_key: string
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          group_label: string
+          id?: string
+          is_completed?: boolean
+          label: string
+          plan_id: string
+          scheduled_on?: string | null
+          sort_order?: number
+          store_id: string
+          task_key: string
+          task_type: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          group_label?: string
+          id?: string
+          is_completed?: boolean
+          label?: string
+          plan_id?: string
+          scheduled_on?: string | null
+          sort_order?: number
+          store_id?: string
+          task_key?: string
+          task_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_plan_tasks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_plan_tasks_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          ends_on: string | null
+          id: string
+          is_active: boolean
+          plan_key: string
+          starts_on: string | null
+          store_id: string
+          therapist_label: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          ends_on?: string | null
+          id?: string
+          is_active?: boolean
+          plan_key: string
+          starts_on?: string | null
+          store_id: string
+          therapist_label: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          ends_on?: string | null
+          id?: string
+          is_active?: boolean
+          plan_key?: string
+          starts_on?: string | null
+          store_id?: string
+          therapist_label?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_plans_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referral_fee_adjustments: {
         Row: {
           amount: number
