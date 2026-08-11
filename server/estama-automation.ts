@@ -756,6 +756,36 @@ const safeSoulDiagnosticText = (value: string) => value
   .trim()
   .slice(0, 180);
 
+function soulSetupTargetFromValues(page: Page, rawValues: string[]) {
+  const checked = new Set<string>();
+  const pending = rawValues.filter(Boolean);
+  while (pending.length) {
+    const raw = pending.shift()!;
+    if (checked.has(raw)) continue;
+    checked.add(raw);
+    const normalized = raw
+      .replace(/\\\//g, "/")
+      .replace(/\\u002f/gi, "/")
+      .replace(/&amp;/gi, "&");
+    if (normalized !== raw) pending.push(normalized);
+    try {
+      const decoded = decodeURIComponent(raw);
+      if (decoded !== raw) pending.push(decoded);
+    } catch { /* URLではない表示文字列は無視する */ }
+
+    for (const match of raw.matchAll(/https?:\/\/[^'"<>\s)]+|\/[^'"<>\s)]+/gi)) {
+      try {
+        const target = new URL(match[0], page.url());
+        const isEstama = target.hostname === "estama.jp" || target.hostname === "www.estama.jp";
+        const isSoulSetup = /\/tamathera\//i.test(target.pathname) && !/\/admin\//i.test(target.pathname);
+        const isGenericLogin = /^\/tamathera\/login\/?$/i.test(target.pathname) && !target.search && !target.hash;
+        if (isEstama && isSoulSetup && !isGenericLogin) return target.toString();
+      } catch { /* 不正なURL候補は無視する */ }
+    }
+  }
+  return null;
+}
+
 async function soulSetupTargetFromDialog(page: Page, root: Locator) {
   const rawValues = await root.locator([
     "a[href]",
@@ -786,29 +816,7 @@ async function soulSetupTargetFromDialog(page: Page, root: Locator) {
   rawValues.push(...await soulQrValues(root));
   rawValues.push(await soulClipboardValue(page));
   rawValues.push(await root.innerText().catch(() => ""));
-
-  const checked = new Set<string>();
-  const pending = rawValues.filter(Boolean);
-  while (pending.length) {
-    const raw = pending.shift()!;
-    if (checked.has(raw)) continue;
-    checked.add(raw);
-    try {
-      const decoded = decodeURIComponent(raw);
-      if (decoded !== raw) pending.push(decoded);
-    } catch { /* URLではない表示文字列は無視する */ }
-
-    for (const match of raw.matchAll(/https?:\/\/[^'"<>\s)]+|\/[^'"<>\s)]+/gi)) {
-      try {
-        const target = new URL(match[0], page.url());
-        const isEstama = target.hostname === "estama.jp" || target.hostname === "www.estama.jp";
-        const isSoulSetup = /\/tamathera\//i.test(target.pathname) && !/\/admin\//i.test(target.pathname);
-        const isGenericLogin = /^\/tamathera\/login\/?$/i.test(target.pathname) && !target.search && !target.hash;
-        if (isEstama && isSoulSetup && !isGenericLogin) return target.toString();
-      } catch { /* 不正なURL候補は無視する */ }
-    }
-  }
-  return null;
+  return soulSetupTargetFromValues(page, rawValues);
 }
 
 async function trySoulDialogSetup(page: Page, root: Locator, credentials: SoulCredentials) {
@@ -872,8 +880,25 @@ async function setupSoulTherapist(
     if (await sendLogin.count()) {
       setupDiagnostics.push("ログイン情報操作あり");
       const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
+      const responsePromise = page.waitForResponse((response) => {
+        try {
+          const url = new URL(response.url());
+          return (url.hostname === "estama.jp" || url.hostname === "www.estama.jp")
+            && /\/tamathera\//i.test(url.pathname);
+        } catch { return false; }
+      }, { timeout: 5_000 }).catch(() => null);
       await sendLogin.click();
-      const infoPage = await popupPromise;
+      const [infoPage, infoResponse] = await Promise.all([popupPromise, responsePromise]);
+      if (infoResponse) {
+        setupDiagnostics.push(`通信あり(${infoResponse.request().method()}:${infoResponse.status()})`);
+        const responseBody = await infoResponse.text().catch(() => "");
+        const responseTarget = soulSetupTargetFromValues(page, [infoResponse.url(), responseBody]);
+        if (responseTarget) {
+          await page.goto(responseTarget, { waitUntil: "domcontentloaded" });
+          const configured = await configureSoulLogin(page, credentials);
+          if (configured) return { status: "configured", loginUrl: page.url() };
+        }
+      } else setupDiagnostics.push("対象通信なし");
       if (infoPage) {
         setupDiagnostics.push("別画面あり");
         const setupFromPopup = await trySoulInfoPage(infoPage, credentials);
