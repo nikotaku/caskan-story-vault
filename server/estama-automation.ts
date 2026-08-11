@@ -743,6 +743,19 @@ async function soulQrValues(root: Locator) {
   return values;
 }
 
+async function soulClipboardValue(page: Page) {
+  const origin = new URL(page.url()).origin;
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin }).catch(() => undefined);
+  return page.evaluate(() => navigator.clipboard?.readText()).catch(() => "");
+}
+
+const safeSoulDiagnosticText = (value: string) => value
+  .replace(/https?:\/\/\S+/gi, "[URL]")
+  .replace(/[A-Za-z0-9_-]{20,}/g, "[値]")
+  .replace(/\s+/g, " ")
+  .trim()
+  .slice(0, 180);
+
 async function soulSetupTargetFromDialog(page: Page, root: Locator) {
   const rawValues = await root.locator([
     "a[href]",
@@ -769,6 +782,7 @@ async function soulSetupTargetFromDialog(page: Page, root: Locator) {
     element.textContent,
   ].filter((value): value is string => Boolean(value)))).catch(() => [] as string[]);
   rawValues.push(...await soulQrValues(root));
+  rawValues.push(await soulClipboardValue(page));
   rawValues.push(await root.innerText().catch(() => ""));
 
   const checked = new Set<string>();
@@ -809,6 +823,7 @@ async function setupSoulTherapist(
   castName: string,
   credentials: SoulCredentials,
 ) {
+  const setupDiagnostics: string[] = [];
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
   let row = await findEstamaCastRow(page, { localName: castName });
@@ -845,14 +860,23 @@ async function setupSoulTherapist(
     loginClass = await login.count() ? await login.getAttribute("class") || "" : "disabled";
     const sendLogin = row.getByText(/ログイン情報を送る/, { exact: false }).last();
     if (await sendLogin.count()) {
+      setupDiagnostics.push("ログイン情報操作あり");
       await sendLogin.click();
       await page.waitForTimeout(300);
       let sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
       if (await sendDialog.count()) {
+        const [dialogText, qrCount, linkCount] = await Promise.all([
+          sendDialog.innerText().catch(() => ""),
+          sendDialog.locator('canvas, img, svg, [class*="qr" i], [id*="qr" i]').count(),
+          sendDialog.locator("a[href]").count(),
+        ]);
+        setupDiagnostics.push(`画面=${safeSoulDiagnosticText(dialogText) || "文字なし"},QR候補=${qrCount},リンク=${linkCount}`);
         const setupFromDialog = await trySoulDialogSetup(page, sendDialog, credentials);
         if (setupFromDialog) return setupFromDialog;
 
-        let reveal = sendDialog.getByRole("button", { name: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/, exact: false }).last();
+        let reveal = sendDialog.getByRole("button", { name: /URL.*コピー|コピー.*URL/, exact: false }).last();
+        if (!await reveal.count()) reveal = sendDialog.getByRole("link", { name: /URL.*コピー|コピー.*URL/, exact: false }).last();
+        if (!await reveal.count()) reveal = sendDialog.getByRole("button", { name: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/, exact: false }).last();
         if (!await reveal.count()) reveal = sendDialog.getByRole("link", { name: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/, exact: false }).last();
         if (!await reveal.count()) reveal = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/ }).last();
         if (await reveal.count()) {
@@ -864,7 +888,7 @@ async function setupSoulTherapist(
             if (setupAfterReveal) return setupAfterReveal;
           }
         }
-      }
+      } else setupDiagnostics.push("表示画面なし");
       await page.waitForTimeout(800);
       await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
       await ensureAdminLogin(page);
@@ -874,13 +898,13 @@ async function setupSoulTherapist(
       loginClass = await login.getAttribute("class") || "";
       const setupAfterSend = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
       if (setupAfterSend) return setupAfterSend;
-    }
+    } else setupDiagnostics.push("ログイン情報操作なし");
   }
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
     const actions = [...new Set((await row.locator("a, button, .btn, [role=button]").allTextContents())
       .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
     throw new SoulActivationRequiredError(
-      `魂セラピストの初回ログイン画面がまだ有効化されていません（利用可能な操作: ${actions.join(" / ") || "なし"}）`,
+      `魂セラピストの初回ログイン画面がまだ有効化されていません（利用可能な操作: ${actions.join(" / ") || "なし"}、初回設定: ${setupDiagnostics.join(" / ") || "確認できず"}）`,
     );
   }
   const context = page.context();
