@@ -930,10 +930,43 @@ async function trySoulInfoPage(page: Page, credentials: SoulCredentials) {
   return trySoulDialogSetup(page, page.locator("body"), credentials);
 }
 
+async function resetPendingSoulTherapist(page: Page, row: Locator, castName: string) {
+  const stop = row.getByText(/利用をやめる/, { exact: false }).last();
+  if (!await stop.count()) return false;
+
+  let nativeConfirmed = false;
+  const acceptDialog = async (dialog: Dialog) => {
+    nativeConfirmed = true;
+    await dialog.accept();
+  };
+  page.once("dialog", acceptDialog);
+  await stop.click();
+  await page.waitForTimeout(500);
+  page.off("dialog", acceptDialog);
+
+  if (!nativeConfirmed) {
+    const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
+    if (await dialog.count()) {
+      let confirm = dialog.getByRole("button", { name: /利用をやめる|停止する|解除する|はい|確定|OK/, exact: false }).last();
+      if (!await confirm.count()) confirm = dialog.getByRole("link", { name: /利用をやめる|停止する|解除する|はい|確定|OK/, exact: false }).last();
+      if (!await confirm.count()) confirm = dialog.locator('button:visible, input[type="submit"]:visible, .btn:visible, [role="button"]:visible').filter({ hasText: /利用をやめる|停止する|解除する|はい|確定|OK/ }).last();
+      if (!await confirm.count()) throw new Error("魂セラピスト保留登録の解除確認ボタンが見つかりません");
+      await confirm.click();
+    }
+  }
+
+  await page.waitForTimeout(1_200);
+  await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page);
+  const refreshedRow = await findEstamaCastRow(page, { localName: castName });
+  return await refreshedRow.getByText(/魂セラピストを始める/, { exact: false }).count() > 0;
+}
+
 async function setupSoulTherapist(
   page: Page,
   castName: string,
   credentials: SoulCredentials,
+  allowPendingReset = false,
 ) {
   const setupDiagnostics: string[] = [];
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
@@ -1069,6 +1102,9 @@ async function setupSoulTherapist(
   if (loginClass.includes("disabled") || !await login.isEnabled()) {
     const actions = [...new Set((await row.locator("a, button, .btn, [role=button]").allTextContents())
       .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
+    if (allowPendingReset && await resetPendingSoulTherapist(page, row, castName)) {
+      return setupSoulTherapist(page, castName, credentials, false);
+    }
     throw new SoulActivationRequiredError(
       `魂セラピストの初回ログイン画面がまだ有効化されていません（利用可能な操作: ${actions.join(" / ") || "なし"}、初回設定: ${setupDiagnostics.join(" / ") || "確認できず"}）`,
     );
@@ -1399,6 +1435,7 @@ export type PreparedEstamaDiary = {
   browserbaseContextId: string;
   soulStatus?: string | null;
   soulCredentials?: SoulCredentials;
+  allowPendingReset?: boolean;
   cast: {
     name: string;
     externalId?: string | null;
@@ -1424,7 +1461,7 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     let soulResult: Json | undefined;
     let accountPage: Page | null = null;
     if (input.soulCredentials && input.soulStatus !== "configured") {
-      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials);
+      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials, input.allowPendingReset === true);
       if (soulResult.status === "configured"
         && !/\/admin\//i.test(page.url())
         && !await page.locator('input[type="password"]:visible').count()) {
