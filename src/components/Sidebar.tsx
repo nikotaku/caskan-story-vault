@@ -212,6 +212,7 @@ const menuItems: MenuItem[] = [
     icon: UserCircle,
     children: [
       { href: "/staff", label: "新規登録" },
+      { href: "/promotion-schedule", label: "投稿宣伝スケジュール" },
       { href: "/education", label: "教育" },
       { href: "/post-management", label: "一括投稿管理" },
       { href: "/panel-manual", label: "パネル撮影マニュアル" },
