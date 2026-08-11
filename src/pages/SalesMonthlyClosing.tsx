@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { addMinutes, format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, subDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, ChevronDown, Loader2, CheckCircle, AlertCircle, AlertTriangle, Users, Receipt, Wallet, TrendingUp, Plus, Trash2, Lock, Download, PieChart } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, CheckCircle, AlertCircle, AlertTriangle, Users, Receipt, Wallet, TrendingUp, Plus, Trash2, Lock, Download, PieChart, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { downloadMonthlyReport } from "@/lib/monthlyClosingReport";
 import { splitClearanceExtraItems, sumClearanceExtraItems } from "@/lib/clearanceExtraItems";
@@ -176,6 +176,9 @@ export default function SalesMonthlyClosing() {
   const [loading, setLoading] = useState(true);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [savingItem, setSavingItem] = useState<string | null>(null);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editingAmount, setEditingAmount] = useState("");
+  const [savingExpenseId, setSavingExpenseId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(["expenses"]));
   // 紹介広告費の推奨額（完了予約 × 紹介ルール単価）
   const [referralSuggested, setReferralSuggested] = useState(0);
@@ -465,6 +468,43 @@ export default function SalesMonthlyClosing() {
     if (error) { toast.error("更新に失敗しました"); return; }
     setRecords((prev) => prev.map((r) => r.id === rec.id ? { ...r, is_paid: !r.is_paid } : r));
     toast.success(!rec.is_paid ? "支払済みにしました" : "未払いに戻しました");
+  };
+
+  const startEditingExpense = (rec: ExpenseRec) => {
+    setEditingExpenseId(rec.id);
+    setEditingAmount(String(rec.amount));
+  };
+
+  const cancelEditingExpense = () => {
+    setEditingExpenseId(null);
+    setEditingAmount("");
+  };
+
+  const handleUpdateExpenseAmount = async (rec: ExpenseRec) => {
+    const raw = editingAmount.trim();
+    const amount = Number(raw);
+    if (raw === "" || !Number.isSafeInteger(amount) || amount < 0) {
+      toast.error("0円以上の金額を整数で入力してください");
+      return;
+    }
+
+    setSavingExpenseId(rec.id);
+    const { data, error } = await supabase
+      .from("expenses")
+      .update({ amount })
+      .eq("id", rec.id)
+      .select("id, amount")
+      .single();
+    setSavingExpenseId(null);
+
+    if (error) {
+      toast.error(`金額の更新に失敗しました: ${error.message}`);
+      return;
+    }
+
+    setRecords((prev) => prev.map((r) => r.id === rec.id ? { ...r, amount: data.amount } : r));
+    cancelEditingExpense();
+    toast.success(`${rec.category}を ${yen(data.amount)} に更新しました`);
   };
 
   const handleAddVariable = async () => {
@@ -919,27 +959,79 @@ export default function SalesMonthlyClosing() {
                           {doneItems.map((item) => {
                             const rec = records.find((r) => r.category === item);
                             const unpaid = !!rec && !rec.is_paid;
+                            const isEditing = !!rec && editingExpenseId === rec.id;
                             return (
-                            <div key={item} className="px-4 py-3 flex items-center justify-between gap-3">
-                              <span className="text-sm flex items-center gap-2 min-w-0">
+                            <div key={item} className={`px-4 py-3 flex items-center justify-between gap-3 ${isEditing ? "flex-wrap sm:flex-nowrap" : ""}`}>
+                              <span className="text-sm flex items-center gap-2 min-w-0 flex-1">
                                 {unpaid
                                   ? <AlertCircle size={14} className="text-amber-500 shrink-0" />
                                   : <CheckCircle size={14} className="text-green-600 shrink-0" />}
                                 <span className="truncate">{item}</span>
                                 {unpaid && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">未払い</span>}
                               </span>
-                              <span className="flex items-center gap-2 shrink-0">
-                                <span className="font-bold tabular-nums">{yen(sumFor(item))}</span>
-                                {rec && (
-                                  <button
-                                    className="text-[11px] px-2 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground hover:bg-muted transition-colors"
-                                    onClick={() => handleTogglePaid(rec)}
-                                    title={unpaid ? "支払済みにする" : "未払いに戻す"}
+                              {rec && isEditing ? (
+                                <span className="flex w-full items-center justify-end gap-1.5 shrink-0 sm:w-auto">
+                                  <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    step="1"
+                                    autoFocus
+                                    aria-label={`${item}の金額`}
+                                    className="w-24 h-8 px-2 text-sm text-right font-bold tabular-nums"
+                                    value={editingAmount}
+                                    onChange={(e) => setEditingAmount(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleUpdateExpenseAmount(rec);
+                                      if (e.key === "Escape") cancelEditingExpense();
+                                    }}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-8 px-2 text-xs"
+                                    disabled={savingExpenseId === rec.id}
+                                    onClick={() => handleUpdateExpenseAmount(rec)}
                                   >
-                                    {unpaid ? "支払済みに" : "未払いに"}
-                                  </button>
-                                )}
-                              </span>
+                                    {savingExpenseId === rec.id ? <Loader2 size={13} className="animate-spin" /> : "保存"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 px-1.5 text-xs"
+                                    disabled={savingExpenseId === rec.id}
+                                    onClick={cancelEditingExpense}
+                                  >
+                                    取消
+                                  </Button>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1.5 shrink-0">
+                                  <span className="font-bold tabular-nums">{yen(sumFor(item))}</span>
+                                  {rec && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        aria-label={`${item}の金額を編集`}
+                                        className="inline-flex items-center gap-1 text-[11px] px-1.5 sm:px-2 py-0.5 rounded border border-primary/30 text-primary hover:bg-primary/5 transition-colors"
+                                        onClick={() => startEditingExpense(rec)}
+                                        title="金額を編集"
+                                      >
+                                        <Pencil size={11} /><span className="hidden sm:inline">編集</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="text-[11px] px-2 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground hover:bg-muted transition-colors"
+                                        onClick={() => handleTogglePaid(rec)}
+                                        title={unpaid ? "支払済みにする" : "未払いに戻す"}
+                                      >
+                                        {unpaid ? "支払済みに" : "未払いに"}
+                                      </button>
+                                    </>
+                                  )}
+                                </span>
+                              )}
                             </div>
                             );
                           })}
