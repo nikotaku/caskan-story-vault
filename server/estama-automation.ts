@@ -813,7 +813,7 @@ async function soulClipboardValue(page: Page) {
 }
 
 async function installSoulShareCapture(page: Page) {
-  await page.evaluate(() => {
+  const captureScript = () => {
     const state = globalThis as typeof globalThis & { __enkaSoulSharedValues?: string[] };
     state.__enkaSoulSharedValues = [];
     const capture = (value: unknown) => {
@@ -840,7 +840,9 @@ async function installSoulShareCapture(page: Page) {
         });
       }
     } catch { /* Clipboard APIを差し替えられないブラウザでは読取を使う */ }
-  }).catch(() => undefined);
+  };
+  await page.addInitScript(captureScript).catch(() => undefined);
+  await page.evaluate(captureScript).catch(() => undefined);
 }
 
 async function soulSharedValues(page: Page) {
@@ -888,29 +890,8 @@ function soulSetupTargetFromValues(page: Page, rawValues: string[]) {
 }
 
 async function soulSetupTargetFromDialog(page: Page, root: Locator) {
-  const rawValues = await root.locator([
-    "a[href]",
-    "input[value]",
-    "textarea",
-    "img[src]",
-    "iframe[src]",
-    "[data-url]",
-    "[data-href]",
-    "[data-text]",
-    "[data-qrcode]",
-    "[data-qr]",
-    "[onclick]",
-  ].join(",")).evaluateAll((elements) => elements.flatMap((element) => [
-    element.getAttribute("href"),
-    element.getAttribute("value"),
-    element.getAttribute("src"),
-    element.getAttribute("data-url"),
-    element.getAttribute("data-href"),
-    element.getAttribute("data-text"),
-    element.getAttribute("data-qrcode"),
-    element.getAttribute("data-qr"),
-    element.getAttribute("onclick"),
-    element.getAttribute("style"),
+  const rawValues = await root.locator("*").evaluateAll((elements) => elements.flatMap((element) => [
+    ...Array.from(element.attributes).map((attribute) => attribute.value),
     element instanceof HTMLTextAreaElement ? element.value : null,
     element.textContent,
   ].filter((value): value is string => Boolean(value)))).catch(() => [] as string[]);
@@ -1021,6 +1002,7 @@ async function setupSoulTherapist(
     if (directSetup) return directSetup;
     const directLogin = await trySoulDirectLogin(page, credentials).catch(() => null);
     if (directLogin) return directLogin;
+    await installSoulShareCapture(page);
     await page.goto(ESTAMA_SOUL_WAITING_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
     row = await findEstamaCastRow(page, { localName: castName });
