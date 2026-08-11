@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, CalendarPlus, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot, AlertTriangle } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
 import { ImportModal } from "@/components/ImportModal";
 import { EstamaImportModal, type EstamaProfileData } from "@/components/EstamaImportModal";
@@ -20,6 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { runEstamaCastAutomation, runEstamaProfileSync } from "@/lib/estamaAutomation";
+import { getCastBookingUrl, getCustomDomainBaseUrl } from "@/lib/bookingUrl";
 
 const THERAPIST_FEATURES = [
   "新人", "経験豊富", "業界未経験", "施術上手", "上品", "甘えん坊", "おとなしい", "おっとり",
@@ -1279,13 +1280,33 @@ export default function Staff() {
     }
   };
 
-  const copyShiftLink = (token: string) => {
-    const link = `${window.location.origin}/therapist/${token}/shift`;
-    navigator.clipboard.writeText(link);
-    toast({
-      title: "シフト提出URLをコピーしました",
-      description: "セラピストに送付してください",
-    });
+  const copyBookingFormLink = async (cast: Cast) => {
+    try {
+      let baseUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin;
+      const { data: storeData, error } = await supabase
+        .from("stores")
+        .select("custom_domain")
+        .eq("id", cast.store_id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const customBaseUrl = getCustomDomainBaseUrl(storeData?.custom_domain);
+      if (customBaseUrl) baseUrl = customBaseUrl;
+
+      await navigator.clipboard.writeText(getCastBookingUrl(baseUrl, cast.id));
+      toast({
+        title: "予約フォームURLをコピーしました",
+        description: "お客様への案内やSNSに使用できます",
+      });
+    } catch (error) {
+      console.error("Failed to copy booking form URL:", error);
+      toast({
+        title: "コピーに失敗しました",
+        description: "予約フォームURLを取得できませんでした",
+        variant: "destructive",
+      });
+    }
   };
 
   const addPhotoUrl = (url: string, isEdit: boolean) => {
@@ -1901,8 +1922,8 @@ export default function Staff() {
                             <Button type="button" variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => copyPortalLink(editingCast.access_token!)}>
                               <Copy size={13} />ポータルURL
                             </Button>
-                            <Button type="button" variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => copyShiftLink(editingCast.access_token!)}>
-                              <CalendarPlus size={13} />シフト提出URL
+                            <Button type="button" variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => copyBookingFormLink(editingCast)}>
+                              <Copy size={13} />予約フォームURL
                             </Button>
                           </>
                         ) : (
