@@ -952,16 +952,25 @@ async function resetPendingSoulTherapist(page: Page, row: Locator, castName: str
   page.off("dialog", acceptDialog);
 
   if (!nativeConfirmed) {
-    const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
+    let dialog = page.locator('#deleteAccountModal:visible, #delete-account-modal:visible, [id*="delete" i].modal:visible').last();
+    if (!await dialog.count()) dialog = page.locator('.modal:visible').last();
+    if (!await dialog.count()) dialog = page.locator('[role="dialog"]:visible, .dialog:visible').last();
     if (await dialog.count()) {
       const destructiveLabel = /利用をやめる|やめる|停止|解除|削除|はい|確定|OK/;
       let confirm = dialog.getByRole("button", { name: destructiveLabel, exact: false }).last();
       if (!await confirm.count()) confirm = dialog.getByRole("link", { name: destructiveLabel, exact: false }).last();
       if (!await confirm.count()) confirm = dialog.locator('button:visible, input[type="submit"]:visible, input[type="button"]:visible, .btn:visible, [role="button"]:visible').filter({ hasText: destructiveLabel }).last();
       if (!await confirm.count()) confirm = dialog.locator('button.btn-danger:visible, input.btn-danger:visible, [class*="delete"]:visible, [data-action*="delete"]:visible, input[type="submit"]:visible').last();
+      if (!await confirm.count()) confirm = page.getByRole("button", { name: destructiveLabel, exact: false }).last();
+      if (!await confirm.count()) confirm = page.locator('button.btn-danger:visible, input.btn-danger:visible, [class*="delete-confirm"]:visible, [class*="confirm-delete"]:visible, [data-action*="delete"]:visible').last();
       if (!await confirm.count()) {
         const dialogText = safeSoulDiagnosticText(await dialog.innerText().catch(() => ""));
-        throw new Error(`魂セラピスト保留登録の解除確認ボタンが見つかりません（画面=${dialogText || "表示なし"}）`);
+        const controls = await dialog.locator("a, button, input").evaluateAll((elements) => elements.slice(0, 8).map((element) => {
+          const input = element as HTMLInputElement;
+          return [element.tagName.toLowerCase(), input.type, input.value, element.textContent, element.id, element.className]
+            .filter(Boolean).join(":").replace(/\s+/g, " ").slice(0, 80);
+        })).catch(() => [] as string[]);
+        throw new Error(`魂セラピスト保留登録の解除確認ボタンが見つかりません（画面=${dialogText || "表示なし"},操作=${safeSoulDiagnosticText(controls.join(" / ")) || "なし"}）`);
       }
       await confirm.click();
     }
