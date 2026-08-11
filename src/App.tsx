@@ -107,6 +107,7 @@ import TextTemplates from "./pages/TextTemplates";
 import ImageStock from "./pages/ImageStock";
 import MediaStrategy from "./pages/MediaStrategy";
 import O2Management from "./pages/O2Management";
+import PromotionSchedule from "./pages/PromotionSchedule";
 import InquiryStats from "./pages/InquiryStats";
 import Tasks from "./pages/Tasks";
 import Bios from "./pages/Bios";
@@ -212,6 +213,7 @@ const App = () => {
           <Route path="/image-stock" element={<ImageStock />} />
           <Route path="/marketing/media" element={<MediaStrategy />} />
           <Route path="/marketing/o2" element={<O2Management />} />
+          <Route path="/promotion-schedule" element={<PromotionSchedule />} />
           <Route path="/inquiry-stats" element={<InquiryStats />} />
           <Route path="/cti-calls" element={<CtiCalls />} />
           <Route path="/sales" element={<SalesDashboard />} />
