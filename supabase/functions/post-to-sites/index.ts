@@ -82,6 +82,7 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
     ...payload,
     worker_token_hash: null,
     worker_token_claimed_at: new Date().toISOString(),
+    ...(payload.reset_soul_pending === true ? { reset_soul_pending: false } : {}),
   };
   const { data: claimed } = await admin.from("automation_jobs")
     .update({ payload: claimedPayload })
@@ -117,6 +118,7 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
       jobId: job.id,
       browserbaseContextId: connection.browserbase_context_id,
       soulStatus,
+      allowPendingReset: payload.reset_soul_pending === true,
       ...(needsSoulSetup ? {
         soulCredentials: {
           loginId: soulCredential.login_id,
