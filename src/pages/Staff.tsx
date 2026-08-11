@@ -279,7 +279,7 @@ export default function Staff() {
     instagram_url: "",
     estama_profile_url: "",
     estama_auto_register: true,
-    estama_account_email: "",
+    estama_account_login_id: "",
     estama_account_password: "",
     therapist_years: 0,
     follow_list: "",
@@ -489,10 +489,10 @@ export default function Staff() {
       return;
     }
 
-    if (!!formData.estama_account_email !== !!formData.estama_account_password) {
+    if (!!formData.estama_account_login_id !== !!formData.estama_account_password) {
       toast({
-        title: "魂セラピスト設定を確認してください",
-        description: "メールアドレスと初期パスワードは両方入力するか、両方空欄にしてください",
+        title: "O2・魂共通設定を確認してください",
+        description: "共通IDとパスワードは両方入力するか、両方空欄にしてください",
         variant: "destructive",
       });
       return;
@@ -572,8 +572,8 @@ export default function Staff() {
       setIsAddDialogOpen(false);
       if (inserted?.id && formData.estama_auto_register) {
         try {
-          const soulCredentials = formData.estama_account_email && formData.estama_account_password
-            ? { email: formData.estama_account_email, password: formData.estama_account_password }
+          const soulCredentials = formData.estama_account_login_id && formData.estama_account_password
+            ? { loginId: formData.estama_account_login_id, password: formData.estama_account_password }
             : undefined;
           const result = await runEstamaCastAutomation({
             storeId: inserted.store_id,
@@ -639,7 +639,7 @@ export default function Staff() {
       blog_url: profile.blog_url || "",
       estama_profile_url: profile.source_url || "",
       estama_auto_register: false,
-      estama_account_email: "",
+      estama_account_login_id: "",
       estama_account_password: "",
     });
     setShowProfileDetailAdd(true);
@@ -1817,18 +1817,17 @@ export default function Staff() {
                         {formData.estama_auto_register && (
                           <div className="grid grid-cols-1 gap-3 border-t border-blue-100 pt-3 sm:grid-cols-2">
                             <div>
-                              <Label htmlFor="add-estama-email" className="text-xs">魂セラピスト用メール（任意）</Label>
+                              <Label htmlFor="add-estama-login-id" className="text-xs">O2・魂共通ID（任意）</Label>
                               <Input
-                                id="add-estama-email"
-                                type="email"
+                                id="add-estama-login-id"
                                 autoComplete="off"
-                                placeholder="therapist@example.jp"
-                                value={formData.estama_account_email}
-                                onChange={(e) => setFormData({ ...formData, estama_account_email: e.target.value })}
+                                placeholder="O2と同じID"
+                                value={formData.estama_account_login_id}
+                                onChange={(e) => setFormData({ ...formData, estama_account_login_id: e.target.value })}
                               />
                             </div>
                             <div>
-                              <Label htmlFor="add-estama-password" className="text-xs">初期パスワード（任意）</Label>
+                              <Label htmlFor="add-estama-password" className="text-xs">O2・魂共通パスワード（任意）</Label>
                               <Input
                                 id="add-estama-password"
                                 type="password"
@@ -1837,7 +1836,7 @@ export default function Staff() {
                                 onChange={(e) => setFormData({ ...formData, estama_account_password: e.target.value })}
                               />
                             </div>
-                            <p className="text-[11px] text-muted-foreground sm:col-span-2">魂セラピスト初期設定に一度だけ使用し、パスワードは保存しません。</p>
+                            <p className="text-[11px] text-muted-foreground sm:col-span-2">O2に登録したものと同じID・パスワードを入力します。魂セラピストの初回ログイン画面で設定し、次回以降も共通で使用します。この画面では保存しません。</p>
                           </div>
                         )}
                       </div>

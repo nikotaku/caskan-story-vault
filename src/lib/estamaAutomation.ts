@@ -30,7 +30,7 @@ async function requestEstamaAutomation(body: Record<string, unknown>) {
 export async function runEstamaCastAutomation(input: {
   storeId: string;
   castId: string;
-  soulCredentials?: { email: string; password: string };
+  soulCredentials?: { loginId: string; password: string; email?: string };
 }): Promise<EstamaRunResult> {
   return requestEstamaAutomation({
     action: "run-cast",

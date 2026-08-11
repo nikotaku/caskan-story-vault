@@ -95,10 +95,10 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   const postId = stringValue(payload.post_id);
   const [{ data: connection }, { data: cast }, { data: external }, { data: post }, { data: soulCredential }] = await Promise.all([
     admin.from("automation_connections").select("browserbase_context_id,status").eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
-    admin.from("casts").select("name").eq("id", job.cast_id).maybeSingle(),
+    admin.from("casts").select("name,o2_login_email").eq("id", job.cast_id).maybeSingle(),
     admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status,soul_status").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
     admin.from("cast_posts").select("title,body,image_urls").eq("id", postId).eq("cast_id", job.cast_id).maybeSingle(),
-    admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("site", "esutama").maybeSingle(),
+    admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("site", "o2").maybeSingle(),
   ]);
   if (!connection?.browserbase_context_id || connection.status !== "ready") {
     return json(req, { error: "エステ魂ログイン設定が未完了です" }, 409);
@@ -108,7 +108,7 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   }
   const soulStatus = stringValue(external.soul_status);
   const soulReady = soulStatus === "configured";
-  const needsSoulSetup = !soulReady && soulStatus !== "issued";
+  const needsSoulSetup = !soulReady;
   if (needsSoulSetup && (!soulCredential?.login_id || !soulCredential?.password)) {
     return json(req, { error: "魂セラピスト本人ログイン情報が未設定です" }, 409);
   }
@@ -117,7 +117,13 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
       jobId: job.id,
       browserbaseContextId: connection.browserbase_context_id,
       soulStatus,
-      ...(needsSoulSetup ? { soulCredentials: { email: soulCredential.login_id, password: soulCredential.password } } : {}),
+      ...(needsSoulSetup ? {
+        soulCredentials: {
+          loginId: soulCredential.login_id,
+          password: soulCredential.password,
+          email: cast.o2_login_email || undefined,
+        },
+      } : {}),
       cast: { name: cast.name, externalId: external.external_cast_id, remoteName: external.remote_name },
       post: { title: post.title, body: post.body, imageUrls: post.image_urls },
     },
@@ -211,12 +217,9 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
     const soul = result.soul && typeof result.soul === "object" ? result.soul as JsonRecord : null;
     if (soul) {
       const soulStatus = stringValue(soul.status);
-      const { data: credential } = await admin.from("cast_site_credentials").select("login_id")
-        .eq("cast_id", post.cast_id).eq("site", "esutama").maybeSingle();
       await admin.from("external_cast_profiles").update({
         soul_status: soulStatus === "configured" ? "configured" : soulStatus === "issued" ? "issued" : "error",
         soul_login_url: stringValue(soul.loginUrl) || null,
-        soul_account_email: credential?.login_id || null,
       }).eq("cast_id", post.cast_id).eq("provider", "estama");
     }
     await Promise.all([
