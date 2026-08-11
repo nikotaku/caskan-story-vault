@@ -700,11 +700,70 @@ async function trySoulCredentialSetup(page: Page, login: Locator, credentials: S
   return configured ? { status: "configured", loginUrl: page.url() } : null;
 }
 
+async function soulSetupTargetFromDialog(page: Page, root: Locator) {
+  const rawValues = await root.locator([
+    "a[href]",
+    "input[value]",
+    "textarea",
+    "img[src]",
+    "[data-url]",
+    "[data-href]",
+    "[data-text]",
+    "[data-qrcode]",
+    "[data-qr]",
+    "[onclick]",
+  ].join(",")).evaluateAll((elements) => elements.flatMap((element) => [
+    element.getAttribute("href"),
+    element.getAttribute("value"),
+    element.getAttribute("src"),
+    element.getAttribute("data-url"),
+    element.getAttribute("data-href"),
+    element.getAttribute("data-text"),
+    element.getAttribute("data-qrcode"),
+    element.getAttribute("data-qr"),
+    element.getAttribute("onclick"),
+    element instanceof HTMLTextAreaElement ? element.value : null,
+    element.textContent,
+  ].filter((value): value is string => Boolean(value)))).catch(() => [] as string[]);
+  rawValues.push(await root.innerText().catch(() => ""));
+
+  const checked = new Set<string>();
+  const pending = rawValues.filter(Boolean);
+  while (pending.length) {
+    const raw = pending.shift()!;
+    if (checked.has(raw)) continue;
+    checked.add(raw);
+    try {
+      const decoded = decodeURIComponent(raw);
+      if (decoded !== raw) pending.push(decoded);
+    } catch { /* URLではない表示文字列は無視する */ }
+
+    for (const match of raw.matchAll(/https?:\/\/[^'"<>\s)]+|\/[^'"<>\s)]+/gi)) {
+      try {
+        const target = new URL(match[0], page.url());
+        const isEstama = target.hostname === "estama.jp" || target.hostname === "www.estama.jp";
+        const isSoulSetup = /\/tamathera\//i.test(target.pathname) && !/\/admin\//i.test(target.pathname);
+        const isGenericLogin = /^\/tamathera\/login\/?$/i.test(target.pathname) && !target.search && !target.hash;
+        if (isEstama && isSoulSetup && !isGenericLogin) return target.toString();
+      } catch { /* 不正なURL候補は無視する */ }
+    }
+  }
+  return null;
+}
+
+async function trySoulDialogSetup(page: Page, root: Locator, credentials: SoulCredentials) {
+  const target = await soulSetupTargetFromDialog(page, root);
+  if (!target) return null;
+  await page.goto(target, { waitUntil: "domcontentloaded" });
+  const configured = await configureSoulLogin(page, credentials);
+  if (!configured) throw new Error("魂セラピストの初回設定URLにID・パスワード入力欄が見つかりません");
+  return { status: "configured", loginUrl: page.url() };
+}
+
 async function setupSoulTherapist(
   page: Page,
   castName: string,
   credentials: SoulCredentials,
-  options: { sendLoginInfo?: boolean } = {},
 ) {
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
@@ -741,19 +800,25 @@ async function setupSoulTherapist(
     login = row.getByText(/本人の代わりにログイン/, { exact: false }).first();
     loginClass = await login.getAttribute("class") || "";
     const sendLogin = row.getByText("ログイン情報を送る", { exact: true }).last();
-    if (options.sendLoginInfo !== false && await sendLogin.count()) {
+    if (await sendLogin.count()) {
       await sendLogin.click();
       await page.waitForTimeout(300);
-      const sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
+      let sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
       if (await sendDialog.count()) {
-        let sendConfirm = sendDialog.getByRole("button", { name: /送信する|送る|はい|確定|閉じる|OK/, exact: false }).last();
-        if (!await sendConfirm.count()) sendConfirm = sendDialog.getByRole("link", { name: /送信する|送る|はい|確定|閉じる|OK/, exact: false }).last();
-        if (!await sendConfirm.count()) sendConfirm = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /送信する|送る|はい|確定|閉じる|OK/ }).last();
-        if (!await sendConfirm.count()) sendConfirm = sendDialog.getByText("閉じる", { exact: true }).last();
-        if (await sendConfirm.count()) await sendConfirm.click();
-        else {
-          const sendText = (await sendDialog.innerText()).replace(/\s+/g, " ").trim().slice(0, 300);
-          throw new Error(`魂セラピストのログイン情報送信を確定できません（画面: ${sendText || "表示なし"}）`);
+        const setupFromDialog = await trySoulDialogSetup(page, sendDialog, credentials);
+        if (setupFromDialog) return setupFromDialog;
+
+        let reveal = sendDialog.getByRole("button", { name: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/, exact: false }).last();
+        if (!await reveal.count()) reveal = sendDialog.getByRole("link", { name: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/, exact: false }).last();
+        if (!await reveal.count()) reveal = sendDialog.locator('.btn:visible, [role="button"]:visible').filter({ hasText: /URL|QR|表示する|発行する|送信する|送る|はい|確定|OK/ }).last();
+        if (await reveal.count()) {
+          await reveal.click();
+          await page.waitForTimeout(500);
+          sendDialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, [id*="Modal"]:visible, [id*="modal"]:visible, [class*="modal"]:visible').last();
+          if (await sendDialog.count()) {
+            const setupAfterReveal = await trySoulDialogSetup(page, sendDialog, credentials);
+            if (setupAfterReveal) return setupAfterReveal;
+          }
         }
       }
       await page.waitForTimeout(800);
@@ -1120,9 +1185,7 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     const page = connected.page;
     let soulResult: Json | undefined;
     if (input.soulCredentials && input.soulStatus !== "configured") {
-      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials, {
-        sendLoginInfo: input.soulStatus !== "issued",
-      });
+      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials);
     }
     await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
     await ensureAdminLogin(page);
