@@ -667,11 +667,19 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
 
   const form = loginId.locator("xpath=ancestor::form[1]");
   const root = await form.count() ? form : page.locator("body");
-  let submit = root.getByRole("button", { name: /設定する|登録する|保存する|確定|次へ|ログイン/, exact: false }).last();
-  if (!await submit.count()) submit = root.locator('input[type="submit"]:visible').last();
-  if (!await submit.count()) throw new Error("魂セラピストの初回ログイン確定ボタンが見つかりません");
+  const submitLabel = /設定|登録|保存|確定|次へ|ログイン|送信|決定|作成|開始|同意|完了/;
+  let submit = root.getByRole("button", { name: submitLabel, exact: false }).last();
+  if (!await submit.count()) submit = root.getByRole("link", { name: submitLabel, exact: false }).last();
+  if (!await submit.count()) submit = root.locator('button[type="submit"]:visible, input[type="submit"]:visible, input[type="image"]:visible').last();
+  if (!await submit.count()) submit = root.locator('button:visible, [role="button"]:visible, a.btn:visible').filter({ hasText: submitLabel }).last();
 
-  await submit.click();
+  if (await submit.count()) await submit.click();
+  else if (await form.count()) {
+    await form.evaluate((element) => {
+      if (!(element instanceof HTMLFormElement)) throw new Error("form要素ではありません");
+      element.requestSubmit();
+    });
+  } else await passwords.last().press("Enter");
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
   await page.waitForTimeout(800);
   const visibleErrors = await page.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible')
