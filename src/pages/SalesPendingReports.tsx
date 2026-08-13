@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { format, parseISO } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { Check, RefreshCw } from "lucide-react";
@@ -17,10 +17,12 @@ interface SalesRecord {
   id: string;
   date: string;
   cast_id: string | null;
+  store_id: string;
   cash_amount: number;
   card_amount: number;
   paypay_amount: number;
   total_amount: number;
+  manual_adjustment: number;
   customer_count: number;
   notes: string | null;
   status: string;
@@ -78,7 +80,7 @@ export default function SalesPendingReports() {
   const [showAll, setShowAll] = useState(false);
   // key: "YYYY-MM-DD_castId" → 予約詳細リスト
   const [reservationsByKey, setReservationsByKey] = useState<Record<string, ReservationDetail[]>>({});
-  // option_name → customer_price
+  // store_id:option_name → customer_price
   const [optionPriceMap, setOptionPriceMap] = useState<Record<string, number>>({});
 
   const { user, loading: authLoading } = useAuth();
@@ -114,7 +116,7 @@ export default function SalesPendingReports() {
           .order("date", { ascending: false }),
         supabase
           .from("option_rates")
-          .select("option_name, customer_price"),
+          .select("store_id, option_name, customer_price"),
       ]);
 
       const salesData = (s.data as SalesRecord[]) || [];
@@ -124,24 +126,53 @@ export default function SalesPendingReports() {
 
       // オプション料金マップ
       const priceMap: Record<string, number> = {};
-      for (const o of (optResult.data || []) as any[]) {
-        priceMap[o.option_name] = o.customer_price ?? 0;
+      for (const o of optResult.data || []) {
+        priceMap[`${o.store_id}:${o.option_name}`] = o.customer_price ?? 0;
       }
       setOptionPriceMap(priceMap);
 
-      // 予約詳細を (date, cast_id) ごとに取得
+      // 予約詳細を営業日の (date, cast_id) ごとに取得する。
+      // 営業日には翌日の営業開始時刻前までを含める。
       const uniqueDates = [...new Set(salesData.map((r) => r.date))];
       if (uniqueDates.length > 0) {
-        const { data: resData } = await supabase
-          .from("reservations")
-          .select("cast_id, reservation_date, price, payment_fee, customer_name, course_name, start_time, options")
-          .in("reservation_date", uniqueDates)
-          .neq("status", "cancelled")
-          .order("start_time", { ascending: true });
+        const storeIds = [...new Set(salesData.map((r) => r.store_id))];
+        const calendarDates = [...new Set(uniqueDates.flatMap((date) => [
+          date,
+          format(addDays(parseISO(date), 1), "yyyy-MM-dd"),
+        ]))];
+        const [{ data: resData }, { data: settingsData }] = await Promise.all([
+          supabase
+            .from("reservations")
+            .select("store_id, cast_id, reservation_date, price, payment_fee, customer_name, course_name, start_time, options")
+            .in("store_id", storeIds)
+            .in("reservation_date", calendarDates)
+            .in("status", ["confirmed", "completed"])
+            .order("reservation_date", { ascending: true })
+            .order("start_time", { ascending: true }),
+          supabase
+            .from("shop_settings")
+            .select("store_id, business_day_start")
+            .in("store_id", storeIds),
+        ]);
+
+        const dayStartByStore: Record<string, string> = {};
+        for (const setting of settingsData || []) {
+          const configuredStart = setting.business_day_start || "10:00";
+          dayStartByStore[setting.store_id] = configuredStart.length === 5
+            ? `${configuredStart}:00`
+            : configuredStart;
+        }
+        const requestedBusinessDates = new Set(uniqueDates);
 
         const detailsMap: Record<string, ReservationDetail[]> = {};
-        for (const res of (resData || []) as any[]) {
-          const key = `${res.reservation_date}_${res.cast_id}`;
+        for (const res of resData || []) {
+          const dayStartTime = dayStartByStore[res.store_id] || "10:00:00";
+          const businessDate = res.start_time < dayStartTime
+            ? format(addDays(parseISO(res.reservation_date), -1), "yyyy-MM-dd")
+            : res.reservation_date;
+          if (!requestedBusinessDates.has(businessDate)) continue;
+
+          const key = `${businessDate}_${res.cast_id}`;
           if (!detailsMap[key]) detailsMap[key] = [];
           detailsMap[key].push({
             customer_name: res.customer_name ?? "不明",
@@ -153,6 +184,8 @@ export default function SalesPendingReports() {
           });
         }
         setReservationsByKey(detailsMap);
+      } else {
+        setReservationsByKey({});
       }
     } catch (e) {
       console.error(e);
@@ -171,36 +204,26 @@ export default function SalesPendingReports() {
       if (error) throw error;
       toast.success("確認済みにしました");
       setter(id);
-    } catch (e: any) {
-      toast.error(`失敗しました：${e?.message ?? "不明なエラー"}`);
+    } catch (e: unknown) {
+      toast.error(`失敗しました：${e instanceof Error ? e.message : "不明なエラー"}`);
     } finally {
       setConfirming(null);
     }
   };
 
   const confirmSales = async (id: string) => {
-    const record = salesRecords.find((r) => r.id === id);
     setConfirming(id);
     try {
-      // 1. 売上報告を確認済みに
-      const { error } = await supabase
-        .from("daily_sales_records")
-        .update({ status: "confirmed" })
-        .eq("id", id);
+      // 売上報告の行固定・権限確認・予約完了・報告承認をDB内の1処理で行う。
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await supabase.rpc("confirm_daily_sales_report", {
+        p_report_id: id,
+      });
       if (error) throw error;
-      // 2. 該当日・該当セラピストの予約を【完了】にする
-      if (record?.cast_id) {
-        await supabase
-          .from("reservations")
-          .update({ status: "completed" })
-          .eq("reservation_date", record.date)
-          .eq("cast_id", record.cast_id)
-          .neq("status", "cancelled");
-      }
       toast.success("承認しました（予約を完了にしました）");
       setSalesRecords((rs) => rs.map((r) => r.id === id ? { ...r, status: "confirmed" } : r));
-    } catch (e: any) {
-      toast.error(`失敗しました：${e?.message ?? "不明なエラー"}`);
+    } catch (e: unknown) {
+      toast.error(`失敗しました：${e instanceof Error ? e.message : "不明なエラー"}`);
     } finally {
       setConfirming(null);
     }
@@ -280,7 +303,8 @@ export default function SalesPendingReports() {
                   const resTotal = resDetails.length > 0
                     ? resDetails.reduce((s, rd) => s + rd.price + rd.payment_fee, 0)
                     : null;
-                  const diff = resTotal !== null ? r.total_amount - resTotal : null;
+                  const expectedTotal = resTotal !== null ? resTotal + (r.manual_adjustment || 0) : null;
+                  const diff = expectedTotal !== null ? r.total_amount - expectedTotal : null;
                   const hasDiff = diff !== null && diff !== 0;
                   return (
                     <Card key={r.id} className={hasDiff ? "border-orange-300" : ""}>
@@ -307,6 +331,9 @@ export default function SalesPendingReports() {
                               <span className="text-muted-foreground">現金 {yen(r.cash_amount)}</span>
                               <span className="text-muted-foreground">カード {yen(r.card_amount)}</span>
                               <span className="text-muted-foreground">PayPay {yen(r.paypay_amount)}</span>
+                              {!!r.manual_adjustment && (
+                                <span className="text-muted-foreground">調整 {yen(r.manual_adjustment)}</span>
+                              )}
                               <span className="text-muted-foreground">{r.customer_count}件</span>
                             </div>
 
@@ -314,7 +341,7 @@ export default function SalesPendingReports() {
                             {resDetails.length > 0 && (
                               <div className="mt-2 space-y-1.5">
                                 {resDetails.map((rd, i) => {
-                                  const optTotal = rd.options.reduce((s, o) => s + (optionPriceMap[o] ?? 0), 0);
+                                  const optTotal = rd.options.reduce((s, o) => s + (optionPriceMap[`${r.store_id}:${o}`] ?? 0), 0);
                                   return (
                                     <div key={i} className="text-xs bg-muted/30 rounded px-2.5 py-2">
                                       <div className="flex items-center justify-between gap-2">
@@ -330,7 +357,7 @@ export default function SalesPendingReports() {
                                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 pl-1 text-muted-foreground">
                                           {rd.options.map((o, j) => (
                                             <span key={j} className="text-blue-600">
-                                              +{o}{optionPriceMap[o] !== undefined ? ` ${yen(optionPriceMap[o])}` : ""}
+                                              +{o}{optionPriceMap[`${r.store_id}:${o}`] !== undefined ? ` ${yen(optionPriceMap[`${r.store_id}:${o}`])}` : ""}
                                             </span>
                                           ))}
                                           {optTotal > 0 && (
@@ -347,7 +374,9 @@ export default function SalesPendingReports() {
                             {/* 予約データとの合計比較 */}
                             {resTotal !== null && (
                               <div className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${hasDiff ? "bg-orange-50 text-orange-700" : "bg-green-50 text-green-700"}`}>
-                                <span>予約データ合計: <strong>{yen(resTotal)}</strong></span>
+                                <span>
+                                  予約データ合計{r.manual_adjustment ? "＋調整" : ""}: <strong>{yen(expectedTotal!)}</strong>
+                                </span>
                                 {hasDiff && (
                                   <span className="font-semibold">
                                     （{diff! > 0 ? "+" : ""}{yen(diff!)} のズレ）

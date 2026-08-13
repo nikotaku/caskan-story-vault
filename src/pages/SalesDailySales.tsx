@@ -40,7 +40,7 @@ interface Reservation {
   payment_fee: number | null;
   payment_method: string | null;
   payment_details: { method: string; amount: number }[] | null;
-  casts: { id: string; name: string; access_token: string | null } | null;
+  casts: { id: string; name: string } | null;
   // 計算済みバック内訳
   courseBack?: number;
   optionBacks?: { name: string; back: number }[];
@@ -127,10 +127,10 @@ export default function SalesDailySales() {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const nextDateStr = format(addDays(selectedDate, 1), "yyyy-MM-dd");
     try {
-      const [resResult, nextResResult, backRatesResult, optionRatesResult, nominationRatesResult, clearResult] = await Promise.all([
+      const [resResult, nextResResult, backRatesResult, optionRatesResult, nominationRatesResult, clearResult, tokensResult] = await Promise.all([
         supabase
           .from("reservations")
-          .select("id, customer_name, start_time, course_name, price, discount, status, course_type, duration, cast_id, options, nomination_type, payment_fee, payment_method, payment_details, casts(id, name, access_token)")
+          .select("id, customer_name, start_time, course_name, price, discount, status, course_type, duration, cast_id, options, nomination_type, payment_fee, payment_method, payment_details, casts(id, name)")
           .eq("reservation_date", dateStr)
           .gte("start_time", dayStartTime) // 営業開始時刻以前は前日の深夜またぎ分なので除外
           .in("status", ["confirmed", "completed"])
@@ -138,7 +138,7 @@ export default function SalesDailySales() {
         // 深夜またぎ分：翌日日付で保存されているが営業開始前の予約は当日扱い
         supabase
           .from("reservations")
-          .select("id, customer_name, start_time, course_name, price, discount, status, course_type, duration, cast_id, options, nomination_type, payment_fee, payment_method, payment_details, casts(id, name, access_token)")
+          .select("id, customer_name, start_time, course_name, price, discount, status, course_type, duration, cast_id, options, nomination_type, payment_fee, payment_method, payment_details, casts(id, name)")
           .eq("reservation_date", nextDateStr)
           .lt("start_time", dayStartTime)
           .in("status", ["confirmed", "completed"])
@@ -150,7 +150,13 @@ export default function SalesDailySales() {
           .from("daily_clearances" as any)
           .select("*")
           .eq("date", dateStr),
+        supabase.rpc("get_cast_access_tokens"),
       ]);
+
+      if (tokensResult.error) throw tokensResult.error;
+      const tokenMap = new Map(
+        (tokensResult.data || []).map((row) => [row.cast_id, row.access_token]),
+      );
 
       const brMap: Record<string, number> = {};
       for (const br of backRatesResult.data || []) {
@@ -204,7 +210,7 @@ export default function SalesDailySales() {
         const castId = r.cast_id;
         const castName = r.casts?.name ?? "未設定";
         if (!groups[castId]) {
-          const accessToken = r.casts?.access_token ?? null;
+          const accessToken = tokenMap.get(castId) ?? null;
           groups[castId] = { castId, castName, accessToken, reservations: [], totalSales: 0, cashSales: 0, autoBack: 0 };
         }
         // 予約ごとのバック内訳を計算

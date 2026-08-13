@@ -10,8 +10,22 @@ async function checkIsAdmin(userId: string): Promise<boolean> {
     .eq("user_id", userId)
     .eq("role", "admin")
     .maybeSingle();
-  // user_roles テーブルが存在しない場合はログイン済みユーザーを管理者として扱う
-  if (error) return true;
+  // user_rolesを使わない店舗環境では、owner/managerの所属を管理権限として扱う。
+  // どちらの照会にも失敗した場合は fail closed にする。
+  if (error || !data) {
+    const { data: membership, error: membershipError } = await supabase
+      .from("user_stores")
+      .select("role")
+      .eq("user_id", userId)
+      .in("role", ["owner", "manager"])
+      .limit(1)
+      .maybeSingle();
+    if (membershipError) {
+      console.error("Failed to verify admin role", error || membershipError);
+      return false;
+    }
+    return !!membership;
+  }
   return !!data;
 }
 

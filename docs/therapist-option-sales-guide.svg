@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c94f78"/>
+      <stop offset="1" stop-color="#e98fac"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#643447" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      text { font-family: "Noto Sans CJK JP", sans-serif; fill: #344054; }
+      .step-title { font-size: 32px; font-weight: 700; }
+      .body { font-size: 24px; }
+      .small { font-size: 20px; }
+      .ui { font-size: 23px; }
+      .ui-small { font-size: 18px; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1350" fill="#fff9fb"/>
+  <rect width="1080" height="180" fill="url(#header)"/>
+  <circle cx="87" cy="78" r="41" fill="#ffffff" opacity="0.96"/>
+  <path d="M70 82l11 11 25-30" fill="none" stroke="#cc557c" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="150" y="78" font-size="48" font-weight="800" fill="#ffffff">追加オプション・売上確定</text>
+  <text x="151" y="126" font-size="26" font-weight="500" fill="#fff7fa">セラピストマイページから、4ステップで完了</text>
+
+  <!-- STEP 1 -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="205" width="970" height="235" rx="26" fill="#ffffff" stroke="#f0c8d5" stroke-width="3"/>
+  </g>
+  <circle cx="105" cy="260" r="31" fill="#cc557c"/>
+  <text x="105" y="270" text-anchor="middle" font-size="30" font-weight="800" fill="#ffffff">1</text>
+  <text class="step-title" x="157" y="270">対象の予約を開く</text>
+  <text class="body" x="157" y="308" fill="#667085">「本日の予約」の</text>
+  <text class="body" x="350" y="308" font-weight="700" fill="#cc557c">オプション入力</text>
+  <text class="body" x="515" y="308" fill="#667085">を押します</text>
+  <rect x="150" y="330" width="815" height="82" rx="15" fill="#fcf7f9" stroke="#ead5dd" stroke-width="2"/>
+  <text class="ui" x="177" y="380" font-weight="800" fill="#cc557c">14:00</text>
+  <text class="ui" x="278" y="374" font-weight="700">さくら 様</text>
+  <text class="ui-small" x="278" y="401" fill="#667085">120分コース ・ 本指名</text>
+  <rect x="740" y="346" width="196" height="50" rx="12" fill="#ffffff" stroke="#cc557c" stroke-width="3"/>
+  <text x="838" y="379" text-anchor="middle" font-size="21" font-weight="700" fill="#cc557c">オプション入力</text>
+
+  <!-- STEP 2 -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="460" width="970" height="265" rx="26" fill="#ffffff" stroke="#f0c8d5" stroke-width="3"/>
+  </g>
+  <circle cx="105" cy="515" r="31" fill="#cc557c"/>
+  <text x="105" y="525" text-anchor="middle" font-size="30" font-weight="800" fill="#ffffff">2</text>
+  <text class="step-title" x="157" y="525">追加した内容を選ぶ</text>
+  <text class="body" x="157" y="563" fill="#667085">当日追加になったオプションだけを選択します</text>
+  <rect x="150" y="585" width="815" height="111" rx="15" fill="#fcf7f9" stroke="#ead5dd" stroke-width="2"/>
+  <text class="ui-small" x="177" y="617" font-weight="700">追加オプション</text>
+  <rect x="177" y="635" width="225" height="43" rx="10" fill="#fff" stroke="#cc557c" stroke-width="2"/>
+  <rect x="194" y="646" width="21" height="21" rx="4" fill="#cc557c"/>
+  <path d="M199 656l5 5 8-10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <text class="ui-small" x="227" y="663">延長30分</text>
+  <text class="ui-small" x="357" y="663" text-anchor="end" font-weight="700">+¥5,000</text>
+  <rect x="422" y="635" width="260" height="43" rx="10" fill="#fff" stroke="#e3e6eb" stroke-width="2"/>
+  <rect x="439" y="646" width="21" height="21" rx="4" fill="#fff" stroke="#aeb4bf" stroke-width="2"/>
+  <text class="ui-small" x="472" y="663">衣装チェンジ</text>
+  <text class="ui-small" x="652" y="663" text-anchor="end" font-weight="700">+¥2,000</text>
+  <rect x="702" y="635" width="230" height="43" rx="10" fill="#fff" stroke="#e3e6eb" stroke-width="2"/>
+  <rect x="719" y="646" width="21" height="21" rx="4" fill="#fff" stroke="#aeb4bf" stroke-width="2"/>
+  <text class="ui-small" x="752" y="663">オイル追加</text>
+  <text class="ui-small" x="908" y="663" text-anchor="end" font-weight="700">+¥1,000</text>
+
+  <!-- STEP 3 -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="745" width="970" height="255" rx="26" fill="#ffffff" stroke="#f0c8d5" stroke-width="3"/>
+  </g>
+  <circle cx="105" cy="800" r="31" fill="#cc557c"/>
+  <text x="105" y="810" text-anchor="middle" font-size="30" font-weight="800" fill="#ffffff">3</text>
+  <text class="step-title" x="157" y="810">支払方法と合計を確認して保存</text>
+  <text class="body" x="157" y="848" fill="#667085">現金・カード・PayPayを選び、金額を確認します</text>
+  <rect x="150" y="870" width="390" height="100" rx="15" fill="#fcf7f9" stroke="#ead5dd" stroke-width="2"/>
+  <text class="ui-small" x="177" y="901" font-weight="700">お支払い方法</text>
+  <rect x="177" y="916" width="104" height="37" rx="9" fill="#cc557c"/>
+  <text class="ui-small" x="229" y="942" text-anchor="middle" font-weight="700" fill="#ffffff">現金</text>
+  <rect x="290" y="916" width="104" height="37" rx="9" fill="#ffffff" stroke="#d6dae1"/>
+  <text class="ui-small" x="342" y="942" text-anchor="middle">カード</text>
+  <rect x="403" y="916" width="110" height="37" rx="9" fill="#ffffff" stroke="#d6dae1"/>
+  <text class="ui-small" x="458" y="942" text-anchor="middle">PayPay</text>
+  <rect x="560" y="870" width="405" height="100" rx="15" fill="#fcf7f9" stroke="#ead5dd" stroke-width="2"/>
+  <text class="ui-small" x="586" y="904">合計</text>
+  <text x="935" y="906" text-anchor="end" font-size="30" font-weight="800">¥24,000</text>
+  <rect x="586" y="921" width="349" height="36" rx="9" fill="#cc557c"/>
+  <text x="761" y="946" text-anchor="middle" font-size="19" font-weight="700" fill="#ffffff">変更を保存</text>
+
+  <!-- STEP 4 -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="1020" width="970" height="240" rx="26" fill="#ffffff" stroke="#f0c8d5" stroke-width="3"/>
+  </g>
+  <circle cx="105" cy="1075" r="31" fill="#cc557c"/>
+  <text x="105" y="1085" text-anchor="middle" font-size="30" font-weight="800" fill="#ffffff">4</text>
+  <text class="step-title" x="157" y="1085">最後に、本日の売上を確定</text>
+  <text class="body" x="157" y="1123" fill="#667085">全予約を確認・保存したあと、1回だけ押します</text>
+  <rect x="150" y="1145" width="815" height="86" rx="15" fill="#fdf3f7" stroke="#e9b9c9" stroke-width="2"/>
+  <text class="ui-small" x="180" y="1178" fill="#667085">総売上</text>
+  <text x="930" y="1179" text-anchor="end" font-size="28" font-weight="800">¥72,000</text>
+  <rect x="180" y="1191" width="750" height="30" rx="9" fill="#cc557c"/>
+  <text x="555" y="1214" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">本日の売上を確定する</text>
+
+  <rect x="55" y="1281" width="970" height="48" rx="16" fill="#fff0f5"/>
+  <circle cx="83" cy="1305" r="13" fill="#cc557c"/>
+  <text x="83" y="1311" text-anchor="middle" font-size="17" font-weight="800" fill="#ffffff">!</text>
+  <text x="110" y="1314" font-size="21" font-weight="600" fill="#9a3658">分割払いの金額変更が必要な場合は、確定前に店舗へ連絡してください。</text>
+</svg>

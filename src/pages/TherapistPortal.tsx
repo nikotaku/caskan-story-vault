@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy } from "lucide-react";
+import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import backRatesImage from "@/assets/back-rates-table.jpg";
@@ -13,6 +13,7 @@ import { format, startOfMonth, endOfMonth, isSameDay, addDays } from "date-fns";
 import { toExtTime } from "@/lib/timeFormat";
 import { getCastBookingUrl, getCustomDomainBaseUrl } from "@/lib/bookingUrl";
 import { ja } from "date-fns/locale";
+import { TherapistSalesPanel } from "@/components/therapist/TherapistSalesPanel";
 
 
 interface Cast {
@@ -129,7 +130,15 @@ const POST_IDEAS: { title: string; body: string }[] = [
 export default function TherapistPortal() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const [portalDayStartTime, setPortalDayStartTime] = useState("10:00:00");
+  const [dayStartHour, dayStartMinute] = portalDayStartTime.split(":").map(Number);
+  const nowForBusinessDate = new Date();
+  const isBeforeBusinessStart = nowForBusinessDate.getHours() * 60 + nowForBusinessDate.getMinutes()
+    < dayStartHour * 60 + dayStartMinute;
+  const businessDate = format(isBeforeBusinessStart ? addDays(nowForBusinessDate, -1) : nowForBusinessDate, "yyyy-MM-dd");
+  const dayStart = portalDayStartTime.slice(0, 5);
   const [cast, setCast] = useState<Cast | null>(null);
+  const [castStoreId, setCastStoreId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("menu");
   const [showBackRates, setShowBackRates] = useState(false);
@@ -145,6 +154,10 @@ export default function TherapistPortal() {
   // 今日以降の全予約（シフトの日付タップで内訳表示）
   const [menuAllUpcoming, setMenuAllUpcoming] = useState<UpcomingReservation[]>([]);
   const [expandedShiftDate, setExpandedShiftDate] = useState<string | null>(null);
+  const [salesDialog, setSalesDialog] = useState<{
+    mode: "edit" | "confirm";
+    reservationId: string | null;
+  } | null>(null);
 
   // Settlement
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -193,6 +206,47 @@ export default function TherapistPortal() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  const loadMenuReservations = useCallback(async () => {
+    if (!token) return;
+    setMenuTodayLoading(true);
+    try {
+      const [upcomingResult, dailyResult] = await Promise.all([
+        supabase.rpc("get_therapist_upcoming_reservations", { p_token: token }),
+        supabase.rpc("get_therapist_daily_reservations", {
+          p_token: token,
+          p_date: businessDate,
+        }),
+      ]);
+      if (dailyResult.error) throw dailyResult.error;
+
+      const dailyRows = ((dailyResult.data || []) as unknown as UpcomingReservation[])
+        .map((reservation) => ({ ...reservation, room: reservation.room ?? null }));
+      const startHour = Number(dayStart.split(":")[0]);
+      const extendedMinutes = (reservation: UpcomingReservation) => {
+        const [hour, minute] = reservation.start_time.split(":").map(Number);
+        return (hour < startHour ? hour + 24 : hour) * 60 + minute;
+      };
+      dailyRows.sort((a, b) => extendedMinutes(a) - extendedMinutes(b));
+      setMenuTodayRes(dailyRows);
+
+      if (upcomingResult.error) {
+        setMenuAllUpcoming(dailyRows);
+      } else {
+        const mergedRows = new Map<string, UpcomingReservation>();
+        ((upcomingResult.data || []) as unknown as UpcomingReservation[])
+          .forEach((reservation) => mergedRows.set(reservation.id, reservation));
+        dailyRows.forEach((reservation) => mergedRows.set(reservation.id, reservation));
+        setMenuAllUpcoming(Array.from(mergedRows.values()).sort((a, b) =>
+          a.reservation_date.localeCompare(b.reservation_date) || a.start_time.localeCompare(b.start_time)
+        ));
+      }
+    } catch {
+      toast.error("本日の予約を取得できませんでした");
+    } finally {
+      setMenuTodayLoading(false);
+    }
+  }, [businessDate, dayStart, token]);
+
   useEffect(() => {
     if (!token) { navigate("/"); return; }
     supabase.rpc("get_cast_by_access_token", { p_token: token }).then(async ({ data, error }) => {
@@ -215,11 +269,22 @@ export default function TherapistPortal() {
         .maybeSingle();
 
       if (castStoreData?.store_id) {
-        const { data: storeData } = await supabase
-          .from("stores")
-          .select("custom_domain")
-          .eq("id", castStoreData.store_id)
-          .maybeSingle();
+        const [{ data: storeData }, { data: shopSettings }] = await Promise.all([
+          supabase
+            .from("stores")
+            .select("custom_domain")
+            .eq("id", castStoreData.store_id)
+            .maybeSingle(),
+          supabase
+            .from("shop_settings")
+            .select("business_day_start")
+            .eq("store_id", castStoreData.store_id)
+            .limit(1)
+            .maybeSingle(),
+        ]);
+        const configuredStart = (shopSettings as { business_day_start?: string } | null)?.business_day_start || "10:00";
+        setPortalDayStartTime(configuredStart.length === 5 ? `${configuredStart}:00` : configuredStart);
+        setCastStoreId(castStoreData.store_id);
         const customBaseUrl = getCustomDomainBaseUrl(storeData?.custom_domain);
         if (customBaseUrl) resolvedBookingBaseUrl = customBaseUrl;
       }
@@ -237,29 +302,12 @@ export default function TherapistPortal() {
         setMenuShiftRows((data || []) as ShiftRow[]);
         setMenuShiftLoading(false);
       });
-
-      // 本日の予約タイムライン（営業日基準：深夜6時までは前日の営業日扱い）
-      const bizBase = now.getHours() < 6 ? addDays(now, -1) : now;
-      const bizToday = format(bizBase, "yyyy-MM-dd");
-      const bizNext = format(addDays(bizBase, 1), "yyyy-MM-dd");
-      supabase.rpc("get_therapist_upcoming_reservations" as any, { p_token: token }).then(({ data }) => {
-        setMenuAllUpcoming((data || []) as UpcomingReservation[]);
-        const rows = ((data || []) as UpcomingReservation[]).filter((r) =>
-          (r.reservation_date === bizToday && r.start_time >= "06:00") ||
-          (r.reservation_date === bizNext && r.start_time < "06:00")
-        );
-        rows.sort((a, b) => {
-          const ext = (r: UpcomingReservation) => {
-            const [h, m] = r.start_time.split(":").map(Number);
-            return (h < 6 ? h + 24 : h) * 60 + m;
-          };
-          return ext(a) - ext(b);
-        });
-        setMenuTodayRes(rows);
-        setMenuTodayLoading(false);
-      });
     });
   }, [token, navigate]);
+
+  useEffect(() => {
+    if (cast?.id && castStoreId) loadMenuReservations();
+  }, [cast?.id, castStoreId, loadMenuReservations]);
 
   useEffect(() => {
     if (view === "settlement" && cast) fetchSettlements();
@@ -302,7 +350,7 @@ export default function TherapistPortal() {
 
   const fetchUpcoming = async () => {
     setUpcomingLoading(true);
-    const { data, error } = await supabase.rpc("get_therapist_upcoming_reservations" as any, { p_token: token });
+    const { data, error } = await supabase.rpc("get_therapist_upcoming_reservations", { p_token: token });
     if (error) toast.error("予約の取得に失敗しました");
     else setUpcoming((data || []) as UpcomingReservation[]);
     setUpcomingLoading(false);
@@ -338,7 +386,7 @@ export default function TherapistPortal() {
 
   const handleSaveNotes = async (customerId: string) => {
     setNotesSaving(true);
-    const { error } = await supabase.rpc("update_therapist_customer_notes" as any, {
+    const { error } = await supabase.rpc("update_therapist_customer_notes", {
       p_token: token,
       p_customer_id: customerId,
       p_notes: notesValue,
@@ -529,9 +577,32 @@ export default function TherapistPortal() {
                       {r.options && r.options.length > 0 && (
                         <p className="text-xs text-muted-foreground truncate">➕ {r.options.join("、")}</p>
                       )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 h-8 border-primary/40 text-primary"
+                        disabled={!castStoreId}
+                        onClick={() => setSalesDialog({ mode: "edit", reservationId: r.id })}
+                      >
+                        <Receipt size={14} className="mr-1.5" />オプション入力
+                      </Button>
                     </div>
                   </div>
                 ))}
+                <div className="px-4 py-3 bg-primary/5">
+                  <Button
+                    type="button"
+                    className="w-full h-11 font-bold"
+                    disabled={!castStoreId}
+                    onClick={() => setSalesDialog({ mode: "confirm", reservationId: null })}
+                  >
+                    <CheckCircle2 size={17} className="mr-2" />本日の売上を確定
+                  </Button>
+                  <p className="mt-1.5 text-[11px] text-center text-muted-foreground">
+                    全予約の追加オプションと支払方法を確認してから押してください
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -1250,6 +1321,27 @@ export default function TherapistPortal() {
           </div>
         )}
       </main>
+
+      {/* 本日の予約から直接、追加オプション入力・売上確定 */}
+      <Dialog open={!!salesDialog} onOpenChange={(open) => !open && setSalesDialog(null)}>
+        <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {salesDialog?.mode === "edit" ? "追加オプション・売上内容" : "本日の売上を確定"}
+            </DialogTitle>
+          </DialogHeader>
+          {salesDialog && token && cast && castStoreId && (
+            <TherapistSalesPanel
+              token={token}
+              businessDate={businessDate}
+              mode={salesDialog.mode}
+              focusReservationId={salesDialog.reservationId}
+              onReservationSaved={loadMenuReservations}
+              onSalesSubmitted={loadMenuReservations}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Back rates dialog */}
       <Dialog open={showBackRates} onOpenChange={setShowBackRates}>
