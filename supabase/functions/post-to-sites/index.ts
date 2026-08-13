@@ -21,7 +21,6 @@ type PostRecord = {
   title: string | null;
   body: string;
   image_urls: string[] | null;
-  hp_status: string;
   o2_status: string;
   esutama_status: string;
   o2_attempts: number;
@@ -279,7 +278,7 @@ serve(async (req) => {
     if (!postId || !accessToken) return json(req, { error: "投稿IDとポータルトークンが必要です" }, 400);
     if (!['o2', 'esutama'].includes(target)) return json(req, { error: "送信先が正しくありません" }, 400);
     const { data: post, error: postError } = await admin.from("cast_posts")
-      .select("id,cast_id,store_id,title,body,image_urls,hp_status,o2_status,esutama_status,o2_attempts,esutama_attempts")
+      .select("id,cast_id,store_id,title,body,image_urls,o2_status,esutama_status,o2_attempts,esutama_attempts")
       .eq("id", postId)
       .maybeSingle<PostRecord>();
     if (postError) throw postError;
@@ -329,9 +328,9 @@ serve(async (req) => {
 });
 
 async function updateOverallStatus(admin: ReturnType<typeof createClient>, postId: string) {
-  const { data } = await admin.from("cast_posts").select("hp_status,o2_status,esutama_status").eq("id", postId).single();
+  const { data } = await admin.from("cast_posts").select("o2_status,esutama_status").eq("id", postId).single();
   if (!data) return;
-  const statuses = [data.hp_status, data.o2_status, data.esutama_status];
+  const statuses = [data.o2_status, data.esutama_status];
   const complete = statuses.every((status) => status === "posted");
   const failed = statuses.some((status) => status === "failed" || status === "skipped");
   await admin.from("cast_posts").update({
