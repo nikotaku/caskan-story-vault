@@ -133,7 +133,7 @@ export default function TherapistPortal() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("menu");
   const [showBackRates, setShowBackRates] = useState(false);
-  const [guideSite, setGuideSite] = useState<"o2" | "x" | "esutama" | "ranking" | null>(null);
+  const [guideSite, setGuideSite] = useState<"o2" | "esutama" | null>(null);
 
   // Upcoming reservations（事前予約）
   const [upcoming, setUpcoming] = useState<UpcomingReservation[]>([]);
@@ -425,17 +425,13 @@ export default function TherapistPortal() {
     { title: "振り込み申請", description: "報酬の振り込み申請フォーム", icon: ExternalLink, action: () => window.open("https://yoom.fun/5eee42a7-b4ff-49a8-8373-606c66495142/forms/shared/Cu2K735X9qaSAdMs45x6Bw", "_blank") },
   ];
 
-  const REGISTER_URLS: Record<"o2" | "x" | "esutama" | "ranking", string> = {
+  const REGISTER_URLS: Record<"o2" | "esutama", string> = {
     o2: "https://m-sns.net/cast-register/",
-    x: "https://x.com/i/flow/signup",
     esutama: "https://estama.jp/",
-    ranking: "https://mensesthe-ranking.com/cast-register/",
   };
-  const SITE_LABEL: Record<"o2" | "x" | "esutama" | "ranking", string> = {
+  const SITE_LABEL: Record<"o2" | "esutama", string> = {
     o2: "O2（ゼロツー）",
-    x: "X（旧Twitter）",
-    esutama: "エスたまの魂",
-    ranking: "メンズエステランキング",
+    esutama: "魂セラピスト",
   };
 
   return (
@@ -759,14 +755,14 @@ export default function TherapistPortal() {
             )}
           </div>
 
-          {/* 外部サイト連携（O2・X） */}
+          {/* 外部サイト連携（O2・魂セラピスト） */}
           <div className="rounded-xl border bg-card overflow-hidden">
             <div className="px-4 py-3 bg-muted/30 flex items-center gap-2">
               <ExternalLink size={15} className="text-primary" />
               <p className="font-semibold text-sm">外部サイト登録・連携</p>
             </div>
             <div className="p-4 space-y-4">
-              {(["o2", "x", "esutama", "ranking"] as const).map((site) => (
+              {(["o2", "esutama"] as const).map((site) => (
                 <div key={site}>
                   <p className="text-sm font-medium mb-2">{SITE_LABEL[site]}</p>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -1274,9 +1270,7 @@ export default function TherapistPortal() {
           ) : (
             <div className="py-6 text-center space-y-3">
               <p className="text-sm text-muted-foreground">
-                {guideSite === "esutama" && "エスたまの魂の新規登録は公式サイトから行えます。"}
-                {guideSite === "x" && "X（旧Twitter）の新規登録は公式サイトから行えます。"}
-                {guideSite === "ranking" && "メンズエステランキングの新規登録は公式サイトから行えます。"}
+                {guideSite === "esutama" && "魂セラピストの新規登録は公式サイトから行えます。"}
               </p>
             </div>
           )}
