@@ -1373,9 +1373,9 @@ async function skipOutsideShiftWindow(admin: AdminClient, job: AutomationJob): P
 }
 
 async function updatePostOverallStatus(admin: AdminClient, postId: string) {
-  const { data } = await admin.from("cast_posts").select("hp_status,o2_status,esutama_status").eq("id", postId).single();
+  const { data } = await admin.from("cast_posts").select("o2_status,esutama_status").eq("id", postId).single();
   if (!data) return;
-  const statuses = [data.hp_status, data.o2_status, data.esutama_status];
+  const statuses = [data.o2_status, data.esutama_status];
   const complete = statuses.every((status) => status === "posted");
   const failed = statuses.some((status) => status === "failed" || status === "skipped");
   await admin.from("cast_posts").update({

@@ -29,10 +29,8 @@ type Post = {
   title: string | null;
   body: string;
   status: string;
-  hp_status: string;
   o2_status: string;
   esutama_status: string;
-  hp_error: string | null;
   o2_error: string | null;
   esutama_error: string | null;
   created_at: string;
@@ -186,14 +184,14 @@ export default function TherapistPostPage() {
       setForm({ title: "", body: "", confirmed: false });
       setImages([]);
       setShowPost(false);
-      toast.success("HPの写メ日記へ掲載しました。O2・魂セラピストへ送信中です");
+      toast.success("O2・魂セラピストへ送信中です");
       await fetchPosts();
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
       await fetchPosts();
       if (results.some((result) => result.status === "rejected")) {
         toast.warning("外部媒体の一部に送れませんでした。履歴から失敗分だけ再送できます");
       } else {
-        toast.success("3媒体への送信処理が完了しました");
+        toast.success("2媒体への送信処理が完了しました");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "投稿に失敗しました");
@@ -250,9 +248,9 @@ export default function TherapistPostPage() {
   const o2Connected = connections.find((item) => item.site === "o2")?.configured;
   const estamaConnected = connections.find((item) => item.site === "esutama")?.configured;
 
-  const statusRow = (post: Post, target: "hp" | Target, label: string) => {
-    const status = target === "hp" ? post.hp_status : target === "o2" ? post.o2_status : post.esutama_status;
-    const error = target === "hp" ? post.hp_error : target === "o2" ? post.o2_error : post.esutama_error;
+  const statusRow = (post: Post, target: Target, label: string) => {
+    const status = target === "o2" ? post.o2_status : post.esutama_status;
+    const error = target === "o2" ? post.o2_error : post.esutama_error;
     const retryKey = `${post.id}:${target}`;
     return (
       <div className="flex items-start justify-between gap-2 text-xs">
@@ -260,7 +258,7 @@ export default function TherapistPostPage() {
           <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span>{label}</span><span className="text-muted-foreground">{status}</span></div>
           {error && <p className="mt-1 text-red-600 break-words">{error}</p>}
         </div>
-        {target !== "hp" && ["pending", "failed", "skipped"].includes(status) && (
+        {["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === retryKey}>
             {retrying === retryKey ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             <span className="ml-1">再送</span>
@@ -275,20 +273,19 @@ export default function TherapistPostPage() {
       <header className="border-b bg-card/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3 max-w-2xl">
           <button onClick={() => navigate(`/therapist/${token}`)} className="text-primary flex items-center gap-1 text-sm"><ChevronLeft size={18} />戻る</button>
-          <div className="flex-1"><p className="font-bold">3媒体投稿</p><p className="text-xs text-muted-foreground">HP写メ日記・O2・魂セラピスト</p></div>
+          <div className="flex-1"><p className="font-bold">2媒体投稿</p><p className="text-xs text-muted-foreground">O2・魂セラピスト</p></div>
           <button aria-label="O2ログイン設定" onClick={() => setShowCreds(true)} className="text-muted-foreground hover:text-foreground"><Settings size={19} /></button>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-4 max-w-2xl space-y-4">
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded border bg-green-50 border-green-200 text-green-700 p-2 text-center">HP<br />✓ 接続済み</div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
           <button onClick={() => setShowCreds(true)} className={`rounded border p-2 text-center ${o2Connected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>O2<br />{o2Connected ? "✓ 設定済み" : "未設定"}</button>
           <div className={`rounded border p-2 text-center ${estamaConnected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>魂セラピスト<br />{estamaConnected ? "✓ 接続済み" : "管理者設定待ち"}</div>
         </div>
 
         <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          HPには先に必ず保存し、O2と魂セラピストは別々に送信します。片方が失敗しても他媒体の投稿は消えず、失敗した媒体だけ再送できます。Xは投稿対象外です。
+          O2と魂セラピストへ別々に送信します。片方が失敗しても、失敗した媒体だけ再送できます。HP写メ日記やその他のSNSには掲載しません。
         </div>
 
         {posts.length === 0 ? <div className="text-center py-12 text-muted-foreground text-sm">投稿がありません</div> : (
@@ -297,7 +294,6 @@ export default function TherapistPostPage() {
               <article key={post.id} className="border rounded-xl p-4 bg-card space-y-3">
                 <div>{post.title && <p className="font-semibold text-sm">{post.title}</p>}<p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">{post.body}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(post.created_at), "M/d HH:mm", { locale: ja })}</p></div>
                 <div className="border-t pt-3 space-y-2">
-                  {statusRow(post, "hp", "HP写メ日記")}
                   {statusRow(post, "o2", "O2")}
                   {statusRow(post, "esutama", "魂セラピスト")}
                 </div>
@@ -311,7 +307,7 @@ export default function TherapistPostPage() {
 
       <Dialog open={showPost} onOpenChange={setShowPost}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>3媒体へ同時投稿</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>2媒体へ同時投稿</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div><Label htmlFor="post-title">タイトル（任意・120文字まで）</Label><Input id="post-title" maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
             <div><Label htmlFor="post-body">本文（5000文字まで）</Label><Textarea id="post-body" rows={7} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /><p className="text-right text-xs text-muted-foreground mt-1">{form.body.length}/5000</p></div>
@@ -326,7 +322,7 @@ export default function TherapistPostPage() {
               <input type="checkbox" className="mt-0.5" checked={form.confirmed} onChange={(event) => setForm({ ...form, confirmed: event.target.checked })} />
               <span>私はセラピスト本人として投稿し、O2を含む各媒体の投稿ルールを確認・順守します。</span>
             </label>
-            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}HP・O2・魂セラピストへ投稿</Button>
+            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}O2・魂セラピストへ投稿</Button>
           </div>
         </DialogContent>
       </Dialog>

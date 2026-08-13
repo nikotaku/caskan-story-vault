@@ -25,7 +25,6 @@ interface Post {
   body: string;
   image_urls: string[] | null;
   status: string;
-  hp_status: string;
   o2_status: string;
   esutama_status: string;
   o2_error: string | null;
@@ -145,14 +144,14 @@ export default function CastPostManagement() {
       if (error || typeof data !== "string") throw new Error(error?.message || "投稿を作成できませんでした");
       setShowDialog(false);
       setForm({ castId: "", title: "", body: "", imageUrls: "" });
-      toast.success("HPへ掲載しました。O2・魂セラピストへ送信中です");
+      toast.success("O2・魂セラピストへ送信中です");
       await load();
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
       await load();
       if (results.some((result) => result.status === "rejected")) {
         toast.warning("外部媒体の一部に送れませんでした。失敗した媒体だけ再送できます");
       } else {
-        toast.success("HP・O2・魂セラピストへの投稿処理が完了しました");
+        toast.success("O2・魂セラピストへの投稿処理が完了しました");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "投稿に失敗しました");
@@ -175,9 +174,9 @@ export default function CastPostManagement() {
     }
   };
 
-  const statusRow = (post: Post, target: "hp" | Target, label: string) => {
-    const status = target === "hp" ? post.hp_status : target === "o2" ? post.o2_status : post.esutama_status;
-    const error = target === "o2" ? post.o2_error : target === "esutama" ? post.esutama_error : null;
+  const statusRow = (post: Post, target: Target, label: string) => {
+    const status = target === "o2" ? post.o2_status : post.esutama_status;
+    const error = target === "o2" ? post.o2_error : post.esutama_error;
     const key = `${post.id}:${target}`;
     return (
       <div className="flex items-start justify-between gap-3 text-xs">
@@ -185,7 +184,7 @@ export default function CastPostManagement() {
           <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span className="font-medium">{label}</span><span className="text-muted-foreground">{STATUS_LABEL[status] || status}</span></div>
           {error && <p className="mt-1 break-words text-red-600">{error}</p>}
         </div>
-        {target !== "hp" && ["pending", "failed", "skipped"].includes(status) && (
+        {["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === key}>
             {retrying === key ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} className="mr-1" />}再送
           </Button>
@@ -203,7 +202,7 @@ export default function CastPostManagement() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">一括投稿管理</h1>
-              <p className="text-sm text-muted-foreground">{store?.name || "店舗"}のHP写メ日記・O2・魂セラピストへ同時投稿します（Xは対象外）</p>
+              <p className="text-sm text-muted-foreground">{store?.name || "店舗"}のO2・魂セラピストへ同時投稿します</p>
             </div>
             <Button onClick={() => setShowDialog(true)}><Plus size={16} className="mr-1" />新規投稿</Button>
           </div>
@@ -246,8 +245,7 @@ export default function CastPostManagement() {
                       <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{post.body}</p>
                     </div>
                   </div>
-                  <div className="grid gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-3">
-                    {statusRow(post, "hp", "HP写メ日記")}
+                  <div className="grid gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-2">
                     {statusRow(post, "o2", "O2")}
                     {statusRow(post, "esutama", "魂セラピスト")}
                   </div>
@@ -260,13 +258,13 @@ export default function CastPostManagement() {
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>3媒体へ一括投稿</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>2媒体へ一括投稿</DialogTitle></DialogHeader>
           <div className="mt-2 space-y-4">
             <div><Label>セラピスト</Label><Select value={form.castId} onValueChange={(value) => setForm({ ...form, castId: value })}><SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger><SelectContent>{casts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>タイトル（任意）</Label><Input maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
             <div><Label>本文</Label><Textarea rows={6} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="投稿内容を入力" /></div>
             <div><Label>画像URL（任意・1行1URL・3件まで）</Label><Textarea rows={3} value={form.imageUrls} onChange={(event) => setForm({ ...form, imageUrls: event.target.value })} placeholder="https://..." /></div>
-            <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">投稿するとHP写メ日記へ即時掲載し、O2と魂セラピストへ同時送信します。Xには投稿しません。</p>
+            <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">O2と魂セラピストへ同時送信します。HP写メ日記やその他のSNSには掲載しません。</p>
             <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}一括投稿</Button><Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)} disabled={submitting}>キャンセル</Button></div>
           </div>
         </DialogContent>

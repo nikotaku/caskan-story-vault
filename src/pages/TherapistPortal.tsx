@@ -416,7 +416,7 @@ export default function TherapistPortal() {
     { title: "シフト提出", description: "希望シフトをカレンダーから提出", icon: CalendarPlus, action: () => navigate(`/therapist/${token}/shift`) },
     { title: "シフト確認", description: "確定したシフトと出勤ルームを確認", icon: Calendar, action: () => setView("shift") },
     { title: "事前予約", description: "今日以降に入っている予約を確認", icon: CalendarPlus, action: () => setView("upcoming") },
-    { title: "3媒体投稿", description: "HP写メ日記・O2・エスたまへ同時投稿", icon: Edit, action: () => navigate(`/therapist/${token}/posts`) },
+    { title: "2媒体投稿", description: "O2・魂セラピストへ同時投稿", icon: Edit, action: () => navigate(`/therapist/${token}/posts`) },
     { title: "バック表", description: "コース別・オプション別のバック率を確認", icon: Receipt, action: () => setShowBackRates(true) },
     { title: "交通費申請", description: "交通費の申請・申請履歴を確認", icon: Plane, action: () => setView("transport") },
     { title: "退勤フォーム", description: "売上入力・清掃チェック・フィードバック", icon: LogOut, action: () => navigate(`/therapist/${token}/checkout`) },
