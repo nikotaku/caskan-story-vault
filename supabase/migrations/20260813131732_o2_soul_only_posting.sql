@@ -1,4 +1,4 @@
--- 一括投稿の送信先をO2・魂セラピストの2媒体だけにする。
+-- 一括投稿先をO2・魂セラピストの2媒体だけに限定する。
 -- 互換性のため hp_status 列は残すが、対象外を示す skipped としてHP写メ日記は作成しない。
 
 create or replace function public.create_therapist_post(
