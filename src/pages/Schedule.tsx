@@ -300,7 +300,7 @@ export default function Schedule() {
     notes: "",
   });
 
-  const [casts, setCasts] = useState<{ id: string; name: string }[]>([]);
+  const [casts, setCasts] = useState<Cast[]>([]);
   const [rooms, setRooms] = useState<{ id: string; name: string; address: string | null; sms_text: string | null; map_url: string | null; caution_text: string | null }[]>([]);
   const [backRates, setBackRates] = useState<any[]>([]);
   const [optionRates, setOptionRates] = useState<any[]>([]);
@@ -405,7 +405,7 @@ export default function Schedule() {
   const fetchFormData = async () => {
     if (!adminStore?.id) return;
     const [{ data: c }, { data: r }, { data: b }, { data: o }, { data: n }, { data: d }, { data: p }, { data: t }, { data: cp }, tokenResult] = await Promise.all([
-      supabase.from("casts").select("id, name").order("name"),
+      supabase.from("casts").select("id, name, photo").order("name"),
       supabase.from("rooms").select("id, name, address, sms_text, map_url, caution_text").eq("is_active", true).order("name"),
       supabase.from("back_rates").select("*").order("display_order"),
       supabase.from("option_rates").select("*").order("display_order"),
@@ -453,9 +453,9 @@ export default function Schedule() {
       { data: monthResData },
     ] = await Promise.all([
       supabase.from("shifts").select("*, cast:casts(id, name, photo)").eq("store_id", adminStore!.id).eq("shift_date", dateStr),
-      supabase.from("reservations").select("*").eq("store_id", adminStore!.id).eq("reservation_date", dateStr).gte("start_time", dayStartTime).neq("status", "cancelled"),
+      supabase.from("reservations").select("*").eq("reservation_date", dateStr).gte("start_time", dayStartTime).neq("status", "cancelled"),
       // 深夜またぎ：翌日日付で保存されているが営業開始前の予約は当日扱い
-      supabase.from("reservations").select("*").eq("store_id", adminStore!.id).eq("reservation_date", nextDateStr).lt("start_time", dayStartTime).neq("status", "cancelled"),
+      supabase.from("reservations").select("*").eq("reservation_date", nextDateStr).lt("start_time", dayStartTime).neq("status", "cancelled"),
       // 月次合計は日別精算（実額）を正とする
       supabase.from("daily_clearances").select("date, total_sales").eq("store_id", adminStore!.id).gte("date", monthStart).lte("date", monthEnd),
       // 精算未入力の日（当日など）は完了予約の金額で補完する
@@ -544,16 +544,34 @@ export default function Schedule() {
   }, [casts]);
 
   const castRows = useMemo(() => {
-    const map = new Map<string, { cast: Cast; shift: Shift & { cast: Cast }; reservations: Reservation[] }>();
-    shifts.forEach((s) => {
-      if (!map.has(s.cast_id)) map.set(s.cast_id, { cast: s.cast, shift: s, reservations: [] });
+    const map = new Map<string, {
+      cast: Cast;
+      shift: (Shift & { cast: Cast }) | null;
+      reservations: Reservation[];
+    }>();
+
+    shifts.forEach((shift) => {
+      if (!map.has(shift.cast_id)) {
+        map.set(shift.cast_id, { cast: shift.cast, shift, reservations: [] });
+      }
     });
-    reservations.forEach((r) => {
-      const row = map.get(r.cast_id);
-      if (row) row.reservations.push(r);
+
+    reservations.forEach((reservation) => {
+      let row = map.get(reservation.cast_id);
+      if (!row) {
+        const cast = casts.find((candidate) => candidate.id === reservation.cast_id) ?? {
+          id: reservation.cast_id,
+          name: "未設定",
+          photo: null,
+        };
+        row = { cast, shift: null, reservations: [] };
+        map.set(reservation.cast_id, row);
+      }
+      row.reservations.push(reservation);
     });
+
     return Array.from(map.values());
-  }, [shifts, reservations]);
+  }, [shifts, reservations, casts]);
 
   // セラピスト別の最短ご案内時間（60分枠が入る最初の時刻を探索）
   const earliestSlots = useMemo(() => {
@@ -1137,7 +1155,9 @@ export default function Schedule() {
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold truncate">{cast.name}</p>
                               <p className="text-[11px] text-muted-foreground">
-                                {toExtTime(shift.start_time)}〜{toExtTime(shift.end_time)}
+                                {shift
+                                  ? `${toExtTime(shift.start_time)}〜${toExtTime(shift.end_time)}`
+                                  : "シフト未登録（予約あり）"}
                               </p>
                               {!hasPortal && (
                                 <p className="text-[11px] text-amber-700 mt-0.5">
@@ -1247,7 +1267,9 @@ export default function Schedule() {
                             )}
                             <div className="text-[10px] font-semibold truncate leading-tight">{cast.name}</div>
                             <div className="text-[9px] text-muted-foreground leading-tight">
-                              {shift.start_time.slice(0, 5)}~{shift.end_time.slice(0, 5)}
+                              {shift
+                                ? `${shift.start_time.slice(0, 5)}~${shift.end_time.slice(0, 5)}`
+                                : "予約のみ"}
                             </div>
                           </div>
                         ))}
@@ -1270,10 +1292,10 @@ export default function Schedule() {
 
                         {/* Cast columns */}
                         {castRows.map(({ cast, shift, reservations: castRes }) => {
-                          const shiftStartMin = timeToMinutes(shift.start_time);
-                          const shiftEndMin = timeToMinutes(shift.end_time);
-                          const shiftTop = minutesToPx(shiftStartMin);
-                          const shiftH = ((shiftEndMin - shiftStartMin) / 60) * HOUR_HEIGHT;
+                          const shiftStartMin = shift ? timeToMinutes(shift.start_time) : 0;
+                          const shiftEndMin = shift ? timeToMinutes(shift.end_time) : 0;
+                          const shiftTop = shift ? minutesToPx(shiftStartMin) : 0;
+                          const shiftH = shift ? ((shiftEndMin - shiftStartMin) / 60) * HOUR_HEIGHT : 0;
 
                           return (
                             <div
@@ -1304,10 +1326,12 @@ export default function Schedule() {
                               ))}
 
                               {/* Shift background */}
-                              <div
-                                className="absolute left-1 right-1 bg-primary/5 border border-primary/20 rounded"
-                                style={{ top: shiftTop, height: shiftH }}
-                              />
+                              {shift && (
+                                <div
+                                  className="absolute left-1 right-1 bg-primary/5 border border-primary/20 rounded"
+                                  style={{ top: shiftTop, height: shiftH }}
+                                />
+                              )}
 
                               {/* Reservation blocks */}
                               {castRes.map((res) => {
