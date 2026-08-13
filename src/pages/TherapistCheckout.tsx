@@ -23,8 +23,7 @@ import checkoutLaundryImg from "@/assets/checkout-laundry.png";
 import checkoutClosetImg from "@/assets/checkout-closet.jpeg";
 import checkoutSandalsImg from "@/assets/checkout-sandals.jpeg";
 import { toast } from "sonner";
-import { format, addDays, parseISO } from "date-fns";
-import { getBusinessDateFromCache, useShopSettings } from "@/hooks/useShopSettings";
+import { format, addDays } from "date-fns";
 import { ja } from "date-fns/locale";
 import { calcPaymentFee, findPaymentSetting, PaymentSetting } from "@/lib/paymentFee";
 
@@ -76,6 +75,13 @@ interface NominationRate {
   customer_price: number;
 }
 
+interface SalesMasters {
+  back_rates: BackRate[];
+  option_rates: OptionRate[];
+  nomination_rates: NominationRate[];
+  payment_settings: PaymentSetting[];
+}
+
 interface EditState {
   course_type: string;
   duration: number;
@@ -94,6 +100,20 @@ const PAYMENT_METHODS = [
   { value: "paypay", label: "PayPay" },
 ];
 
+const normalizePaymentMethod = (value?: string | null) => {
+  const raw = (value || "cash").toLowerCase();
+  if (raw === "card" || raw.includes("カード") || raw.includes("クレジット")) return "card";
+  if (raw === "paypay" || raw.includes("ペイペイ")) return "paypay";
+  return "cash";
+};
+
+const businessDateForStart = (dayStartTime: string) => {
+  const [startHour, startMinute] = dayStartTime.split(":").map(Number);
+  const now = new Date();
+  const beforeStart = now.getHours() * 60 + now.getMinutes() < startHour * 60 + startMinute;
+  return format(beforeStart ? addDays(now, -1) : now, "yyyy-MM-dd");
+};
+
 export default function TherapistCheckout() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -101,6 +121,7 @@ export default function TherapistCheckout() {
   const initialStep = searchParams.get("step") ?? "sales";
   const [activeTab, setActiveTab] = useState(initialStep);
   const [cast, setCast] = useState<Cast | null>(null);
+  const [castStoreId, setCastStoreId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<string | null>(null);
@@ -109,12 +130,9 @@ export default function TherapistCheckout() {
   // 予約データ
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [paymentEdits, setPaymentEdits] = useState<Record<string, string>>({});
+  const [paymentSavingId, setPaymentSavingId] = useState<string | null>(null);
   const [reservationsLoading, setReservationsLoading] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => format(getBusinessDateFromCache(), "yyyy-MM-dd"));
-  const { loaded: settingsLoaded, businessToday, dayStartTime } = useShopSettings();
-  useEffect(() => {
-    if (settingsLoaded) setSelectedDate(format(businessToday, "yyyy-MM-dd"));
-  }, [settingsLoaded]); // eslint-disable-line
+  const [selectedDate, setSelectedDate] = useState(() => businessDateForStart("10:00:00"));
 
   // マスターデータ
   const [backRates, setBackRates] = useState<BackRate[]>([]);
@@ -173,7 +191,25 @@ export default function TherapistCheckout() {
         if (error) throw error;
         const row = Array.isArray(data) ? data[0] : data;
         if (!row) { navigate("/"); return; }
-        setCast(row as Cast);
+        const castRow = row as Cast;
+        setCast(castRow);
+        const { data: castStore } = await supabase
+          .from("casts")
+          .select("store_id")
+          .eq("id", castRow.id)
+          .maybeSingle();
+        if (castStore?.store_id) {
+          const { data: shopSettings } = await supabase
+            .from("shop_settings")
+            .select("business_day_start")
+            .eq("store_id", castStore.store_id)
+            .limit(1)
+            .maybeSingle();
+          const configuredStart = (shopSettings as { business_day_start?: string } | null)?.business_day_start || "10:00";
+          const resolvedStart = configuredStart.length === 5 ? `${configuredStart}:00` : configuredStart;
+          setSelectedDate(businessDateForStart(resolvedStart));
+          setCastStoreId(castStore.store_id);
+        }
       } catch {
         navigate("/");
       } finally {
@@ -185,18 +221,19 @@ export default function TherapistCheckout() {
 
   // マスターデータ取得
   useEffect(() => {
-    Promise.all([
-      supabase.from("back_rates").select("id, course_type, duration, customer_price, display_order").order("display_order"),
-      supabase.from("option_rates").select("id, option_name, customer_price, display_order").order("display_order"),
-      supabase.from("payment_settings").select("id, payment_method, payment_link, fee_percentage"),
-      supabase.from("nomination_rates" as any).select("id, nomination_type, customer_price").order("customer_price"),
-    ]).then(([br, or, ps, nr]) => {
-      if (br.data) setBackRates(br.data as BackRate[]);
-      if (or.data) setOptionRates(or.data as OptionRate[]);
-      if (ps.data) setPaymentSettings(ps.data as PaymentSetting[]);
-      if (nr.data) setNominationRates(nr.data as NominationRate[]);
+    if (!castStoreId || !token) return;
+    supabase.rpc("get_therapist_sales_masters", { p_token: token }).then(({ data, error }) => {
+      if (error) {
+        toast.error("料金情報の取得に失敗しました");
+        return;
+      }
+      const masters = data as unknown as SalesMasters;
+      setBackRates(masters?.back_rates || []);
+      setOptionRates(masters?.option_rates || []);
+      setPaymentSettings(masters?.payment_settings || []);
+      setNominationRates(masters?.nomination_rates || []);
     });
-  }, []);
+  }, [castStoreId, token]);
 
   const courseTypes = useMemo(() => [...new Set(backRates.map(r => r.course_type))], [backRates]);
 
@@ -210,32 +247,22 @@ export default function TherapistCheckout() {
     if (!cast) return;
     setReservationsLoading(true);
     try {
-      // 営業日基準：当日は営業開始以降＋翌日の深夜(営業開始前)を当日扱い。
-      // 当日の早朝(営業開始前)は前営業日の分なので除外する。
-      const dayStart = dayStartTime || "06:00";
-      const nextDate = format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd");
-      const { data, error } = await supabase
-        .from("reservations")
-        .select("id, reservation_date, customer_name, start_time, course_name, course_type, duration, options, discount, discount_ids, price, payment_method, payment_details, payment_fee, status, nomination_type")
-        .eq("cast_id", cast.id)
-        .in("reservation_date", [selectedDate, nextDate])
-        .order("reservation_date")
-        .order("start_time");
+      const { data, error } = await supabase.rpc("get_therapist_daily_reservations", {
+        p_token: token,
+        p_date: selectedDate,
+      });
       if (error) throw error;
-      const list = ((data || []) as any[]).filter((r) =>
-        (r.reservation_date === selectedDate && (r.start_time || "") >= dayStart) ||
-        (r.reservation_date === nextDate && (r.start_time || "") < dayStart)
-      ) as Reservation[];
+      const list = (data || []) as unknown as Reservation[];
       setReservations(list);
       const edits: Record<string, string> = {};
-      list.forEach((r) => { edits[r.id] = r.payment_method || "cash"; });
+      list.forEach((r) => { edits[r.id] = normalizePaymentMethod(r.payment_method); });
       setPaymentEdits(edits);
     } catch {
       toast.error("予約の取得に失敗しました");
     } finally {
       setReservationsLoading(false);
     }
-  }, [cast, selectedDate, dayStartTime]);
+  }, [cast, selectedDate, token]);
 
   useEffect(() => {
     if (cast) fetchReservations();
@@ -262,7 +289,7 @@ export default function TherapistCheckout() {
           duration,
           selectedOptions: r.options ?? [],
           discount_amount,
-          payment_method: r.payment_method || "cash",
+          payment_method: normalizePaymentMethod(r.payment_method),
           nomination_type: r.nomination_type ?? "none",
         },
       }));
@@ -296,12 +323,17 @@ export default function TherapistCheckout() {
   const handleSaveEdit = async (r: Reservation) => {
     const state = editStates[r.id];
     if (!state) return;
-    setSavingId(r.id);
     const { subtotal: _, discount, fee, total } = calcPrice(state);
+    const updatedPrice = total - fee;
+    if (r.payment_details?.length && updatedPrice !== r.price) {
+      toast.error("分割払いの予約は金額内訳の再設定が必要です。店舗へ連絡してください");
+      return;
+    }
+    setSavingId(r.id);
     const backRate = backRates.find(b => b.course_type === state.course_type && b.duration === state.duration);
     const courseName = backRate ? `${state.course_type} ${state.duration}分` : r.course_name;
     try {
-      const discountIds: string[] = [];
+      const discountIds: string[] = r.discount_ids ?? [];
       // セラピストポータルは anon 権限のため、token 検証付きRPC経由で予約を直接更新する
       const { error } = await supabase.rpc("therapist_update_reservation", {
         p_token: token,
@@ -312,7 +344,7 @@ export default function TherapistCheckout() {
         p_options: state.selectedOptions,
         p_discount: discount,
         p_discount_ids: discountIds,
-        p_price: total - fee,
+        p_price: updatedPrice,
         p_payment_fee: fee,
         p_payment_method: state.payment_method,
         p_nomination_type: state.nomination_type === "none" ? null : state.nomination_type,
@@ -326,7 +358,7 @@ export default function TherapistCheckout() {
         options: state.selectedOptions,
         discount,
         discount_ids: discountIds,
-        price: total - fee,
+        price: updatedPrice,
         payment_fee: fee,
         payment_method: state.payment_method,
         nomination_type: state.nomination_type === "none" ? null : state.nomination_type,
@@ -343,11 +375,20 @@ export default function TherapistCheckout() {
 
   const handlePaymentChange = async (reservationId: string, method: string) => {
     setPaymentEdits((prev) => ({ ...prev, [reservationId]: method }));
-    await supabase.rpc("therapist_update_payment_method", {
-      p_token: token,
-      p_reservation_id: reservationId,
-      p_payment_method: method,
-    });
+    setPaymentSavingId(reservationId);
+    try {
+      const { error } = await supabase.rpc("therapist_update_payment_method", {
+        p_token: token,
+        p_reservation_id: reservationId,
+        p_payment_method: method,
+      });
+      if (error) throw error;
+    } catch {
+      toast.error("支払い方法の更新に失敗しました");
+    } finally {
+      await fetchReservations();
+      setPaymentSavingId(null);
+    }
   };
 
   // 支払い方法別合計（payment_details がある場合は各エントリで集計）
@@ -359,7 +400,7 @@ export default function TherapistCheckout() {
           acc[d.method] = (acc[d.method] || 0) + (d.amount || 0);
         }
       } else {
-        const method = paymentEdits[r.id] || r.payment_method || "cash";
+        const method = paymentEdits[r.id] || normalizePaymentMethod(r.payment_method);
         acc[method] = (acc[method] || 0) + (r.price || 0);
       }
       return acc;
@@ -376,7 +417,7 @@ export default function TherapistCheckout() {
           if (f > 0) acc[d.method] = (acc[d.method] || 0) + f;
         }
       } else {
-        const method = paymentEdits[r.id] || r.payment_method || "cash";
+        const method = paymentEdits[r.id] || normalizePaymentMethod(r.payment_method);
         acc[method] = (acc[method] || 0) + (r.payment_fee || 0);
       }
       return acc;
@@ -384,11 +425,15 @@ export default function TherapistCheckout() {
     {} as Record<string, number>
   );
 
-  const cashTotal = totals["cash"] || 0;
-  const cardTotal = totals["card"] || 0;
-  const paypayTotal = totals["paypay"] || 0;
+  const cashBaseTotal = totals["cash"] || 0;
+  const cardBaseTotal = totals["card"] || 0;
+  const paypayBaseTotal = totals["paypay"] || 0;
+  const cashFeeTotal = feesByMethod["cash"] || 0;
   const cardFeeTotal = feesByMethod["card"] || 0;
   const paypayFeeTotal = feesByMethod["paypay"] || 0;
+  const cashTotal = cashBaseTotal + cashFeeTotal;
+  const cardTotal = cardBaseTotal + cardFeeTotal;
+  const paypayTotal = paypayBaseTotal + paypayFeeTotal;
   const grandTotal = cashTotal + cardTotal + paypayTotal + manualAdjustment;
   const completedCount = reservations.filter((r) => r.status !== "cancelled").length;
 
@@ -396,16 +441,17 @@ export default function TherapistCheckout() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("daily_sales_records").insert([{
-        date: selectedDate,
-        cash_amount: cashTotal,
-        card_amount: cardTotal,
-        paypay_amount: paypayTotal,
-        total_amount: grandTotal,
-        customer_count: completedCount,
-        notes: salesNotes,
-        cast_id: cast?.id,
-      }]);
+      const { error } = await supabase.rpc("therapist_submit_daily_sales", {
+        p_token: token,
+        p_date: selectedDate,
+        p_cash_amount: cashTotal,
+        p_card_amount: cardTotal,
+        p_paypay_amount: paypayTotal,
+        p_total_amount: grandTotal,
+        p_customer_count: completedCount,
+        p_manual_adjustment: manualAdjustment,
+        p_notes: salesNotes || null,
+      });
       if (error) throw error;
       setSubmitted("sales");
     } catch (err: any) {
@@ -429,7 +475,7 @@ export default function TherapistCheckout() {
       // Mark clearance completed if one exists
       if (cast?.id) {
         await supabase
-          .from("daily_clearances" as any)
+          .from("daily_clearances")
           .update({ status: "completed" })
           .eq("cast_id", cast.id)
           .eq("status", "pending");
@@ -568,11 +614,12 @@ export default function TherapistCheckout() {
                 {/* 日付 */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
-                    <Label>日付</Label>
+                    <Label>営業日（現在日のみ）</Label>
                     <Input
                       type="date"
                       value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
+                      disabled
+                      aria-label="現在の営業日"
                     />
                   </div>
                   <Button
@@ -653,6 +700,7 @@ export default function TherapistCheckout() {
                                     <Select
                                       value={paymentEdits[r.id] || "cash"}
                                       onValueChange={(v) => handlePaymentChange(r.id, v)}
+                                      disabled={paymentSavingId !== null}
                                     >
                                       <SelectTrigger className="h-6 text-xs mt-1 w-20 border-0 bg-muted/50 px-2">
                                         <SelectValue />
@@ -929,7 +977,7 @@ export default function TherapistCheckout() {
                       <div className="space-y-0.5">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">カード</span>
-                          <span className="font-semibold">¥{(cardTotal + cardFeeTotal).toLocaleString()}</span>
+                          <span className="font-semibold">¥{cardTotal.toLocaleString()}</span>
                         </div>
                         {cardFeeTotal > 0 && (
                           <div className="flex justify-between text-xs text-muted-foreground pl-2">
@@ -943,7 +991,7 @@ export default function TherapistCheckout() {
                       <div className="space-y-0.5">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">PayPay</span>
-                          <span className="font-semibold">¥{(paypayTotal + paypayFeeTotal).toLocaleString()}</span>
+                          <span className="font-semibold">¥{paypayTotal.toLocaleString()}</span>
                         </div>
                         {paypayFeeTotal > 0 && (
                           <div className="flex justify-between text-xs text-muted-foreground pl-2">

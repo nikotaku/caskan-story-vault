@@ -34,19 +34,29 @@ export default function TherapistMyPage() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (user) fetchTherapists();
-  }, [user]);
+    if (user && adminStore?.id) fetchTherapists();
+  }, [user, adminStore?.id]);
 
   const fetchTherapists = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("casts")
-      .select("id, name, access_token")
-      .order("name");
-    if (error) {
-      toast.error(`読み込みに失敗しました: ${error.message}`);
+    const [castsResult, tokensResult] = await Promise.all([
+      supabase
+        .from("casts")
+        .select("id, name")
+        .eq("store_id", adminStore!.id)
+        .order("name"),
+      supabase.rpc("get_cast_access_tokens"),
+    ]);
+    if (castsResult.error || tokensResult.error) {
+      toast.error(`読み込みに失敗しました: ${(castsResult.error || tokensResult.error)?.message}`);
     } else {
-      const list = (data || []) as Therapist[];
+      const tokenMap = new Map(
+        (tokensResult.data || []).map((row) => [row.cast_id, row.access_token]),
+      );
+      const list = (castsResult.data || []).map((cast) => ({
+        ...cast,
+        access_token: tokenMap.get(cast.id) || null,
+      })) as Therapist[];
       setTherapists(list);
       if (selected) {
         const updated = list.find((t) => t.id === selected.id);
@@ -60,10 +70,10 @@ export default function TherapistMyPage() {
     if (!selected) return;
     setGenerating(true);
     const token = crypto.randomUUID();
-    const { error } = await supabase
-      .from("casts")
-      .update({ access_token: token })
-      .eq("id", selected.id);
+    const { error } = await supabase.rpc("set_cast_access_token", {
+      p_cast_id: selected.id,
+      p_token: token,
+    });
     setGenerating(false);
     if (error) {
       toast.error(`リンクの発行に失敗しました: ${error.message}`);

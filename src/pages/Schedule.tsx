@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { format, addDays, subDays, addMonths, subMonths, parse, addMinutes, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval } from "date-fns";
 import { toExtTime, toStoredTime } from "@/lib/timeFormat";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2, Send, Loader2, CheckCircle2 } from "lucide-react";
 import paypayGuideUrl from "@/assets/paypay-guide.jpeg";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -25,14 +25,12 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReservationForm } from "@/components/ReservationForm";
 import { useAuth } from "@/hooks/useAuth";
-import { useShopSettings } from "@/hooks/useShopSettings";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { findPaymentSetting, PaymentSetting } from "@/lib/paymentFee";
 import { openSmsApp } from "@/lib/sms";
-import { getBusinessDateFromCache } from "@/hooks/useShopSettings";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { PaymentReminderPopup } from "@/components/PaymentReminderPopup";
 
@@ -73,6 +71,17 @@ interface Reservation {
   payment_status: string;
   room: string | null;
   notes: string | null;
+}
+
+interface ReceptionEndNotification {
+  cast_id: string;
+  sent_at: string;
+}
+
+interface ReceptionEndFunctionResponse {
+  success?: boolean;
+  sent_at?: string;
+  error?: string;
 }
 
 const TIME_START = 10;
@@ -228,13 +237,16 @@ function StatusBox({
 
 export default function Schedule() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(getBusinessDateFromCache);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedView, setSelectedView] = useState<"cast" | "room">("cast");
   const [shifts, setShifts] = useState<(Shift & { cast: Cast })[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [receptionEndNotifications, setReceptionEndNotifications] = useState<Record<string, string>>({});
+  const [sendingReceptionEndCastId, setSendingReceptionEndCastId] = useState<string | null>(null);
+  const [receptionEndResendTarget, setReceptionEndResendTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Detail/Edit sheet
   const [detailRes, setDetailRes] = useState<Reservation | null>(null);
@@ -243,10 +255,9 @@ export default function Schedule() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { user, loading: authLoading, isAdmin } = useAuth();
-  const { dayStartTime, loaded: settingsLoaded, businessToday, intervalMinutes } = useShopSettings();
-  useEffect(() => {
-    if (settingsLoaded) setSelectedDate(businessToday);
-  }, [settingsLoaded]); // eslint-disable-line
+  const [intervalMinutes, setIntervalMinutes] = useState(30);
+  const [dayStartTime, setDayStartTime] = useState("10:00:00");
+  const [storeDayStartLoaded, setStoreDayStartLoaded] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -314,17 +325,54 @@ export default function Schedule() {
     ? `https://${adminStore.custom_domain}`
     : "https://zenryokuesthe.com";
 
+  // useShopSettings は先頭1件を返すため、営業日の境界だけは管理中の店舗を明示して取得する。
+  useEffect(() => {
+    let active = true;
+    if (!adminStore?.id) {
+      setStoreDayStartLoaded(false);
+      return () => { active = false; };
+    }
+
+    setStoreDayStartLoaded(false);
+    supabase
+      .from("shop_settings")
+      .select("business_day_start, reservation_interval_minutes")
+      .eq("store_id", adminStore.id)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) console.error("店舗の営業開始時刻の取得に失敗しました:", error);
+
+        const configuredStart = data?.business_day_start || "10:00";
+        const normalizedStart = configuredStart.length === 5
+          ? `${configuredStart}:00`
+          : configuredStart;
+        setDayStartTime(normalizedStart);
+        setIntervalMinutes(data?.reservation_interval_minutes ?? 30);
+
+        const [startHour, startMinute] = normalizedStart.split(":").map(Number);
+        const now = new Date();
+        const beforeBusinessStart = now.getHours() * 60 + now.getMinutes()
+          < startHour * 60 + startMinute;
+        setSelectedDate(beforeBusinessStart ? addDays(now, -1) : now);
+        setStoreDayStartLoaded(true);
+      });
+
+    return () => { active = false; };
+  }, [adminStore?.id]);
+
   // クーポン案内SMS用の店舗公式LINE URL（store_info から自店舗分を取得）
   const [storeLineUrl, setStoreLineUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!adminStore?.id) return;
     supabase
-      .from("store_info" as any)
+      .from("store_info")
       .select("line_url")
       .eq("store_id", adminStore.id)
       .limit(1)
       .maybeSingle()
-      .then(({ data }) => setStoreLineUrl((data as any)?.line_url ?? null));
+      .then(({ data }) => setStoreLineUrl(data?.line_url ?? null));
   }, [adminStore?.id]);
 
   useEffect(() => {
@@ -342,11 +390,12 @@ export default function Schedule() {
   }, [backRates]);
 
   useEffect(() => {
-    if (user && adminStore?.id) {
-      fetchData();
-      fetchFormData();
-    }
-  }, [user, selectedDate, adminStore?.id]);
+    if (user && adminStore?.id && storeDayStartLoaded) fetchData();
+  }, [user, selectedDate, adminStore?.id, storeDayStartLoaded, dayStartTime]);
+
+  useEffect(() => {
+    if (user && adminStore?.id) fetchFormData();
+  }, [user, adminStore?.id]);
 
   const fetchFormData = async () => {
     if (!adminStore?.id) return;
@@ -374,6 +423,7 @@ export default function Schedule() {
 
   const fetchData = async () => {
     setLoading(true);
+    setReceptionEndNotifications({});
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const nextDateStr = format(addDays(selectedDate, 1), "yyyy-MM-dd");
     const monthStart = format(startOfMonth(selectedDate), "yyyy-MM-dd");
@@ -382,19 +432,40 @@ export default function Schedule() {
     // 深夜またぎ分（翌月1日の営業開始前＝当月末の営業日扱い）まで含めて取得
     const monthEndNext = format(addDays(endOfMonth(selectedDate), 1), "yyyy-MM-dd");
 
-    const [{ data: shiftsData }, { data: reservationsData }, { data: nextResData }, { data: clearanceData }, { data: monthResData }] = await Promise.all([
-      supabase.from("shifts").select("*, cast:casts(id, name, photo)").eq("shift_date", dateStr),
-      supabase.from("reservations").select("*").eq("reservation_date", dateStr).gte("start_time", dayStartTime).neq("status", "cancelled"),
+    const [
+      { data: shiftsData },
+      { data: reservationsData },
+      { data: nextResData },
+      { data: clearanceData },
+      { data: monthResData },
+      { data: receptionEndData, error: receptionEndError },
+    ] = await Promise.all([
+      supabase.from("shifts").select("*, cast:casts(id, name, photo)").eq("store_id", adminStore!.id).eq("shift_date", dateStr),
+      supabase.from("reservations").select("*").eq("store_id", adminStore!.id).eq("reservation_date", dateStr).gte("start_time", dayStartTime).neq("status", "cancelled"),
       // 深夜またぎ：翌日日付で保存されているが営業開始前の予約は当日扱い
-      supabase.from("reservations").select("*").eq("reservation_date", nextDateStr).lt("start_time", dayStartTime).neq("status", "cancelled"),
+      supabase.from("reservations").select("*").eq("store_id", adminStore!.id).eq("reservation_date", nextDateStr).lt("start_time", dayStartTime).neq("status", "cancelled"),
       // 月次合計は日別精算（実額）を正とする
-      supabase.from("daily_clearances").select("date, total_sales").gte("date", monthStart).lte("date", monthEnd),
+      supabase.from("daily_clearances").select("date, total_sales").eq("store_id", adminStore!.id).gte("date", monthStart).lte("date", monthEnd),
       // 精算未入力の日（当日など）は完了予約の金額で補完する
-      supabase.from("reservations").select("price, reservation_date, start_time").gte("reservation_date", monthStart).lte("reservation_date", monthEndNext).eq("status", "completed"),
+      supabase.from("reservations").select("price, reservation_date, start_time").eq("store_id", adminStore!.id).gte("reservation_date", monthStart).lte("reservation_date", monthEndNext).eq("status", "completed"),
+      supabase
+        .from("therapist_reception_end_notifications")
+        .select("cast_id, sent_at")
+        .eq("store_id", adminStore!.id)
+        .eq("business_date", dateStr),
     ]);
 
     setShifts((shiftsData as any) || []);
     setReservations([...(reservationsData || []), ...(nextResData || [])]);
+    if (receptionEndError) {
+      console.error("受付終了連絡履歴の取得に失敗しました:", receptionEndError);
+    } else {
+      const notificationMap: Record<string, string> = {};
+      for (const row of (receptionEndData || []) as unknown as ReceptionEndNotification[]) {
+        notificationMap[row.cast_id] = row.sent_at;
+      }
+      setReceptionEndNotifications(notificationMap);
+    }
 
     // 営業日単位で「精算があれば精算合計、なければ完了予約合計」を積み上げる
     const clearanceByDay = new Map<string, number>();
@@ -417,7 +488,77 @@ export default function Schedule() {
     setLoading(false);
   };
 
+  const sendReceptionEndNotification = async (castId: string) => {
+    const [startHour, startMinute] = dayStartTime.split(":").map(Number);
+    const now = new Date();
+    const currentBusinessDate = format(
+      now.getHours() * 60 + now.getMinutes() < startHour * 60 + startMinute
+        ? addDays(now, -1)
+        : now,
+      "yyyy-MM-dd",
+    );
+    if (format(selectedDate, "yyyy-MM-dd") !== currentBusinessDate) {
+      toast({
+        title: "本日の営業日を選択してください",
+        description: "受付終了連絡は本日の営業日のみ送信できます。",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!adminStore?.id || sendingReceptionEndCastId) return;
+    setSendingReceptionEndCastId(castId);
+    try {
+      // selectedDate は、上で店舗別の営業開始時刻から初期化した営業日。
+      const businessDate = format(selectedDate, "yyyy-MM-dd");
+      const { data, error } = await supabase.functions.invoke("notify-line-reception-end", {
+        body: {
+          cast_id: castId,
+          business_date: businessDate,
+        },
+      });
+
+      if (error) {
+        let message = error.message || "LINEへの送信に失敗しました";
+        const response = (error as unknown as { context?: Response }).context;
+        if (response && typeof response.clone === "function") {
+          try {
+            const body = await response.clone().json() as { error?: unknown };
+            if (typeof body?.error === "string") message = body.error;
+          } catch {
+            // JSONではないエラー応答の場合は FunctionsHttpError のメッセージを使う
+          }
+        }
+        throw new Error(message);
+      }
+      const response = data as ReceptionEndFunctionResponse | null;
+      if (!response?.success) {
+        throw new Error(response?.error || "LINEへの送信に失敗しました");
+      }
+
+      const sentAt = response.sent_at || new Date().toISOString();
+      setReceptionEndNotifications((prev) => ({ ...prev, [castId]: sentAt }));
+      toast({ title: "受付終了連絡を送信しました" });
+    } catch (error) {
+      toast({
+        title: "受付終了連絡を送信できませんでした",
+        description: error instanceof Error ? error.message : "送信先のLINE連携とマイページ発行状況を確認してください",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingReceptionEndCastId(null);
+      setReceptionEndResendTarget(null);
+    }
+  };
+
   const dailyTotal = useMemo(() => reservations.reduce((sum, r) => sum + (r.price || 0), 0), [reservations]);
+  const isCurrentBusinessDate = useMemo(() => {
+    const [startHour, startMinute] = dayStartTime.split(":").map(Number);
+    const now = new Date();
+    const today = now.getHours() * 60 + now.getMinutes() < startHour * 60 + startMinute
+      ? addDays(now, -1)
+      : now;
+    return format(selectedDate, "yyyy-MM-dd") === format(today, "yyyy-MM-dd");
+  }, [dayStartTime, selectedDate]);
 
   const castNameMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -977,6 +1118,86 @@ export default function Schedule() {
                 </Card>
               </div>
 
+              {/* セラピストへの受付終了連絡 */}
+              {isAdmin && (
+                <Card className="p-3 mb-3">
+                  <div className="flex items-start gap-2 mb-3">
+                    <Send size={16} className="text-primary mt-0.5 shrink-0" />
+                    <div>
+                      <h2 className="text-sm font-bold">受付終了連絡</h2>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        マイページと追加オプション入力の画像マニュアルを、本人用LINEグループへ送ります。
+                      </p>
+                      {!isCurrentBusinessDate && (
+                        <p className="text-[11px] text-amber-700 mt-1">
+                          送信するには本日の営業日を選択してください。
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="py-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 size={14} className="animate-spin" />読み込み中...
+                    </div>
+                  ) : castRows.length === 0 ? (
+                    <p className="py-3 text-center text-xs text-muted-foreground">この日の出勤セラピストはいません</p>
+                  ) : (
+                    <div className="divide-y rounded-lg border">
+                      {castRows.map(({ cast, shift }) => {
+                        const sentAt = receptionEndNotifications[cast.id];
+                        const isSending = sendingReceptionEndCastId === cast.id;
+                        return (
+                          <div key={cast.id} className="p-2.5 flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                            {cast.photo ? (
+                              <img src={cast.photo} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-bold shrink-0">
+                                {cast.name.charAt(0)}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold truncate">{cast.name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {toExtTime(shift.start_time)}〜{toExtTime(shift.end_time)}
+                              </p>
+                              {sentAt && (
+                                <p className="text-[11px] text-emerald-700 flex items-center gap-1 mt-0.5">
+                                  <CheckCircle2 size={12} />
+                                  送信済み {format(new Date(sentAt), "M/d HH:mm")}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={sentAt ? "outline" : "default"}
+                              className={cn("h-8 text-xs shrink-0", sentAt && "text-primary")}
+                              disabled={!isCurrentBusinessDate || !!sendingReceptionEndCastId}
+                              onClick={() => {
+                                if (sentAt) {
+                                  setReceptionEndResendTarget({ id: cast.id, name: cast.name });
+                                } else {
+                                  sendReceptionEndNotification(cast.id);
+                                }
+                              }}
+                            >
+                              {isSending ? (
+                                <><Loader2 size={13} className="mr-1.5 animate-spin" />送信中...</>
+                              ) : sentAt ? (
+                                <><Send size={13} className="mr-1.5" />再送</>
+                              ) : (
+                                <><Send size={13} className="mr-1.5" />受付終了連絡</>
+                              )}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              )}
+
               {/* 最短ご案内時間 */}
               {earliestSlots.length > 0 && (
                 <Card className="p-3 mb-3">
@@ -1392,6 +1613,34 @@ export default function Schedule() {
           )}
         </SheetContent>
       </Sheet>
+
+      <AlertDialog
+        open={!!receptionEndResendTarget}
+        onOpenChange={(open) => { if (!open) setReceptionEndResendTarget(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>受付終了連絡を再送しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {receptionEndResendTarget?.name}さんへ、
+              {format(selectedDate, "M月d日(E)", { locale: ja })}の受付終了連絡をもう一度送ります。
+              マイページURLと追加オプション入力の画像マニュアルが再送されます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>戻る</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (receptionEndResendTarget) {
+                  sendReceptionEndNotification(receptionEndResendTarget.id);
+                }
+              }}
+            >
+              再送する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>

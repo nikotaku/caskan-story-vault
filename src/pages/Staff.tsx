@@ -367,15 +367,25 @@ export default function Staff() {
 
   const fetchCasts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('casts')
-        .select('*')
-        .order('display_order', { ascending: true })
-        .order('created_at', { ascending: false });
+      const [{ data, error }, tokensResult] = await Promise.all([
+        supabase
+          .from('casts_admin_safe')
+          .select('*')
+          .order('display_order', { ascending: true })
+          .order('created_at', { ascending: false }),
+        supabase.rpc('get_cast_access_tokens'),
+      ]);
 
       if (error) throw error;
+      if (tokensResult.error) throw tokensResult.error;
 
-      setCasts((data || []) as Cast[]);
+      const tokenMap = new Map(
+        (tokensResult.data || []).map((row) => [row.cast_id, row.access_token]),
+      );
+      setCasts((data || []).map((cast: Cast) => ({
+        ...cast,
+        access_token: tokenMap.get(cast.id) || null,
+      })) as Cast[]);
     } catch (error) {
       console.error('Error fetching casts:', error);
       toast({
@@ -664,14 +674,15 @@ export default function Staff() {
     // 最新のデータを取得してから編集ダイアログを開く
     try {
       const { data, error } = await supabase
-        .from('casts')
+        .from('casts_admin_safe')
         .select('*')
         .eq('id', cast.id)
         .single();
       
       if (error) throw error;
 
-      setEditingCast(data as Cast);
+      const latestCast = { ...(data as Cast), access_token: cast.access_token };
+      setEditingCast(latestCast);
       const cf = (data as Cast).custom_fields || {};
       setBlogIconUrl(cf.blog_icon || "");
       setSkebiyIconUrl(cf.skebiy_icon || "");
@@ -917,10 +928,17 @@ export default function Staff() {
     setParsingMemo(true);
     try {
       const parsed = await parseMemoToFields();
-      const { data: cast, error: fetchErr } = await supabase.from("casts").select("*").eq("id", memoTargetCastId).single();
+      const { data: cast, error: fetchErr } = await supabase
+        .from("casts_admin_safe")
+        .select("*")
+        .eq("id", memoTargetCastId)
+        .single();
       if (fetchErr) throw fetchErr;
       // 既存が空の項目のみメモの値で補完（既存の情報は上書きしない）
-      const merged: any = { ...(cast as any) };
+      const merged: any = {
+        ...(cast as any),
+        access_token: casts.find((item) => item.id === memoTargetCastId)?.access_token || null,
+      };
       for (const [k, v] of Object.entries(parsed)) {
         if (v === null || v === undefined || v === "") continue;
         const cur = merged[k];
@@ -1104,10 +1122,10 @@ export default function Staff() {
 
     try {
       const token = crypto.randomUUID();
-      const { error } = await supabase
-        .from('casts')
-        .update({ access_token: token })
-        .eq('id', castId);
+      const { error } = await supabase.rpc('set_cast_access_token', {
+        p_cast_id: castId,
+        p_token: token,
+      });
 
       if (error) throw error;
 
@@ -1270,8 +1288,12 @@ export default function Staff() {
       if (!completed) {
         throw new Error((result.results || [])[0]?.error || "エスたま自動化設定を確認してください");
       }
-      const { data: latest } = await supabase.from("casts").select("*").eq("id", cast.id).single();
-      if (latest) setEditingCast(latest as Cast);
+      const { data: latest } = await supabase
+        .from("casts_admin_safe")
+        .select("*")
+        .eq("id", cast.id)
+        .single();
+      if (latest) setEditingCast({ ...(latest as Cast), access_token: cast.access_token });
       await fetchCasts();
       toast({
         title: "エスたま登録・連携が完了しました",
