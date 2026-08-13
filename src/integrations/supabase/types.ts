@@ -4945,55 +4945,6 @@ export type Database = {
           },
         ]
       }
-      therapist_reception_end_notifications: {
-        Row: {
-          business_date: string
-          cast_id: string
-          id: string
-          sent_at: string
-          sent_by: string | null
-          store_id: string
-        }
-        Insert: {
-          business_date: string
-          cast_id: string
-          id?: string
-          sent_at?: string
-          sent_by?: string | null
-          store_id: string
-        }
-        Update: {
-          business_date?: string
-          cast_id?: string
-          id?: string
-          sent_at?: string
-          sent_by?: string | null
-          store_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "therapist_reception_end_notifications_cast_id_fkey"
-            columns: ["cast_id"]
-            isOneToOne: false
-            referencedRelation: "casts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "therapist_reception_end_notifications_cast_id_fkey"
-            columns: ["cast_id"]
-            isOneToOne: false
-            referencedRelation: "casts_admin_safe"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "therapist_reception_end_notifications_store_id_fkey"
-            columns: ["store_id"]
-            isOneToOne: false
-            referencedRelation: "stores"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       therapist_transport_expenses: {
         Row: {
           amount: number
