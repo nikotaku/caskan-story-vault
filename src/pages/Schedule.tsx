@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { format, addDays, subDays, addMonths, subMonths, parse, addMinutes, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval } from "date-fns";
 import { toExtTime, toStoredTime } from "@/lib/timeFormat";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2, Share2, Loader2 } from "lucide-react";
 import paypayGuideUrl from "@/assets/paypay-guide.jpeg";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -33,6 +33,7 @@ import { findPaymentSetting, PaymentSetting } from "@/lib/paymentFee";
 import { openSmsApp } from "@/lib/sms";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { PaymentReminderPopup } from "@/components/PaymentReminderPopup";
+import { loadReceptionEndGuide, shareReceptionEndContent } from "@/lib/receptionEndShare";
 
 interface Cast {
   id: string;
@@ -71,17 +72,6 @@ interface Reservation {
   payment_status: string;
   room: string | null;
   notes: string | null;
-}
-
-interface ReceptionEndNotification {
-  cast_id: string;
-  sent_at: string;
-}
-
-interface ReceptionEndFunctionResponse {
-  success?: boolean;
-  sent_at?: string;
-  error?: string;
 }
 
 const TIME_START = 10;
@@ -244,9 +234,10 @@ export default function Schedule() {
   const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [receptionEndNotifications, setReceptionEndNotifications] = useState<Record<string, string>>({});
-  const [sendingReceptionEndCastId, setSendingReceptionEndCastId] = useState<string | null>(null);
-  const [receptionEndResendTarget, setReceptionEndResendTarget] = useState<{ id: string; name: string } | null>(null);
+  const [castAccessTokens, setCastAccessTokens] = useState<Record<string, string>>({});
+  const [receptionEndGuideFile, setReceptionEndGuideFile] = useState<File | null>(null);
+  const [receptionEndGuideError, setReceptionEndGuideError] = useState(false);
+  const [sharingReceptionEndCastId, setSharingReceptionEndCastId] = useState<string | null>(null);
 
   // Detail/Edit sheet
   const [detailRes, setDetailRes] = useState<Reservation | null>(null);
@@ -325,6 +316,20 @@ export default function Schedule() {
     ? `https://${adminStore.custom_domain}`
     : "https://zenryokuesthe.com";
 
+  // iPhoneではボタン操作直後に共有画面を開く必要があるため、画像を先にFile化しておく。
+  useEffect(() => {
+    const controller = new AbortController();
+    setReceptionEndGuideError(false);
+    loadReceptionEndGuide(controller.signal)
+      .then(setReceptionEndGuideFile)
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("追加オプション入力マニュアルの読み込みに失敗しました:", error);
+        setReceptionEndGuideError(true);
+      });
+    return () => controller.abort();
+  }, []);
+
   // useShopSettings は先頭1件を返すため、営業日の境界だけは管理中の店舗を明示して取得する。
   useEffect(() => {
     let active = true;
@@ -399,7 +404,7 @@ export default function Schedule() {
 
   const fetchFormData = async () => {
     if (!adminStore?.id) return;
-    const [{ data: c }, { data: r }, { data: b }, { data: o }, { data: n }, { data: d }, { data: p }, { data: t }, { data: cp }] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: b }, { data: o }, { data: n }, { data: d }, { data: p }, { data: t }, { data: cp }, tokenResult] = await Promise.all([
       supabase.from("casts").select("id, name").order("name"),
       supabase.from("rooms").select("id, name, address, sms_text, map_url, caution_text").eq("is_active", true).order("name"),
       supabase.from("back_rates").select("*").order("display_order"),
@@ -409,6 +414,7 @@ export default function Schedule() {
       supabase.from("payment_settings").select("id, payment_method, payment_link, fee_percentage"),
       supabase.from("sms_auto_templates").select("message").eq("store_id", adminStore.id).eq("trigger", "thanks").eq("is_active", true).limit(1),
       supabase.from("sms_auto_templates").select("message").eq("store_id", adminStore.id).eq("trigger", "coupon").eq("is_active", true).limit(1),
+      supabase.rpc("get_cast_access_tokens"),
     ]);
     if (c) setCasts(c);
     if (r) setRooms(r);
@@ -419,11 +425,18 @@ export default function Schedule() {
     if (p) setPaymentSettings(p as PaymentSetting[]);
     setThanksTemplate(t && t.length > 0 ? t[0].message : null);
     setCouponTemplate(cp && cp.length > 0 ? cp[0].message : null);
+    if (tokenResult.error) {
+      console.error("セラピストマイページURLの取得に失敗しました:", tokenResult.error);
+      setCastAccessTokens({});
+    } else {
+      setCastAccessTokens(Object.fromEntries(
+        (tokenResult.data || []).map((row) => [row.cast_id, row.access_token]),
+      ));
+    }
   };
 
   const fetchData = async () => {
     setLoading(true);
-    setReceptionEndNotifications({});
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const nextDateStr = format(addDays(selectedDate, 1), "yyyy-MM-dd");
     const monthStart = format(startOfMonth(selectedDate), "yyyy-MM-dd");
@@ -438,7 +451,6 @@ export default function Schedule() {
       { data: nextResData },
       { data: clearanceData },
       { data: monthResData },
-      { data: receptionEndData, error: receptionEndError },
     ] = await Promise.all([
       supabase.from("shifts").select("*, cast:casts(id, name, photo)").eq("store_id", adminStore!.id).eq("shift_date", dateStr),
       supabase.from("reservations").select("*").eq("store_id", adminStore!.id).eq("reservation_date", dateStr).gte("start_time", dayStartTime).neq("status", "cancelled"),
@@ -448,25 +460,10 @@ export default function Schedule() {
       supabase.from("daily_clearances").select("date, total_sales").eq("store_id", adminStore!.id).gte("date", monthStart).lte("date", monthEnd),
       // 精算未入力の日（当日など）は完了予約の金額で補完する
       supabase.from("reservations").select("price, reservation_date, start_time").eq("store_id", adminStore!.id).gte("reservation_date", monthStart).lte("reservation_date", monthEndNext).eq("status", "completed"),
-      supabase
-        .from("therapist_reception_end_notifications")
-        .select("cast_id, sent_at")
-        .eq("store_id", adminStore!.id)
-        .eq("business_date", dateStr),
     ]);
 
     setShifts((shiftsData as any) || []);
     setReservations([...(reservationsData || []), ...(nextResData || [])]);
-    if (receptionEndError) {
-      console.error("受付終了連絡履歴の取得に失敗しました:", receptionEndError);
-    } else {
-      const notificationMap: Record<string, string> = {};
-      for (const row of (receptionEndData || []) as unknown as ReceptionEndNotification[]) {
-        notificationMap[row.cast_id] = row.sent_at;
-      }
-      setReceptionEndNotifications(notificationMap);
-    }
-
     // 営業日単位で「精算があれば精算合計、なければ完了予約合計」を積み上げる
     const clearanceByDay = new Map<string, number>();
     for (const c of (clearanceData || []) as any[]) {
@@ -488,78 +485,58 @@ export default function Schedule() {
     setLoading(false);
   };
 
-  const sendReceptionEndNotification = async (castId: string) => {
-    const [startHour, startMinute] = dayStartTime.split(":").map(Number);
-    const now = new Date();
-    const currentBusinessDate = format(
-      now.getHours() * 60 + now.getMinutes() < startHour * 60 + startMinute
-        ? addDays(now, -1)
-        : now,
-      "yyyy-MM-dd",
-    );
-    if (format(selectedDate, "yyyy-MM-dd") !== currentBusinessDate) {
+  const shareReceptionEnd = async (castId: string) => {
+    const accessToken = castAccessTokens[castId];
+    if (!accessToken) {
       toast({
-        title: "本日の営業日を選択してください",
-        description: "受付終了連絡は本日の営業日のみ送信できます。",
+        title: "マイページが未発行です",
+        description: "セラピストマイページからアクセスリンクを発行してください。",
         variant: "destructive",
       });
       return;
     }
-    if (!adminStore?.id || sendingReceptionEndCastId) return;
-    setSendingReceptionEndCastId(castId);
-    try {
-      // selectedDate は、上で店舗別の営業開始時刻から初期化した営業日。
-      const businessDate = format(selectedDate, "yyyy-MM-dd");
-      const { data, error } = await supabase.functions.invoke("notify-line-reception-end", {
-        body: {
-          cast_id: castId,
-          business_date: businessDate,
-        },
+    if (!receptionEndGuideFile) {
+      toast({
+        title: "画像マニュアルを準備できませんでした",
+        description: "画面を再読み込みして、もう一度お試しください。",
+        variant: "destructive",
       });
+      return;
+    }
+    if (sharingReceptionEndCastId) return;
 
-      if (error) {
-        let message = error.message || "LINEへの送信に失敗しました";
-        const response = (error as unknown as { context?: Response }).context;
-        if (response && typeof response.clone === "function") {
-          try {
-            const body = await response.clone().json() as { error?: unknown };
-            if (typeof body?.error === "string") message = body.error;
-          } catch {
-            // JSONではないエラー応答の場合は FunctionsHttpError のメッセージを使う
-          }
-        }
-        throw new Error(message);
-      }
-      const response = data as ReceptionEndFunctionResponse | null;
-      if (!response?.success) {
-        throw new Error(response?.error || "LINEへの送信に失敗しました");
-      }
+    const portalBase = adminStore?.custom_domain
+      ? `https://${adminStore.custom_domain}`
+      : (import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin);
+    const portalUrl = `${portalBase}/therapist/${encodeURIComponent(accessToken)}`;
 
-      const sentAt = response.sent_at || new Date().toISOString();
-      setReceptionEndNotifications((prev) => ({ ...prev, [castId]: sentAt }));
-      toast({ title: "受付終了連絡を送信しました" });
+    setSharingReceptionEndCastId(castId);
+    try {
+      const result = await shareReceptionEndContent(portalUrl, receptionEndGuideFile);
+      if (result.status === "shared") {
+        toast({ title: "共有内容を送信先へ渡しました" });
+      } else if (result.status === "fallback") {
+        toast({
+          title: result.urlCopied
+            ? "ポータルURLをコピーしました"
+            : "画像マニュアルを保存しました",
+          description: result.urlCopied
+            ? "画像マニュアルも保存したので、2つを送信先へ共有してください。"
+            : "ポータルURLはコピーできなかったため、画面からコピーしてください。",
+        });
+      }
     } catch (error) {
       toast({
-        title: "受付終了連絡を送信できませんでした",
-        description: error instanceof Error ? error.message : "送信先のLINE連携とマイページ発行状況を確認してください",
+        title: "共有画面を開けませんでした",
+        description: error instanceof Error ? error.message : "もう一度お試しください。",
         variant: "destructive",
       });
     } finally {
-      setSendingReceptionEndCastId(null);
-      setReceptionEndResendTarget(null);
+      setSharingReceptionEndCastId(null);
     }
   };
 
   const dailyTotal = useMemo(() => reservations.reduce((sum, r) => sum + (r.price || 0), 0), [reservations]);
-  const isCurrentBusinessDate = useMemo(() => {
-    const [startHour, startMinute] = dayStartTime.split(":").map(Number);
-    const now = new Date();
-    const today = now.getHours() * 60 + now.getMinutes() < startHour * 60 + startMinute
-      ? addDays(now, -1)
-      : now;
-    return format(selectedDate, "yyyy-MM-dd") === format(today, "yyyy-MM-dd");
-  }, [dayStartTime, selectedDate]);
-
   const castNameMap = useMemo(() => {
     const m = new Map<string, string>();
     casts.forEach((c) => m.set(c.id, c.name));
@@ -1122,15 +1099,15 @@ export default function Schedule() {
               {isAdmin && (
                 <Card className="p-3 mb-3">
                   <div className="flex items-start gap-2 mb-3">
-                    <Send size={16} className="text-primary mt-0.5 shrink-0" />
+                    <Share2 size={16} className="text-primary mt-0.5 shrink-0" />
                     <div>
                       <h2 className="text-sm font-bold">受付終了連絡</h2>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        マイページと追加オプション入力の画像マニュアルを、本人用LINEグループへ送ります。
+                        iPhoneの共有画面から送信先を選び、ポータルURLと画像マニュアルを共有します。
                       </p>
-                      {!isCurrentBusinessDate && (
-                        <p className="text-[11px] text-amber-700 mt-1">
-                          送信するには本日の営業日を選択してください。
+                      {receptionEndGuideError && (
+                        <p className="text-[11px] text-rose-700 mt-1">
+                          画像マニュアルを読み込めませんでした。画面を再読み込みしてください。
                         </p>
                       )}
                     </div>
@@ -1145,8 +1122,9 @@ export default function Schedule() {
                   ) : (
                     <div className="divide-y rounded-lg border">
                       {castRows.map(({ cast, shift }) => {
-                        const sentAt = receptionEndNotifications[cast.id];
-                        const isSending = sendingReceptionEndCastId === cast.id;
+                        const hasPortal = !!castAccessTokens[cast.id];
+                        const isSharing = sharingReceptionEndCastId === cast.id;
+                        const isGuidePreparing = !receptionEndGuideFile && !receptionEndGuideError;
                         return (
                           <div key={cast.id} className="p-2.5 flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
                             {cast.photo ? (
@@ -1161,33 +1139,29 @@ export default function Schedule() {
                               <p className="text-[11px] text-muted-foreground">
                                 {toExtTime(shift.start_time)}〜{toExtTime(shift.end_time)}
                               </p>
-                              {sentAt && (
-                                <p className="text-[11px] text-emerald-700 flex items-center gap-1 mt-0.5">
-                                  <CheckCircle2 size={12} />
-                                  送信済み {format(new Date(sentAt), "M/d HH:mm")}
+                              {!hasPortal && (
+                                <p className="text-[11px] text-amber-700 mt-0.5">
+                                  マイページ未発行
                                 </p>
                               )}
                             </div>
                             <Button
                               type="button"
                               size="sm"
-                              variant={sentAt ? "outline" : "default"}
-                              className={cn("h-8 text-xs shrink-0", sentAt && "text-primary")}
-                              disabled={!isCurrentBusinessDate || !!sendingReceptionEndCastId}
-                              onClick={() => {
-                                if (sentAt) {
-                                  setReceptionEndResendTarget({ id: cast.id, name: cast.name });
-                                } else {
-                                  sendReceptionEndNotification(cast.id);
-                                }
-                              }}
+                              className="h-8 text-xs shrink-0"
+                              disabled={
+                                !hasPortal
+                                || !receptionEndGuideFile
+                                || !!sharingReceptionEndCastId
+                              }
+                              onClick={() => shareReceptionEnd(cast.id)}
                             >
-                              {isSending ? (
-                                <><Loader2 size={13} className="mr-1.5 animate-spin" />送信中...</>
-                              ) : sentAt ? (
-                                <><Send size={13} className="mr-1.5" />再送</>
+                              {isSharing ? (
+                                <><Loader2 size={13} className="mr-1.5 animate-spin" />共有中...</>
+                              ) : isGuidePreparing ? (
+                                <><Loader2 size={13} className="mr-1.5 animate-spin" />準備中...</>
                               ) : (
-                                <><Send size={13} className="mr-1.5" />受付終了連絡</>
+                                <><Share2 size={13} className="mr-1.5" />受付終了連絡</>
                               )}
                             </Button>
                           </div>
@@ -1613,34 +1587,6 @@ export default function Schedule() {
           )}
         </SheetContent>
       </Sheet>
-
-      <AlertDialog
-        open={!!receptionEndResendTarget}
-        onOpenChange={(open) => { if (!open) setReceptionEndResendTarget(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>受付終了連絡を再送しますか？</AlertDialogTitle>
-            <AlertDialogDescription>
-              {receptionEndResendTarget?.name}さんへ、
-              {format(selectedDate, "M月d日(E)", { locale: ja })}の受付終了連絡をもう一度送ります。
-              マイページURLと追加オプション入力の画像マニュアルが再送されます。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>戻る</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (receptionEndResendTarget) {
-                  sendReceptionEndNotification(receptionEndResendTarget.id);
-                }
-              }}
-            >
-              再送する
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
