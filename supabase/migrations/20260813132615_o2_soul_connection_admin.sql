@@ -1,4 +1,4 @@
--- O2・魂セラピスト専用の管理保存RPC。
+-- O2・魂セラピスト専用の管理用保存RPC。
 -- 既存のXプロフィールと認証情報は削除せず、そのまま保持する。
 
 create or replace function public.save_o2_soul_connection_admin_v1(
