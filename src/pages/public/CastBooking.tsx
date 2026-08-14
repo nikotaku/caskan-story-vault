@@ -268,7 +268,7 @@ export default function CastBooking() {
         payment_method: "cash",
         notes: notes.trim() || null,
         referral_source: `${cast.name}専用フォーム`,
-        status: "confirmed",
+        status: "pending",
         payment_status: "unpaid",
         created_by: null,
         store_id: storeId,
