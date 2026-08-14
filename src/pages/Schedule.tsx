@@ -84,9 +84,9 @@ const STATUS_COLORS: Record<string, string> = {
   hold: "bg-amber-100 border-amber-400 text-amber-900",
   completed: "bg-emerald-100 border-emerald-400 text-emerald-900",
   cancelled: "bg-rose-100 border-rose-300 text-rose-700 opacity-50",
-  // 旧ステータス（後方互換・確定扱いで表示）
-  pending: "bg-blue-100 border-blue-400 text-blue-900",
-  sms_waiting: "bg-blue-100 border-blue-400 text-blue-900",
+  // 確定前のWEB予約（旧ステータスを含む）
+  pending: "bg-purple-100 border-purple-400 text-purple-900",
+  sms_waiting: "bg-purple-100 border-purple-400 text-purple-900",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1341,7 +1341,7 @@ export default function Schedule() {
                                 const extMin = getExtMinutes(res.options, optionRates);
                                 const effDuration = res.duration + extMin;
                                 const resH = Math.max((effDuration / 60) * HOUR_HEIGHT, 28);
-                                const statusClass = STATUS_COLORS[res.status] || STATUS_COLORS.pending;
+                                const statusClass = STATUS_COLORS[res.status] || STATUS_COLORS.confirmed;
                                 const endTime = format(
                                   addMinutes(parse(res.start_time.slice(0, 5), "HH:mm", new Date()), effDuration),
                                   "HH:mm"
