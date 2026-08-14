@@ -582,7 +582,7 @@ const BookingReservation = () => {
           payment_method: paymentMethod || "cash",
           payment_fee: finalPaymentFee || 0,
           notes: notes.trim() || null,
-          status: "confirmed",
+          status: "pending",
           payment_status: "unpaid",
           created_by: null,
           store_id: storeId,
