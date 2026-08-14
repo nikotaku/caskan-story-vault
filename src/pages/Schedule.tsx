@@ -96,6 +96,14 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "キャンセル",
 };
 
+const TIMELINE_LEGEND = [
+  { status: "pending", label: "確定前WEB予約" },
+  { status: "confirmed", label: "確定予約" },
+  { status: "hold", label: STATUS_LABELS.hold },
+  { status: "completed", label: STATUS_LABELS.completed },
+  { status: "cancelled", label: STATUS_LABELS.cancelled },
+] as const;
+
 const TOTAL_HEIGHT = (TIME_END - TIME_START) * HOUR_HEIGHT;
 
 function timeToMinutes(time: string) {
@@ -1418,9 +1426,9 @@ export default function Schedule() {
 
               {/* Legend */}
               <div className="flex gap-3 mt-2 flex-wrap text-xs">
-                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                  <div key={key} className="flex items-center gap-1">
-                    <div className={cn("w-3 h-3 rounded border-t-2", STATUS_COLORS[key])} />
+                {TIMELINE_LEGEND.map(({ status, label }) => (
+                  <div key={status} className="flex items-center gap-1">
+                    <div className={cn("w-3 h-3 rounded border-t-2", STATUS_COLORS[status])} />
                     <span className="text-muted-foreground">{label}</span>
                   </div>
                 ))}
