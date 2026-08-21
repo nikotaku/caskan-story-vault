@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, Pencil, Trash2, GripVertical } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -39,6 +39,16 @@ const emptyForm = {
   notes: "",
 };
 
+const bankAccountToForm = (account: BankAccount) => ({
+  account_name: account.account_name,
+  bank_name: account.bank_name || "",
+  branch_name: account.branch_name || "",
+  account_number: account.account_number || "",
+  account_holder: account.account_holder || "",
+  purpose: account.purpose || "",
+  notes: account.notes || "",
+});
+
 export default function BusinessBankAccounts() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -50,7 +60,9 @@ export default function BusinessBankAccounts() {
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const linkedAccountId = searchParams.get("account");
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -78,16 +90,25 @@ export default function BusinessBankAccounts() {
 
   const openEdit = (a: BankAccount) => {
     setEditingId(a.id);
-    setForm({
-      account_name: a.account_name,
-      bank_name: a.bank_name || "",
-      branch_name: a.branch_name || "",
-      account_number: a.account_number || "",
-      account_holder: a.account_holder || "",
-      purpose: a.purpose || "",
-      notes: a.notes || "",
-    });
+    setForm(bankAccountToForm(a));
     setIsDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (!linkedAccountId) return;
+    const account = accounts.find((item) => item.id === linkedAccountId);
+    if (!account) return;
+    setEditingId(account.id);
+    setForm(bankAccountToForm(account));
+    setIsDialogOpen(true);
+  }, [accounts, linkedAccountId]);
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (open || !linkedAccountId) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("account");
+    setSearchParams(nextParams, { replace: true });
   };
 
   const handleSave = async () => {
@@ -244,7 +265,7 @@ export default function BusinessBankAccounts() {
         </div>
       </main>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "銀行口座を編集" : "銀行口座を追加"}</DialogTitle>
