@@ -61,6 +61,12 @@ interface ExpenseRec {
   is_paid: boolean;
 }
 
+interface FixedCostDestination {
+  id: string;
+  item_name: string;
+  transfer_account_id: string | null;
+}
+
 interface ClearanceRec {
   cast_id: string;
   cast_name: string;
@@ -112,6 +118,13 @@ interface TherapistMetric {
 type TherapistMetricTab = "sales" | "nominations" | "repeatRate";
 
 const yen = (v: number) => `¥${v.toLocaleString()}`;
+
+const normalizeFixedCostItemName = (value: string) =>
+  value
+    .replace(/^賃借料[（(](.+)[）)]$/, "$1")
+    .replace(/^広告媒体費[（(](.+)[）)]$/, "$1")
+    .replace(/代$/, "")
+    .replace(/\s/g, "");
 
 const getReservationEndAt = (reservation: Pick<ReservationRec, "reservation_date" | "start_time" | "duration">) => {
   const startAt = new Date(`${reservation.reservation_date}T${reservation.start_time.slice(0, 8)}`);
@@ -169,6 +182,7 @@ export default function SalesMonthlyClosing() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()));
   const [records, setRecords] = useState<ExpenseRec[]>([]);
+  const [fixedCostDestinations, setFixedCostDestinations] = useState<FixedCostDestination[]>([]);
   const [clearances, setClearances] = useState<ClearanceRec[]>([]);
   const [reservations, setReservations] = useState<ReservationRec[]>([]);
   const [incompleteReservations, setIncompleteReservations] = useState<IncompleteReservationRec[]>([]);
@@ -203,6 +217,7 @@ export default function SalesMonthlyClosing() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setRecords([]);
+    setFixedCostDestinations([]);
     setClearances([]);
     setReservations([]);
     setIncompleteReservations([]);
@@ -211,7 +226,7 @@ export default function SalesMonthlyClosing() {
     setClosing(null);
     const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
     const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
-    const [expRes, clrRes, rewardsRes, resvRes, closeRes] = await Promise.all([
+    const [expRes, clrRes, rewardsRes, resvRes, closeRes, fixedCostsRes] = await Promise.all([
       supabase
         .from("expenses")
         .select("id, expense_date, expense_type, amount, is_paid")
@@ -234,9 +249,12 @@ export default function SalesMonthlyClosing() {
         .eq("store_id", ZENRYOKU_STORE_ID)
         .eq("month_date", monthStart)
         .maybeSingle(),
+      supabase
+        .from("business_fixed_costs")
+        .select("id, item_name, transfer_account_id"),
     ]);
 
-    const firstError = [expRes.error, clrRes.error, rewardsRes.error, resvRes.error, closeRes.error].find(Boolean);
+    const firstError = [expRes.error, clrRes.error, rewardsRes.error, resvRes.error, closeRes.error, fixedCostsRes.error].find(Boolean);
     if (firstError) {
       console.error("monthly settlement fetch failed", firstError);
       toast.error(`月別清算の読み込みに失敗しました: ${firstError.message}`);
@@ -286,6 +304,7 @@ export default function SalesMonthlyClosing() {
     }
     payAgg.cashOnHand = (clrRes.data ?? []).reduce((s, r) => s + (r.payout_amount ?? 0), 0);
     setPay(payAgg);
+    setFixedCostDestinations((fixedCostsRes.data ?? []) as FixedCostDestination[]);
     setRecords((expRes.data ?? []).map((r) => ({
       id: r.id,
       date: r.expense_date,
@@ -396,6 +415,44 @@ export default function SalesMonthlyClosing() {
   const totalFixed = doneItems.reduce((s, i) => s + sumFor(i), 0);
   const isCurrentMonth = isSameMonth(selectedMonth, new Date());
   const allDone = pendingItems.length === 0;
+
+  const getFixedCostDestination = (item: string) => {
+    const normalizedItem = normalizeFixedCostItemName(item);
+    return fixedCostDestinations.find(
+      (fixedCost) => normalizeFixedCostItemName(fixedCost.item_name) === normalizedItem,
+    );
+  };
+
+  const openPaymentDestination = (item: string) => {
+    const fixedCost = getFixedCostDestination(item);
+    if (fixedCost?.transfer_account_id) {
+      navigate(`/business-continuity/bank-accounts?account=${encodeURIComponent(fixedCost.transfer_account_id)}`);
+      return;
+    }
+    if (fixedCost) {
+      navigate(`/business-continuity/fixed-costs?fixedCost=${encodeURIComponent(fixedCost.id)}`);
+      return;
+    }
+    navigate(`/business-continuity/fixed-costs?newItem=${encodeURIComponent(item)}`);
+  };
+
+  const renderPaymentDestinationButton = (item: string, compact = false) => {
+    const registered = !!getFixedCostDestination(item)?.transfer_account_id;
+    return (
+      <button
+        type="button"
+        className={`${compact ? "h-7" : "h-9"} inline-flex items-center rounded border px-2 text-[11px] font-medium transition-colors ${
+          registered
+            ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            : "border-amber-300 text-amber-700 hover:bg-amber-50"
+        }`}
+        onClick={() => openPaymentDestination(item)}
+        title={registered ? "登録済みの入金先口座を確認" : "入金先口座を固定費に関連付ける"}
+      >
+        {registered ? "入金先確認" : "入金先登録"}
+      </button>
+    );
+  };
 
   // ── 変動費（固定費以外の当月経費。登録ごとに合算） ──
   const variableRecs = records
@@ -939,6 +996,7 @@ export default function SalesMonthlyClosing() {
                                 >
                                   {savingItem === item ? <Loader2 size={13} className="animate-spin" /> : "支払・登録"}
                                 </Button>
+                                {renderPaymentDestinationButton(item)}
                               </div>
                             </div>
                             );
@@ -1007,7 +1065,7 @@ export default function SalesMonthlyClosing() {
                                   </Button>
                                 </span>
                               ) : (
-                                <span className="flex items-center gap-1.5 shrink-0">
+                                <span className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
                                   <span className="font-bold tabular-nums">{yen(sumFor(item))}</span>
                                   {rec && (
                                     <>
@@ -1028,6 +1086,7 @@ export default function SalesMonthlyClosing() {
                                       >
                                         {unpaid ? "支払済みに" : "未払いに"}
                                       </button>
+                                      {renderPaymentDestinationButton(item, true)}
                                     </>
                                   )}
                                 </span>
