@@ -74,6 +74,26 @@ interface Reservation {
   notes: string | null;
 }
 
+function RoomBadges({ rooms, compact = false }: { rooms: string[]; compact?: boolean }) {
+  if (rooms.length === 0) return null;
+
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0">
+      {rooms.map((room) => (
+        <span
+          key={room}
+          className={cn(
+            "inline-flex items-center rounded-full border border-rose-200 bg-rose-50 font-semibold text-rose-700",
+            compact ? "px-1.5 py-0 text-[9px]" : "px-2 py-0.5 text-[10px]",
+          )}
+        >
+          {room}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const TIME_START = 10;
 const TIME_END = 26;
 const HOUR_HEIGHT = 80; // px per hour (vertical)
@@ -550,6 +570,17 @@ export default function Schedule() {
     casts.forEach((c) => m.set(c.id, c.name));
     return m;
   }, [casts]);
+
+  const castRoomMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    shifts.forEach((shift) => {
+      if (!shift.room) return;
+      const rooms = map.get(shift.cast_id) ?? [];
+      if (!rooms.includes(shift.room)) rooms.push(shift.room);
+      map.set(shift.cast_id, rooms);
+    });
+    return map;
+  }, [shifts]);
 
   const castRows = useMemo(() => {
     const map = new Map<string, {
@@ -1161,7 +1192,10 @@ export default function Schedule() {
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold truncate">{cast.name}</p>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <p className="text-sm font-semibold truncate">{cast.name}</p>
+                                <RoomBadges rooms={castRoomMap.get(cast.id) ?? []} />
+                              </div>
                               <p className="text-[11px] text-muted-foreground">
                                 {shift
                                   ? `${toExtTime(shift.start_time)}〜${toExtTime(shift.end_time)}`
@@ -1208,22 +1242,26 @@ export default function Schedule() {
                     <span className="text-[11px] font-semibold text-muted-foreground">最短ご案内時間</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {earliestSlots.map((sl) => (
-                      <span
-                        key={sl.castId}
-                        className={cn(
-                          "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border",
-                          sl.now
-                            ? "bg-green-50 border-green-300 text-green-700 font-bold"
-                            : sl.label === "受付終了"
-                              ? "bg-muted border-border text-muted-foreground"
-                              : "bg-blue-50 border-blue-200 text-blue-800"
-                        )}
-                      >
-                        <span className="font-medium">{sl.name}</span>
-                        <span className={sl.now ? "" : "font-bold"}>{sl.label}</span>
-                      </span>
-                    ))}
+                    {earliestSlots.map((sl) => {
+                      const rooms = castRoomMap.get(sl.castId) ?? [];
+                      return (
+                        <span
+                          key={sl.castId}
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border",
+                            sl.now
+                              ? "bg-green-50 border-green-300 text-green-700 font-bold"
+                              : sl.label === "受付終了"
+                                ? "bg-muted border-border text-muted-foreground"
+                                : "bg-blue-50 border-blue-200 text-blue-800"
+                          )}
+                        >
+                          <span className="font-medium">{sl.name}</span>
+                          <RoomBadges rooms={rooms} compact />
+                          <span className={sl.now ? "" : "font-bold"}>{sl.label}</span>
+                        </span>
+                      );
+                    })}
                   </div>
                 </Card>
               )}
