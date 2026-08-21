@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, Pencil, Trash2, GripVertical } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -87,6 +87,23 @@ const emptyForm = {
   vendor_id: "",
 };
 
+const fixedCostToForm = (c: FixedCost) => ({
+  item_name: c.item_name,
+  label: c.label || "",
+  label_color: c.label_color || "gray",
+  contract_holder: c.contract_holder || "",
+  amount: c.amount as any,
+  payment_day: c.payment_day?.toString() || "",
+  payment_method: c.payment_method || "",
+  transfer_destination: c.transfer_destination || "",
+  transfer_account_id: c.transfer_account_id || "",
+  debit_account_id: c.debit_account_id || "",
+  renewal_date: c.renewal_date || "",
+  cancellation_method: c.cancellation_method || "",
+  notes: c.notes || "",
+  vendor_id: c.vendor_id || "",
+});
+
 export default function BusinessFixedCosts() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([]);
@@ -101,7 +118,10 @@ export default function BusinessFixedCosts() {
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const linkedFixedCostId = searchParams.get("fixedCost");
+  const requestedNewItem = searchParams.get("newItem");
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -143,23 +163,33 @@ export default function BusinessFixedCosts() {
 
   const openEdit = (c: FixedCost) => {
     setEditingId(c.id);
-    setForm({
-      item_name: c.item_name,
-      label: c.label || "",
-      label_color: c.label_color || "gray",
-      contract_holder: c.contract_holder || "",
-      amount: c.amount as any,
-      payment_day: c.payment_day?.toString() || "",
-      payment_method: c.payment_method || "",
-      transfer_destination: c.transfer_destination || "",
-      transfer_account_id: c.transfer_account_id || "",
-      debit_account_id: c.debit_account_id || "",
-      renewal_date: c.renewal_date || "",
-      cancellation_method: c.cancellation_method || "",
-      notes: c.notes || "",
-      vendor_id: c.vendor_id || "",
-    });
+    setForm(fixedCostToForm(c));
     setIsDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (linkedFixedCostId) {
+      const fixedCost = fixedCosts.find((item) => item.id === linkedFixedCostId);
+      if (!fixedCost) return;
+      setEditingId(fixedCost.id);
+      setForm(fixedCostToForm(fixedCost));
+      setIsDialogOpen(true);
+      return;
+    }
+    if (requestedNewItem) {
+      setEditingId(null);
+      setForm({ ...emptyForm, item_name: requestedNewItem });
+      setIsDialogOpen(true);
+    }
+  }, [fixedCosts, linkedFixedCostId, requestedNewItem]);
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (open || (!linkedFixedCostId && !requestedNewItem)) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("fixedCost");
+    nextParams.delete("newItem");
+    setSearchParams(nextParams, { replace: true });
   };
 
   const handleSave = async () => {
@@ -377,7 +407,7 @@ export default function BusinessFixedCosts() {
         </div>
       </main>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "固定費を編集" : "固定費を追加"}</DialogTitle>
