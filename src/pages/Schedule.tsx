@@ -1311,7 +1311,10 @@ export default function Schedule() {
                                 {cast.name.charAt(0)}
                               </div>
                             )}
-                            <div className="text-[10px] font-semibold truncate leading-tight">{cast.name}</div>
+                            <div className="flex items-center justify-center gap-1 min-w-0 leading-tight">
+                              <span className="text-[10px] font-semibold truncate">{cast.name}</span>
+                              <RoomBadges rooms={castRoomMap.get(cast.id) ?? []} compact />
+                            </div>
                             <div className="text-[9px] text-muted-foreground leading-tight">
                               {shift
                                 ? `${shift.start_time.slice(0, 5)}~${shift.end_time.slice(0, 5)}`
