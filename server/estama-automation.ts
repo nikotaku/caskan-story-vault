@@ -563,6 +563,28 @@ const visibleSoulAction = (root: Locator, label: RegExp) => root
   .filter({ hasText: label })
   .last();
 
+async function isDisabledSoulAction(action: Locator) {
+  if (!await action.count()) return true;
+  return action.evaluate((element) => {
+    const className = typeof element.className === "string" ? element.className : "";
+    return element.hasAttribute("disabled")
+      || element.getAttribute("aria-disabled") === "true"
+      || /(?:^|\s)(?:btn-disabled|disabled)(?:\s|$)/.test(className);
+  }).catch(() => true);
+}
+
+async function clickSoulAction(action: Locator) {
+  if (await isDisabledSoulAction(action)) throw new SoulActivationRequiredError();
+  try {
+    await action.click({ timeout: 5_000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/intercepts pointer events|outside of the viewport/i.test(message)) throw error;
+    if (await isDisabledSoulAction(action)) throw new SoulActivationRequiredError();
+    await action.evaluate((element) => (element as HTMLElement).click());
+  }
+}
+
 async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, soul?: SoulCredentials) {
   if (!job.cast_id) throw new Error("登録対象のセラピストがありません");
   const { data: cast, error: castError } = await admin.from("casts").select("*").eq("id", job.cast_id).single();
@@ -949,7 +971,7 @@ async function resetPendingSoulTherapist(page: Page, row: Locator, castName: str
     await dialog.accept();
   };
   page.once("dialog", acceptDialog);
-  await stop.click();
+  await clickSoulAction(stop);
   await page.waitForTimeout(500);
   page.off("dialog", acceptDialog);
 
@@ -997,7 +1019,7 @@ async function setupSoulTherapist(
   let row = await findEstamaCastRow(page, { localName: castName });
   const start = visibleSoulAction(row, /魂セラピストを始める/);
   if (await start.count()) {
-    await start.click();
+    await clickSoulAction(start);
     await page.waitForTimeout(300);
     const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, #createAccountModal:visible, .p-tamathera-confirm-modal:visible').last();
     const setupRoot = await dialog.count() ? dialog : page.locator("body");
@@ -1018,7 +1040,7 @@ async function setupSoulTherapist(
   let login = visibleSoulAction(row, /本人の代わりにログイン/);
   if (!await login.count()) return { status: "issued" };
   let loginClass = await login.getAttribute("class") || "";
-  if (loginClass.includes("disabled") || !await login.isEnabled()) {
+  if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
     const directSetup = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
     if (directSetup) return directSetup;
     const directLogin = await trySoulDirectLogin(page, credentials).catch(() => null);
@@ -1044,7 +1066,7 @@ async function setupSoulTherapist(
             && ["document", "fetch", "xhr"].includes(resourceType);
         } catch { return false; }
       }, { timeout: 5_000 }).catch(() => null);
-      await sendLogin.click();
+      await clickSoulAction(sendLogin);
       const [infoPage, infoResponse] = await Promise.all([popupPromise, responsePromise]);
       if (infoResponse) {
         setupDiagnostics.push(`通信あり(${infoResponse.request().method()}:${infoResponse.status()})`);
@@ -1123,7 +1145,7 @@ async function setupSoulTherapist(
       if (setupAfterSend) return setupAfterSend;
     } else setupDiagnostics.push("ログイン情報操作なし");
   }
-  if (loginClass.includes("disabled") || !await login.isEnabled()) {
+  if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
     const actions = [...new Set((await row.locator("a, button, .btn, [role=button]").allTextContents())
       .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
     if (allowPendingReset && await resetPendingSoulTherapist(page, row, castName)) {
@@ -1135,7 +1157,7 @@ async function setupSoulTherapist(
   }
   const context = page.context();
   const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-  await login.click();
+  await clickSoulAction(login);
   const popup = await popupPromise;
   const accountPage = popup || page;
   await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
@@ -1413,9 +1435,10 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   });
   const login = visibleSoulAction(row, /本人の代わりにログイン/);
   if (!await login.count()) throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
+  if (await isDisabledSoulAction(login)) throw new SoulActivationRequiredError();
 
   const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-  await login.click();
+  await clickSoulAction(login);
   const popup = await popupPromise;
   const accountPage = popup || page;
   await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
@@ -1505,12 +1528,12 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
         throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
       }
       const loginClass = await login.getAttribute("class") || "";
-      if (loginClass.includes("disabled") || !await login.isEnabled()) {
+      if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
         throw new SoulActivationRequiredError();
       }
 
       const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-      await login.click();
+      await clickSoulAction(login);
       const popup = await popupPromise;
       accountPage = popup || page;
     }
@@ -1584,13 +1607,20 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
   const postId = job.job_type === "estama_post_diary" && typeof job.payload?.post_id === "string"
     ? job.payload.post_id
     : null;
-  if (error instanceof LoginRequiredError) {
+  if (error instanceof LoginRequiredError || error instanceof SoulActivationRequiredError) {
+    const loginRequired = error instanceof LoginRequiredError;
     const isProfileUpdate = job.job_type === "estama_register_cast"
       && job.payload?.source === "profile_update";
     await Promise.all([
       admin.from("automation_jobs").update({ status: "waiting_for_login", error_message: message }).eq("id", job.id),
-      admin.from("automation_connections").update({ status: "expired", last_error: message }).eq("store_id", job.store_id).eq("provider", "estama"),
+      ...(loginRequired
+        ? [admin.from("automation_connections").update({ status: "expired", last_error: message }).eq("store_id", job.store_id).eq("provider", "estama")]
+        : []),
       ...(postId ? [admin.from("cast_posts").update({ esutama_status: "pending", esutama_error: message }).eq("id", postId)] : []),
+      ...(!loginRequired && job.cast_id
+        ? [admin.from("external_cast_profiles").update({ soul_status: "issued", last_error: message })
+          .eq("cast_id", job.cast_id).eq("provider", "estama")]
+        : []),
       ...(job.cast_id && job.job_type === "estama_register_cast"
         ? [admin.from("external_cast_profiles").update({
           sync_status: isProfileUpdate ? "synced" : "error",
@@ -1975,13 +2005,19 @@ async function verifyEstamaAdminSchedule(page: Page, item: EstamaShiftBatchItem)
 const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
   `https://estama.jp/shop/${encodeURIComponent(shopId)}/cast/${encodeURIComponent(externalId)}/`;
 
+const sundayOf = (date: string) => {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() - value.getUTCDay());
+  return value.toISOString().slice(0, 10);
+};
+
 const currentEstamaDate = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
-const publicScheduleWindowOffset = (shiftDate: string, publicStartDate: string) => {
-  const currentStart = new Date(`${publicStartDate}T00:00:00.000Z`).getTime();
-  const targetDate = new Date(`${shiftDate}T00:00:00.000Z`).getTime();
-  return Math.max(0, Math.floor((targetDate - currentStart) / (7 * 86_400_000)));
+const weekOffsetFromCurrent = (weekStart: string) => {
+  const currentSunday = new Date(`${sundayOf(currentEstamaDate())}T00:00:00.000Z`).getTime();
+  const targetSunday = new Date(`${weekStart}T00:00:00.000Z`).getTime();
+  return Math.max(0, Math.round((targetSunday - currentSunday) / (7 * 86_400_000)));
 };
 
 const compactScheduleText = (value: string) => value
@@ -2005,7 +2041,7 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
   if (dateIndex < 0) {
     return item.action === "delete"
       ? { verified: true }
-      : { verified: false, error: `${label}の出勤を公開ページで確認できません` };
+      : { verified: false, error: `${label}の出勤表示がありません` };
   }
 
   const nextDate = normalized.slice(dateIndex + label.length).search(/\b\d{1,2}\/\d{1,2}(?:\([^)]*\))?/);
@@ -2025,7 +2061,7 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
   const expected = new RegExp(`${escapeRegExp(start)}\\s*～\\s*${escapeRegExp(end)}`);
   return expected.test(dateBlock)
     ? { verified: true }
-    : { verified: false, error: `${label} ${start}～${end}を公開ページで確認できません` };
+    : { verified: false, error: `${label} ${start}～${end}が公開ページにありません` };
 }
 
 async function clickNextPublicScheduleWeek(page: Page, targetOffset: number) {
@@ -2111,22 +2147,15 @@ async function verifyPublicShiftGroup(
   if (!first.externalId) throw new Error(`${first.castName}のエステ魂公開ページIDがありません`);
 
   const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
-  // エステ魂の公開出勤表は固定曜日の週ではなく、当日から7日間ずつ表示される。
-  // 例: 8/21に開くと初期表示は8/21〜8/27、次画面は8/28〜9/3。
-  const publicStartDate = currentEstamaDate();
-  const byWindow = new Map<number, EstamaShiftBatchItem[]>();
+  const byWeek = new Map<string, EstamaShiftBatchItem[]>();
   for (const item of group) {
-    const offset = publicScheduleWindowOffset(item.shiftDate, publicStartDate);
-    byWindow.set(offset, [...(byWindow.get(offset) || []), item]);
+    const weekStart = sundayOf(item.shiftDate);
+    byWeek.set(weekStart, [...(byWeek.get(weekStart) || []), item]);
   }
-  const windows = [...byWindow.entries()]
-    .map(([offset, expected]) => ({
-      weekStart: addDays(publicStartDate, offset * 7),
-      expected,
-      offset,
-    }))
+  const weeks = [...byWeek.entries()]
+    .map(([weekStart, expected]) => ({ weekStart, expected, offset: weekOffsetFromCurrent(weekStart) }))
     .sort((left, right) => left.offset - right.offset);
-  const maxOffset = Math.min(2, Math.max(...windows.map((window) => window.offset)));
+  const maxOffset = Math.min(2, Math.max(...weeks.map((week) => week.offset)));
   let finalEvidence: EstamaShiftEvidence[] = [];
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -2141,7 +2170,7 @@ async function verifyPublicShiftGroup(
         } catch (error) {
           const screenshotBase64 = await capturePublicScheduleScreenshot(page);
           const message = error instanceof Error ? error.message : String(error);
-          for (const remaining of windows.filter((candidate) => candidate.offset >= offset)) {
+          for (const remaining of weeks.filter((candidate) => candidate.offset >= offset)) {
             attemptEvidence.push({
               castId: first.castId,
               castName: first.castName,
@@ -2167,13 +2196,13 @@ async function verifyPublicShiftGroup(
           break;
         }
       }
-      const window = windows.find((candidate) => candidate.offset === offset);
-      if (!window) continue;
+      const week = weeks.find((candidate) => candidate.offset === offset);
+      if (!week) continue;
       const rawText = await page.locator("body").innerText();
       if (/Site Unavailable|Unable to access this site|アクセスできません/i.test(rawText)) {
         throw new Error("エステ魂の公開ページを取得できませんでした");
       }
-      const expected = window.expected.map((item) => ({
+      const expected = week.expected.map((item) => ({
         jobId: item.jobId,
         action: item.action,
         shiftDate: item.shiftDate,
@@ -2187,7 +2216,7 @@ async function verifyPublicShiftGroup(
         castId: first.castId,
         castName: first.castName,
         externalId: first.externalId,
-        weekStart: window.weekStart,
+        weekStart: week.weekStart,
         publicUrl: page.url(),
         capturedAt: new Date().toISOString(),
         verified,
@@ -2199,7 +2228,7 @@ async function verifyPublicShiftGroup(
     }
 
     finalEvidence = attemptEvidence;
-    if (attemptEvidence.length === windows.length && attemptEvidence.every((item) => item.verified)) break;
+    if (attemptEvidence.length === weeks.length && attemptEvidence.every((item) => item.verified)) break;
     if (attempt < 3) await page.waitForTimeout(attempt === 1 ? 15_000 : 30_000);
   }
   return finalEvidence;
@@ -2437,7 +2466,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           } else {
             await recordFailure(
               item,
-              new Error(`公開確認できません: ${verification?.error || itemEvidence?.error || "証跡を確認できませんでした"}`),
+              new Error(`公開ページ未反映: ${verification?.error || itemEvidence?.error || "証跡を確認できませんでした"}`),
             );
           }
         }
@@ -2540,8 +2569,9 @@ export async function processAvailableJobs(
         results.push({ id: job.id, status: "completed", result });
       } catch (error) {
         await failJob(admin, job, error);
-        results.push({ id: job.id, status: error instanceof LoginRequiredError ? "waiting_for_login" : "failed", error: error instanceof Error ? error.message : String(error) });
-        if (error instanceof LoginRequiredError) break;
+        const waitingForLogin = error instanceof LoginRequiredError || error instanceof SoulActivationRequiredError;
+        results.push({ id: job.id, status: waitingForLogin ? "waiting_for_login" : "failed", error: error instanceof Error ? error.message : String(error) });
+        if (waitingForLogin) break;
       }
     }
   } finally {
@@ -2602,3 +2632,4 @@ export async function enqueueReconcileJobs(admin: AdminClient) {
   }
   return connections?.length || 0;
 }
+
