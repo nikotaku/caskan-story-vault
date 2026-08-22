@@ -9,7 +9,9 @@ import {
   Loader2,
   Megaphone,
   PackageCheck,
+  Plus,
   RefreshCw,
+  Sparkles,
   UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +20,17 @@ import { Sidebar } from "@/components/Sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +38,21 @@ import type { Database } from "@/integrations/supabase/types";
 
 type PromotionPlan = Database["public"]["Tables"]["promotion_plans"]["Row"];
 type PromotionTask = Database["public"]["Tables"]["promotion_plan_tasks"]["Row"];
+type CastOption = Pick<
+  Database["public"]["Tables"]["casts"]["Row"],
+  "id" | "name" | "photo" | "profile" | "message" | "tags" | "x_account" | "o2_url"
+>;
+
+type GeneratedSchedule = {
+  title: string;
+  description: string;
+  preparation: Array<{ label: string }>;
+  posting: Array<{
+    scheduled_on: string;
+    group_label: string;
+    labels: string[];
+  }>;
+};
 
 const DAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -46,12 +74,49 @@ const taskProgress = (tasks: PromotionTask[]) => ({
   total: tasks.length,
 });
 
+const toLocalDateString = (offsetDays = 0) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isGeneratedSchedule = (value: unknown): value is GeneratedSchedule => {
+  if (!value || typeof value !== "object") return false;
+  const schedule = value as GeneratedSchedule;
+  return (
+    typeof schedule.title === "string" &&
+    typeof schedule.description === "string" &&
+    Array.isArray(schedule.preparation) &&
+    schedule.preparation.length > 0 &&
+    schedule.preparation.every((item) => typeof item?.label === "string") &&
+    Array.isArray(schedule.posting) &&
+    schedule.posting.length > 0 &&
+    schedule.posting.every((group) =>
+      typeof group?.scheduled_on === "string" &&
+      typeof group?.group_label === "string" &&
+      Array.isArray(group?.labels) &&
+      group.labels.length > 0 &&
+      group.labels.every((label) => typeof label === "string")
+    )
+  );
+};
+
 export default function PromotionSchedule() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [plans, setPlans] = useState<PromotionPlan[]>([]);
   const [tasks, setTasks] = useState<PromotionTask[]>([]);
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
   const [savingTaskIds, setSavingTaskIds] = useState<Set<string>>(new Set());
+  const [castOptions, setCastOptions] = useState<CastOption[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedCastIds, setSelectedCastIds] = useState<string[]>([]);
+  const [startsOn, setStartsOn] = useState(() => toLocalDateString());
+  const [endsOn, setEndsOn] = useState(() => toLocalDateString(7));
+  const [promotionGoal, setPromotionGoal] = useState("");
+  const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const { user, loading: authLoading } = useAuth();
@@ -67,7 +132,7 @@ export default function PromotionSchedule() {
     setLoading(true);
     setErrorMessage("");
 
-    const [plansResult, tasksResult] = await Promise.all([
+    const [plansResult, tasksResult, castsResult] = await Promise.all([
       supabase
         .from("promotion_plans")
         .select("*")
@@ -79,6 +144,12 @@ export default function PromotionSchedule() {
         .select("*")
         .eq("store_id", storeId)
         .order("sort_order", { ascending: true }),
+      supabase
+        .from("casts")
+        .select("id, name, photo, profile, message, tags, x_account, o2_url")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .order("name", { ascending: true }),
     ]);
 
     if (plansResult.error || tasksResult.error) {
@@ -88,6 +159,17 @@ export default function PromotionSchedule() {
     } else {
       setPlans(plansResult.data || []);
       setTasks(tasksResult.data || []);
+    }
+    if (castsResult.error) {
+      console.error("セラピスト一覧の取得に失敗しました:", castsResult.error);
+      toast.error("セラピスト一覧を読み込めませんでした");
+    } else {
+      // リブランド前後で同じ人が別の店舗IDにいる場合も、選択肢は名前単位で1件にまとめる
+      const uniqueCasts = new Map<string, CastOption>();
+      for (const cast of castsResult.data || []) {
+        if (!uniqueCasts.has(cast.name)) uniqueCasts.set(cast.name, cast);
+      }
+      setCastOptions([...uniqueCasts.values()]);
     }
     setLoading(false);
   }, [storeId, storeLoading, user]);
@@ -115,6 +197,126 @@ export default function PromotionSchedule() {
       else next.add(planId);
       return next;
     });
+  };
+
+  const toggleSelectedCast = (castId: string, checked: boolean) => {
+    setSelectedCastIds((previous) => checked
+      ? [...new Set([...previous, castId])]
+      : previous.filter((id) => id !== castId));
+  };
+
+  const resetCreateForm = () => {
+    setSelectedCastIds([]);
+    setStartsOn(toLocalDateString());
+    setEndsOn(toLocalDateString(7));
+    setPromotionGoal("");
+  };
+
+  const createAiSchedule = async () => {
+    const selectedCasts = castOptions.filter((cast) => selectedCastIds.includes(cast.id));
+    if (selectedCasts.length === 0) {
+      toast.error("セラピストを1名以上選んでください");
+      return;
+    }
+    if (!startsOn || !endsOn) {
+      toast.error("開始日と終了日を入力してください");
+      return;
+    }
+    if (startsOn > endsOn) {
+      toast.error("終了日は開始日以降にしてください");
+      return;
+    }
+
+    setGenerating(true);
+    let createdPlanId: string | null = null;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-promotion-schedule", {
+        body: {
+          storeId,
+          therapists: selectedCasts.map((cast) => ({
+            name: cast.name,
+            profile: cast.profile,
+            message: cast.message,
+            tags: cast.tags,
+            hasX: Boolean(cast.x_account),
+            hasO2: Boolean(cast.o2_url),
+          })),
+          startsOn,
+          endsOn,
+          goal: promotionGoal.trim() || undefined,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!isGeneratedSchedule(data?.schedule)) {
+        throw new Error("AIの生成結果を読み取れませんでした。もう一度お試しください。");
+      }
+
+      const schedule = data.schedule;
+      const therapistLabel = selectedCasts.map((cast) => cast.name).join("&");
+      const planKey = `ai-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const { data: createdPlan, error: planError } = await supabase
+        .from("promotion_plans")
+        .insert({
+          store_id: storeId,
+          plan_key: planKey,
+          therapist_label: therapistLabel,
+          title: schedule.title,
+          description: schedule.description,
+          starts_on: startsOn,
+          ends_on: endsOn,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+
+      if (planError) throw planError;
+      createdPlanId = createdPlan.id;
+
+      const preparationTasks = schedule.preparation.map((item, index) => ({
+        store_id: storeId,
+        plan_id: createdPlan.id,
+        task_key: `prep-${String(index + 1).padStart(3, "0")}`,
+        task_type: "preparation",
+        scheduled_on: null,
+        group_label: "準備物",
+        label: item.label,
+        sort_order: (index + 1) * 10,
+      }));
+      const postingTasks = schedule.posting.flatMap((group, groupIndex) =>
+        group.labels.map((label, labelIndex) => ({
+          store_id: storeId,
+          plan_id: createdPlan.id,
+          task_key: `post-${String(groupIndex + 1).padStart(3, "0")}-${String(labelIndex + 1).padStart(2, "0")}`,
+          task_type: "posting",
+          scheduled_on: group.scheduled_on,
+          group_label: group.group_label,
+          label,
+          sort_order: 1000 + (groupIndex + 1) * 100 + (labelIndex + 1) * 10,
+        }))
+      );
+
+      const { error: tasksError } = await supabase
+        .from("promotion_plan_tasks")
+        .insert([...preparationTasks, ...postingTasks]);
+      if (tasksError) throw tasksError;
+
+      await load();
+      setExpandedPlanIds((previous) => new Set(previous).add(createdPlan.id));
+      setCreateOpen(false);
+      resetCreateForm();
+      toast.success("AIが宣伝スケジュールを作成しました");
+    } catch (error) {
+      if (createdPlanId) {
+        await supabase.from("promotion_plans").delete().eq("id", createdPlanId).eq("store_id", storeId);
+      }
+      console.error("宣伝スケジュールの作成に失敗しました:", error);
+      toast.error(error instanceof Error ? error.message : "宣伝スケジュールを作成できませんでした");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const toggleTask = async (task: PromotionTask, nextValue: boolean) => {
@@ -174,10 +376,16 @@ export default function PromotionSchedule() {
                 {store?.name || "店舗"}の撮影準備と、投稿日・投稿先ごとの進捗を管理
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-              <RefreshCw size={15} className={loading ? "mr-1.5 animate-spin" : "mr-1.5"} />
-              再読み込み
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus size={16} className="mr-1.5" />
+                新たな宣伝スケジュールを作成
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+                <RefreshCw size={15} className={loading ? "mr-1.5 animate-spin" : "mr-1.5"} />
+                再読み込み
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -327,6 +535,84 @@ export default function PromotionSchedule() {
           )}
         </div>
       </main>
+
+      <Dialog open={createOpen} onOpenChange={(open) => !generating && setCreateOpen(open)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles size={19} className="text-primary" />
+              AIで宣伝スケジュールを作成
+            </DialogTitle>
+            <DialogDescription>
+              セラピストと期間を選ぶと、必要な準備物と日別の投稿計画をAIが作成します。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <div className="space-y-2">
+              <Label>セラピスト</Label>
+              <div className="max-h-52 space-y-2 overflow-y-auto rounded-xl border p-2">
+                {castOptions.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">選択できるセラピストがいません</p>
+                ) : castOptions.map((cast) => {
+                  const checked = selectedCastIds.includes(cast.id);
+                  return (
+                    <label
+                      key={cast.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${checked ? "border-primary bg-primary/5" : "hover:bg-muted/40"}`}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(value) => toggleSelectedCast(cast.id, value === true)}
+                      />
+                      {cast.photo ? (
+                        <img src={cast.photo} alt="" className="h-9 w-9 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
+                          {cast.name.slice(0, 1)}
+                        </span>
+                      )}
+                      <span className="font-medium">{cast.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">複数名を選ぶと、合同企画として作成します。</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="promotion-starts-on">開始日</Label>
+                <Input id="promotion-starts-on" type="date" value={startsOn} onChange={(event) => setStartsOn(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="promotion-ends-on">終了日</Label>
+                <Input id="promotion-ends-on" type="date" value={endsOn} min={startsOn} onChange={(event) => setEndsOn(event.target.value)} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="promotion-goal">目的・希望（任意）</Label>
+              <Textarea
+                id="promotion-goal"
+                value={promotionGoal}
+                onChange={(event) => setPromotionGoal(event.target.value)}
+                maxLength={500}
+                rows={4}
+                placeholder="例：新人の初出勤に向けて予約を増やしたい。動画を中心に、02・X・店舗HPで告知したい。"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={generating}>キャンセル</Button>
+            <Button onClick={() => void createAiSchedule()} disabled={generating || castOptions.length === 0}>
+              {generating ? <Loader2 size={16} className="mr-1.5 animate-spin" /> : <Sparkles size={16} className="mr-1.5" />}
+              {generating ? "AIが作成中..." : "AIで作成する"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
