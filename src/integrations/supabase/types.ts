@@ -3778,8 +3778,66 @@ export type Database = {
           },
         ]
       }
+      promotion_plan_channels: {
+        Row: {
+          channel_key: string
+          channel_label: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          placement_count: number
+          plan_id: string
+          size_spec: string | null
+          sort_order: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_key: string
+          channel_label: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          placement_count?: number
+          plan_id: string
+          size_spec?: string | null
+          sort_order?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_key?: string
+          channel_label?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          placement_count?: number
+          plan_id?: string
+          size_spec?: string | null
+          sort_order?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_plan_channels_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_plan_channels_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       promotion_plan_tasks: {
         Row: {
+          channel_key: string | null
           completed_at: string | null
           completed_by: string | null
           created_at: string
@@ -3796,6 +3854,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          channel_key?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
@@ -3812,6 +3871,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          channel_key?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
@@ -3846,6 +3906,7 @@ export type Database = {
       }
       promotion_plans: {
         Row: {
+          cast_ids: string[]
           created_at: string
           description: string | null
           ends_on: string | null
@@ -3859,6 +3920,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cast_ids?: string[]
           created_at?: string
           description?: string | null
           ends_on?: string | null
@@ -3872,6 +3934,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cast_ids?: string[]
           created_at?: string
           description?: string | null
           ends_on?: string | null
@@ -5807,6 +5870,35 @@ export type Database = {
           start_time: string
           status: string
           therapist_back: number
+        }[]
+      }
+      get_therapist_promotion_channels: {
+        Args: { p_token: string }
+        Returns: {
+          channel_key: string
+          channel_label: string
+          placement_count: number
+          plan_id: string
+          size_spec: string | null
+          sort_order: number
+        }[]
+      }
+      get_therapist_promotion_schedules: {
+        Args: { p_token: string }
+        Returns: {
+          ends_on: string | null
+          group_label: string | null
+          is_completed: boolean | null
+          plan_description: string | null
+          plan_id: string
+          plan_title: string
+          scheduled_on: string | null
+          sort_order: number | null
+          starts_on: string | null
+          task_id: string | null
+          task_label: string | null
+          task_type: string | null
+          therapist_label: string
         }[]
       }
       get_therapist_post_connections: {

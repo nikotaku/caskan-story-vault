@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy, CheckCircle2 } from "lucide-react";
+import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy, CheckCircle2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import backRatesImage from "@/assets/back-rates-table.jpg";
@@ -63,7 +63,41 @@ interface Room {
   entry_photos: string[] | null;
 }
 
-type View = "menu" | "settlement" | "transport" | "shift" | "entry" | "customers" | "upcoming";
+type View = "menu" | "settlement" | "transport" | "shift" | "entry" | "customers" | "upcoming" | "promotion";
+
+interface PromotionScheduleTask {
+  id: string;
+  taskType: string;
+  scheduledOn: string | null;
+  groupLabel: string;
+  label: string;
+  isCompleted: boolean;
+  sortOrder: number;
+}
+
+interface PromotionChannelSummary {
+  key: string;
+  label: string;
+  count: number;
+  sizeSpec: string | null;
+  sortOrder: number;
+}
+
+interface TherapistPromotionPlan {
+  id: string;
+  therapistLabel: string;
+  title: string;
+  description: string | null;
+  startsOn: string | null;
+  endsOn: string | null;
+  tasks: PromotionScheduleTask[];
+  channels: PromotionChannelSummary[];
+}
+
+const formatPromotionDate = (value: string | null) => {
+  if (!value) return "日付未設定";
+  return format(new Date(`${value}T00:00:00`), "M/d(E)", { locale: ja });
+};
 
 interface UpcomingReservation {
   id: string;
@@ -147,6 +181,10 @@ export default function TherapistPortal() {
   // Upcoming reservations（事前予約）
   const [upcoming, setUpcoming] = useState<UpcomingReservation[]>([]);
   const [upcomingLoading, setUpcomingLoading] = useState(false);
+
+  // 投稿宣伝スケジュール（本人に紐付く計画のみ）
+  const [promotionPlans, setPromotionPlans] = useState<TherapistPromotionPlan[]>([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
 
   // 本日の予約タイムライン（メニュー上部）
   const [menuTodayRes, setMenuTodayRes] = useState<UpcomingReservation[]>([]);
@@ -356,6 +394,60 @@ export default function TherapistPortal() {
     setUpcomingLoading(false);
   };
 
+  const fetchPromotionPlans = async () => {
+    if (!token) return;
+    setPromotionLoading(true);
+    const [scheduleResult, channelResult] = await Promise.all([
+      supabase.rpc("get_therapist_promotion_schedules", { p_token: token }),
+      supabase.rpc("get_therapist_promotion_channels", { p_token: token }),
+    ]);
+    if (scheduleResult.error || channelResult.error) {
+      toast.error("宣伝スケジュールの取得に失敗しました");
+      setPromotionLoading(false);
+      return;
+    }
+
+    const groupedPlans = new Map<string, TherapistPromotionPlan>();
+    for (const row of scheduleResult.data || []) {
+      let plan = groupedPlans.get(row.plan_id);
+      if (!plan) {
+        plan = {
+          id: row.plan_id,
+          therapistLabel: row.therapist_label,
+          title: row.plan_title,
+          description: row.plan_description,
+          startsOn: row.starts_on,
+          endsOn: row.ends_on,
+          tasks: [],
+          channels: [],
+        };
+        groupedPlans.set(row.plan_id, plan);
+      }
+      if (row.task_id && row.task_type && row.group_label && row.task_label) {
+        plan.tasks.push({
+          id: row.task_id,
+          taskType: row.task_type,
+          scheduledOn: row.scheduled_on,
+          groupLabel: row.group_label,
+          label: row.task_label,
+          isCompleted: Boolean(row.is_completed),
+          sortOrder: row.sort_order ?? 0,
+        });
+      }
+    }
+    for (const row of channelResult.data || []) {
+      groupedPlans.get(row.plan_id)?.channels.push({
+        key: row.channel_key,
+        label: row.channel_label,
+        count: row.placement_count,
+        sizeSpec: row.size_spec,
+        sortOrder: row.sort_order,
+      });
+    }
+    setPromotionPlans([...groupedPlans.values()]);
+    setPromotionLoading(false);
+  };
+
   const fetchSettlements = async () => {
     setSettlementLoading(true);
     const { data, error } = await supabase.rpc("get_therapist_monthly_settlements", {
@@ -465,6 +557,7 @@ export default function TherapistPortal() {
     { title: "シフト確認", description: "確定したシフトと出勤ルームを確認", icon: Calendar, action: () => setView("shift") },
     { title: "事前予約", description: "今日以降に入っている予約を確認", icon: CalendarPlus, action: () => setView("upcoming") },
     { title: "2媒体投稿", description: "O2・魂セラピストへ同時投稿", icon: Edit, action: () => navigate(`/therapist/${token}/posts`) },
+    { title: "投稿宣伝スケジュール", description: "自分の投稿予定・回数・画像サイズを確認", icon: Megaphone, action: () => { setView("promotion"); void fetchPromotionPlans(); } },
     { title: "バック表", description: "コース別・オプション別のバック率を確認", icon: Receipt, action: () => setShowBackRates(true) },
     { title: "交通費申請", description: "交通費の申請・申請履歴を確認", icon: Plane, action: () => setView("transport") },
     { title: "退勤フォーム", description: "売上入力・清掃チェック・フィードバック", icon: LogOut, action: () => navigate(`/therapist/${token}/checkout`) },
@@ -498,7 +591,7 @@ export default function TherapistPortal() {
           <div className="min-w-0">
             <p className="font-bold text-base leading-tight truncate">{cast.name}様</p>
             <p className="text-xs text-muted-foreground">
-              {view === "menu" ? "セラピストポータル" : view === "settlement" ? "精算・売上確認" : view === "shift" ? "シフト確認" : view === "entry" ? "入室方法" : view === "customers" ? "顧客カルテ" : view === "upcoming" ? "事前予約" : "交通費申請"}
+              {view === "menu" ? "セラピストポータル" : view === "settlement" ? "精算・売上確認" : view === "shift" ? "シフト確認" : view === "entry" ? "入室方法" : view === "customers" ? "顧客カルテ" : view === "upcoming" ? "事前予約" : view === "promotion" ? "投稿宣伝スケジュール" : "交通費申請"}
             </p>
           </div>
         </div>
@@ -854,6 +947,115 @@ export default function TherapistPortal() {
               </p>
             </div>
           </div>
+          </div>
+        )}
+
+        {/* ── PROMOTION SCHEDULE ── */}
+        {view === "promotion" && (
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              あなたが対象の投稿予定です。宣伝先ごとの回数と画像サイズを確認して進めてください。
+            </p>
+            {promotionLoading ? (
+              <div className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" /></div>
+            ) : promotionPlans.length === 0 ? (
+              <div className="rounded-xl border bg-card py-12 text-center text-sm text-muted-foreground">
+                現在、あなた向けの宣伝スケジュールはありません
+              </div>
+            ) : (
+              promotionPlans.map((plan) => {
+                const completedCount = plan.tasks.filter((task) => task.isCompleted).length;
+                const preparationTasks = plan.tasks.filter((task) => task.taskType === "preparation");
+                const postingTasks = plan.tasks.filter((task) => task.taskType === "posting");
+                const postingGroups = new Map<string, PromotionScheduleTask[]>();
+                for (const task of postingTasks) {
+                  const key = `${task.scheduledOn || ""}:${task.groupLabel}`;
+                  postingGroups.set(key, [...(postingGroups.get(key) || []), task]);
+                }
+
+                return (
+                  <section key={plan.id} className="rounded-xl border bg-card overflow-hidden">
+                    <div className="border-b bg-primary/5 px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-base">{plan.title}</p>
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Calendar size={13} />
+                            {formatPromotionDate(plan.startsOn)}〜{formatPromotionDate(plan.endsOn)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-background px-2.5 py-1 text-xs font-semibold text-primary">
+                          {completedCount}/{plan.tasks.length} 完了
+                        </span>
+                      </div>
+                      {plan.description && (
+                        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{plan.description}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-5 p-4">
+                      {plan.channels.length > 0 && (
+                        <div>
+                          <p className="mb-2 text-xs font-bold text-muted-foreground">宣伝先・掲載量・サイズ</p>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {plan.channels.map((channel) => (
+                              <div key={channel.key} className="rounded-lg border bg-muted/15 p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-sm font-semibold">{channel.label}</p>
+                                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                                    {channel.count}回
+                                  </span>
+                                </div>
+                                <p className="mt-1.5 text-xs text-muted-foreground">
+                                  サイズ・仕様：{channel.sizeSpec || "指定なし"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {preparationTasks.length > 0 && (
+                        <div>
+                          <p className="mb-2 text-xs font-bold text-muted-foreground">準備物</p>
+                          <div className="space-y-2">
+                            {preparationTasks.map((task) => (
+                              <div key={task.id} className="flex items-start gap-2 text-sm">
+                                <CheckCircle2 size={16} className={task.isCompleted ? "mt-0.5 shrink-0 text-green-500" : "mt-0.5 shrink-0 text-muted-foreground/35"} />
+                                <span className={task.isCompleted ? "text-muted-foreground line-through" : ""}>{task.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {postingGroups.size > 0 && (
+                        <div>
+                          <p className="mb-2 text-xs font-bold text-muted-foreground">投稿予定</p>
+                          <div className="space-y-3">
+                            {[...postingGroups.values()].map((group) => (
+                              <div key={`${group[0].scheduledOn}:${group[0].groupLabel}`} className="rounded-lg border bg-muted/15 p-3">
+                                <p className="text-xs font-bold text-primary">
+                                  {formatPromotionDate(group[0].scheduledOn)} · {group[0].groupLabel}
+                                </p>
+                                <div className="mt-2 space-y-1.5">
+                                  {group.map((task) => (
+                                    <div key={task.id} className="flex items-start gap-2 text-sm">
+                                      <CheckCircle2 size={15} className={task.isCompleted ? "mt-0.5 shrink-0 text-green-500" : "mt-0.5 shrink-0 text-muted-foreground/35"} />
+                                      <span className={task.isCompleted ? "text-muted-foreground line-through" : ""}>{task.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                );
+              })
+            )}
           </div>
         )}
 
