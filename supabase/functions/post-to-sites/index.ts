@@ -137,7 +137,7 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
 
   const [{ data: connection }, { data: external }] = await Promise.all([
     admin.from("automation_connections").select("status,browserbase_context_id").eq("store_id", post.store_id).eq("provider", "estama").maybeSingle(),
-    admin.from("external_cast_profiles").select("sync_status").eq("cast_id", post.cast_id).eq("provider", "estama").maybeSingle(),
+    admin.from("external_cast_profiles").select("sync_status,soul_status").eq("cast_id", post.cast_id).eq("provider", "estama").maybeSingle(),
   ]);
   if (!connection?.browserbase_context_id || connection.status !== "ready" || external?.sync_status !== "synced") {
     const message = external?.sync_status !== "synced"
@@ -160,8 +160,19 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
     .maybeSingle<AutomationJob>();
   if (job?.status === "running") return json(req, { jobId: job.id, status: "posting", skipped: true });
   if (job?.status === "waiting_for_login") {
-    const { data: reset } = await admin.from("automation_jobs").update({ status: "queued", error_message: null })
+    const { data: reset } = await admin.from("automation_jobs").update({
+      status: "queued",
+      error_message: null,
+      payload: { ...(job.payload || {}), reset_soul_pending: external?.soul_status === "issued" },
+    })
       .eq("id", job.id).eq("status", "waiting_for_login")
+      .select("id,store_id,cast_id,status,attempts,max_attempts,payload").maybeSingle<AutomationJob>();
+    job = reset || job;
+  }
+  if (job?.status === "queued" && external?.soul_status === "issued" && job.payload?.reset_soul_pending !== true) {
+    const { data: reset } = await admin.from("automation_jobs").update({
+      payload: { ...(job.payload || {}), reset_soul_pending: true },
+    }).eq("id", job.id).eq("status", "queued")
       .select("id,store_id,cast_id,status,attempts,max_attempts,payload").maybeSingle<AutomationJob>();
     job = reset || job;
   }
@@ -173,7 +184,12 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
       p_cast_id: post.cast_id,
       p_shift_id: null,
       p_dedupe_key: `estama:diary:${post.id}:${attempt}`,
-      p_payload: { source: "therapist_portal", post_id: post.id, attempt },
+      p_payload: {
+        source: "therapist_portal",
+        post_id: post.id,
+        attempt,
+        ...(external?.soul_status === "issued" ? { reset_soul_pending: true } : {}),
+      },
     });
     if (error) throw error;
     const { data: created } = await admin.from("automation_jobs")
@@ -523,3 +539,4 @@ async function downloadImage(rawUrl: string, index: number) {
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   return { blob: new Blob([buffer], { type: contentType }), name: `photo-${index + 1}.${extension}` };
 }
+
