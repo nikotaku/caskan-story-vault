@@ -85,6 +85,12 @@ const CHANNEL_DEFINITIONS: Array<Pick<PromotionChannelDraft, "key" | "label" | "
   { key: "line_official", label: "LINE公式アカウントでの宣伝", sortOrder: 60 },
 ];
 
+const STANDARD_PREPARATION = [
+  { name: "ショート動画", quantity: "3本", description: "各5秒。ティザー・中盤・最終で使い分け" },
+  { name: "2ショット宣材写真", quantity: "3パターン", description: "投稿期間内で分散して使用" },
+  { name: "告知バナー", quantity: "1点", description: "横長。X・エステ魂ヘッダー想定" },
+];
+
 const createDefaultChannelDrafts = (): PromotionChannelDraft[] =>
   CHANNEL_DEFINITIONS.map((channel) => ({
     ...channel,
@@ -712,7 +718,7 @@ export default function PromotionSchedule() {
               AIで宣伝スケジュールを作成
             </DialogTitle>
             <DialogDescription>
-              セラピストと期間を選ぶと、必要な準備物と日別の投稿計画をAIが作成します。
+              セラピストと期間を選ぶと、共通の準備物を使った日別の投稿計画をAIが作成します。
             </DialogDescription>
           </DialogHeader>
 
@@ -756,6 +762,26 @@ export default function PromotionSchedule() {
               <div className="space-y-2">
                 <Label htmlFor="promotion-ends-on">終了日</Label>
                 <Input id="promotion-ends-on" type="date" value={endsOn} min={startsOn} onChange={(event) => setEndsOn(event.target.value)} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <Label>共通の準備物</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  勝ちパターンを比較できるよう、どのセラピストも同じ内容で作成します。
+                </p>
+              </div>
+              <div className="overflow-hidden rounded-xl border bg-muted/15">
+                {STANDARD_PREPARATION.map((item, index) => (
+                  <div key={item.name} className={`grid grid-cols-[1fr_auto] gap-3 px-3 py-2.5 ${index > 0 ? "border-t" : ""}`}>
+                    <div>
+                      <p className="text-sm font-semibold">{item.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
+                    </div>
+                    <Badge variant="outline" className="self-center bg-background">{item.quantity}</Badge>
+                  </div>
+                ))}
               </div>
             </div>
 
