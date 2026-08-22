@@ -2,12 +2,22 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CheckCircle, ChevronDown, ChevronUp, Clock, Link2, Loader2, Plus, RefreshCw, Send, XCircle } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronUp, Clock, Link2, Loader2, Plus, RefreshCw, Send, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +35,7 @@ interface Post {
   body: string;
   image_urls: string[] | null;
   status: string;
+  hp_status: string;
   o2_status: string;
   esutama_status: string;
   o2_error: string | null;
@@ -56,6 +67,15 @@ const rpc = (name: string, args: Record<string, unknown>) =>
 
 const createTestPostBody = () => `【動作確認】\nO2・魂セラピスト連携のテスト投稿です。\n${format(new Date(), "yyyy年M月d日 HH:mm", { locale: ja })}`;
 
+const canDeleteFailedPost = (post: Post) => {
+  const hasPublishedTarget = [post.hp_status, post.o2_status, post.esutama_status].includes("posted");
+  const isPosting = [post.o2_status, post.esutama_status].includes("posting");
+  const hasError = post.status === "failed"
+    || [post.o2_status, post.esutama_status].some((status) => ["failed", "skipped"].includes(status))
+    || Boolean(post.o2_error || post.esutama_error);
+  return hasError && !hasPublishedTarget && !isPosting;
+};
+
 export default function CastPostManagement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedCastId = searchParams.get("cast") || "";
@@ -70,6 +90,8 @@ export default function CastPostManagement() {
   const [showConnections, setShowConnections] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Post | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState(() => ({
     castId: requestedCastId,
     title: requestedTestMode ? "動作確認" : "",
@@ -206,6 +228,22 @@ export default function CastPostManagement() {
     }
   };
 
+  const deleteFailedPost = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await rpc("delete_admin_failed_cast_post", { p_post_id: deleteTarget.id });
+      if (error || data !== true) throw new Error(error?.message || "投稿を削除できませんでした");
+      setDeleteTarget(null);
+      toast.success("送信エラーの投稿を削除しました");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "投稿を削除できませんでした");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const statusRow = (post: Post, target: Target, label: string) => {
     const status = target === "o2" ? post.o2_status : post.esutama_status;
     const error = target === "o2" ? post.o2_error : post.esutama_error;
@@ -276,6 +314,16 @@ export default function CastPostManagement() {
                       {post.title && <p className="mt-1 text-sm font-medium">{post.title}</p>}
                       <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{post.body}</p>
                     </div>
+                    {canDeleteFailedPost(post) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDeleteTarget(post)}
+                      >
+                        <Trash2 size={14} className="mr-1" />削除
+                      </Button>
+                    )}
                   </div>
                   <div className="grid gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-2">
                     {statusRow(post, "o2", "O2")}
@@ -301,6 +349,28 @@ export default function CastPostManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>送信エラーの投稿を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.casts?.name}さんの投稿履歴と、関連する再送待ちジョブを削除します。この操作は元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => { event.preventDefault(); void deleteFailedPost(); }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Trash2 size={14} className="mr-1" />}
+              削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
