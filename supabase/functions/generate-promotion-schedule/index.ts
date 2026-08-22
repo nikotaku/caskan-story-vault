@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,6 +85,23 @@ serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ error: "POSTのみ利用できます" }, 405);
 
   try {
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!token || !supabaseUrl || !anonKey) {
+      return jsonResponse({ error: "ログインが必要です" }, 401);
+    }
+
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: authData, error: authError } = await authClient.auth.getUser(token);
+    if (authError || !authData.user) {
+      return jsonResponse({ error: "ログインが必要です" }, 401);
+    }
+
     const body = await req.json();
     const therapists = Array.isArray(body?.therapists)
       ? (body.therapists as TherapistInput[]).slice(0, 6)
