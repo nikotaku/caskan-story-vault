@@ -4,7 +4,7 @@ import EnkaHome from "@/pages/public/EnkaHome";
 
 /**
  * "/" のトップページを店舗ごとに出し分ける。
- * デフォルト店舗（全力エステ）は従来の Top、それ以外（艶華など）は専用トップを表示。
+ * デフォルト店舗は従来の Top、それ以外は専用トップを表示。
  */
 export default function StoreTop() {
   const { store, loading } = useStore();

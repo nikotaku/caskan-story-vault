@@ -12,7 +12,7 @@ const STARS = [1, 2, 3, 4, 5];
 
 export default function CustomerReview() {
   const { store, storeId } = useStore();
-  const storeName = store?.name ?? "全力エステ";
+  const storeName = store?.name ?? "艶華";
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [therapistName, setTherapistName] = useState("");

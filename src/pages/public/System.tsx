@@ -31,13 +31,13 @@ interface NominationRate {
 
 const System = () => {
   const { store, storeId } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
   const isDefaultStore = store?.is_default ?? true;
   // 店舗情報テーブル用：独自ドメインがあればそれを、なければ既定値を表示
   const siteUrl = store?.custom_domain
     ? `https://${store.custom_domain}`
     : isDefaultStore
-      ? "https://zenryoku-esthe.com"
+      ? "https://enka-salon.jp"
       : window.location.origin;
   const areaLabel = isDefaultStore ? "出張専門" : "マンション（個室）";
   const { telHref, phoneDisplay } = useStoreContact();
