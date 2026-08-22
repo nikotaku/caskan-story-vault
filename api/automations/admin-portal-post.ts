@@ -1,8 +1,6 @@
 import {
   assertStoreManager,
   authenticateUser,
-  enqueueEstamaDiaryJob,
-  processAvailableJobs,
 } from "../../server/estama-automation.js";
 
 export const config = { maxDuration: 300 };
@@ -47,48 +45,34 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }
     await assertStoreManager(admin, user.id, post.store_id);
 
-    if (target === "o2") {
-      if (post.o2_status === "posted") {
-        res.status(200).json({ status: "posted", skipped: true });
-        return;
-      }
-      const { data: cast } = await admin.from("casts")
-        .select("access_token")
-        .eq("id", post.cast_id)
-        .maybeSingle();
-      if (!cast?.access_token) throw new Error("セラピストの投稿トークンがありません");
-
-      const baseUrl = process.env.SUPABASE_URL
-        || process.env.VITE_SUPABASE_URL
-        || "https://imrxzkivwrkqbhqfbbes.supabase.co";
-      const response = await fetch(`${baseUrl}/functions/v1/post-to-sites`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ post_id: post.id, access_token: cast.access_token, target: "o2" }),
-        signal: AbortSignal.timeout(60_000),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        res.status(response.status).json(payload);
-        return;
-      }
-      res.status(200).json({ status: payload?.results?.o2?.status || "posted", result: payload });
-      return;
-    }
-
-    if (post.esutama_status === "posted") {
+    const currentStatus = target === "o2" ? post.o2_status : post.esutama_status;
+    if (currentStatus === "posted") {
       res.status(200).json({ status: "posted", skipped: true });
       return;
     }
-    const jobId = await enqueueEstamaDiaryJob(admin, post.store_id, post.cast_id, post.id);
-    const results = await processAvailableJobs(admin, {
-      storeId: post.store_id,
-      castId: post.cast_id,
-      jobId,
-      limit: 1,
+
+    const { data: cast } = await admin.from("casts")
+      .select("access_token")
+      .eq("id", post.cast_id)
+      .maybeSingle();
+    if (!cast?.access_token) throw new Error("セラピストの投稿トークンがありません");
+
+    const baseUrl = process.env.SUPABASE_URL
+      || process.env.VITE_SUPABASE_URL
+      || "https://imrxzkivwrkqbhqfbbes.supabase.co";
+    const response = await fetch(`${baseUrl}/functions/v1/post-to-sites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ post_id: post.id, access_token: cast.access_token, target }),
+      signal: AbortSignal.timeout(target === "esutama" ? 300_000 : 60_000),
     });
-    const result = results[0];
-    res.status(200).json({ jobId, status: result?.status || "queued", result });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      res.status(response.status).json(payload);
+      return;
+    }
+    const status = target === "o2" ? payload?.results?.o2?.status : payload?.status;
+    res.status(200).json({ status: status || "posted", result: payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     res.status(/認証|ログイン|権限/.test(message) ? 401 : 400).json({ error: message });

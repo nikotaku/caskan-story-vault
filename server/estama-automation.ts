@@ -563,6 +563,28 @@ const visibleSoulAction = (root: Locator, label: RegExp) => root
   .filter({ hasText: label })
   .last();
 
+async function isDisabledSoulAction(action: Locator) {
+  if (!await action.count()) return true;
+  return action.evaluate((element) => {
+    const className = typeof element.className === "string" ? element.className : "";
+    return element.hasAttribute("disabled")
+      || element.getAttribute("aria-disabled") === "true"
+      || /(?:^|\s)(?:btn-disabled|disabled)(?:\s|$)/.test(className);
+  }).catch(() => true);
+}
+
+async function clickSoulAction(action: Locator) {
+  if (await isDisabledSoulAction(action)) throw new SoulActivationRequiredError();
+  try {
+    await action.click({ timeout: 5_000 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/intercepts pointer events|outside of the viewport/i.test(message)) throw error;
+    if (await isDisabledSoulAction(action)) throw new SoulActivationRequiredError();
+    await action.evaluate((element) => (element as HTMLElement).click());
+  }
+}
+
 async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, soul?: SoulCredentials) {
   if (!job.cast_id) throw new Error("登録対象のセラピストがありません");
   const { data: cast, error: castError } = await admin.from("casts").select("*").eq("id", job.cast_id).single();
@@ -949,7 +971,7 @@ async function resetPendingSoulTherapist(page: Page, row: Locator, castName: str
     await dialog.accept();
   };
   page.once("dialog", acceptDialog);
-  await stop.click();
+  await clickSoulAction(stop);
   await page.waitForTimeout(500);
   page.off("dialog", acceptDialog);
 
@@ -997,7 +1019,7 @@ async function setupSoulTherapist(
   let row = await findEstamaCastRow(page, { localName: castName });
   const start = visibleSoulAction(row, /魂セラピストを始める/);
   if (await start.count()) {
-    await start.click();
+    await clickSoulAction(start);
     await page.waitForTimeout(300);
     const dialog = page.locator('[role="dialog"]:visible, .modal:visible, .dialog:visible, #createAccountModal:visible, .p-tamathera-confirm-modal:visible').last();
     const setupRoot = await dialog.count() ? dialog : page.locator("body");
@@ -1018,7 +1040,7 @@ async function setupSoulTherapist(
   let login = visibleSoulAction(row, /本人の代わりにログイン/);
   if (!await login.count()) return { status: "issued" };
   let loginClass = await login.getAttribute("class") || "";
-  if (loginClass.includes("disabled") || !await login.isEnabled()) {
+  if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
     const directSetup = await trySoulCredentialSetup(page, login, credentials).catch(() => null);
     if (directSetup) return directSetup;
     const directLogin = await trySoulDirectLogin(page, credentials).catch(() => null);
@@ -1044,7 +1066,7 @@ async function setupSoulTherapist(
             && ["document", "fetch", "xhr"].includes(resourceType);
         } catch { return false; }
       }, { timeout: 5_000 }).catch(() => null);
-      await sendLogin.click();
+      await clickSoulAction(sendLogin);
       const [infoPage, infoResponse] = await Promise.all([popupPromise, responsePromise]);
       if (infoResponse) {
         setupDiagnostics.push(`通信あり(${infoResponse.request().method()}:${infoResponse.status()})`);
@@ -1123,7 +1145,7 @@ async function setupSoulTherapist(
       if (setupAfterSend) return setupAfterSend;
     } else setupDiagnostics.push("ログイン情報操作なし");
   }
-  if (loginClass.includes("disabled") || !await login.isEnabled()) {
+  if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
     const actions = [...new Set((await row.locator("a, button, .btn, [role=button]").allTextContents())
       .map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
     if (allowPendingReset && await resetPendingSoulTherapist(page, row, castName)) {
@@ -1135,7 +1157,7 @@ async function setupSoulTherapist(
   }
   const context = page.context();
   const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-  await login.click();
+  await clickSoulAction(login);
   const popup = await popupPromise;
   const accountPage = popup || page;
   await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
@@ -1413,9 +1435,10 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   });
   const login = visibleSoulAction(row, /本人の代わりにログイン/);
   if (!await login.count()) throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
+  if (await isDisabledSoulAction(login)) throw new SoulActivationRequiredError();
 
   const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-  await login.click();
+  await clickSoulAction(login);
   const popup = await popupPromise;
   const accountPage = popup || page;
   await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
@@ -1505,12 +1528,12 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
         throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
       }
       const loginClass = await login.getAttribute("class") || "";
-      if (loginClass.includes("disabled") || !await login.isEnabled()) {
+      if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
         throw new SoulActivationRequiredError();
       }
 
       const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-      await login.click();
+      await clickSoulAction(login);
       const popup = await popupPromise;
       accountPage = popup || page;
     }
@@ -1584,13 +1607,20 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
   const postId = job.job_type === "estama_post_diary" && typeof job.payload?.post_id === "string"
     ? job.payload.post_id
     : null;
-  if (error instanceof LoginRequiredError) {
+  if (error instanceof LoginRequiredError || error instanceof SoulActivationRequiredError) {
+    const loginRequired = error instanceof LoginRequiredError;
     const isProfileUpdate = job.job_type === "estama_register_cast"
       && job.payload?.source === "profile_update";
     await Promise.all([
       admin.from("automation_jobs").update({ status: "waiting_for_login", error_message: message }).eq("id", job.id),
-      admin.from("automation_connections").update({ status: "expired", last_error: message }).eq("store_id", job.store_id).eq("provider", "estama"),
+      ...(loginRequired
+        ? [admin.from("automation_connections").update({ status: "expired", last_error: message }).eq("store_id", job.store_id).eq("provider", "estama")]
+        : []),
       ...(postId ? [admin.from("cast_posts").update({ esutama_status: "pending", esutama_error: message }).eq("id", postId)] : []),
+      ...(!loginRequired && job.cast_id
+        ? [admin.from("external_cast_profiles").update({ soul_status: "issued", last_error: message })
+          .eq("cast_id", job.cast_id).eq("provider", "estama")]
+        : []),
       ...(job.cast_id && job.job_type === "estama_register_cast"
         ? [admin.from("external_cast_profiles").update({
           sync_status: isProfileUpdate ? "synced" : "error",
@@ -2540,8 +2570,9 @@ export async function processAvailableJobs(
         results.push({ id: job.id, status: "completed", result });
       } catch (error) {
         await failJob(admin, job, error);
-        results.push({ id: job.id, status: error instanceof LoginRequiredError ? "waiting_for_login" : "failed", error: error instanceof Error ? error.message : String(error) });
-        if (error instanceof LoginRequiredError) break;
+        const waitingForLogin = error instanceof LoginRequiredError || error instanceof SoulActivationRequiredError;
+        results.push({ id: job.id, status: waitingForLogin ? "waiting_for_login" : "failed", error: error instanceof Error ? error.message : String(error) });
+        if (waitingForLogin) break;
       }
     }
   } finally {
