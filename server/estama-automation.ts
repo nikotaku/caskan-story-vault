@@ -1481,6 +1481,7 @@ export type PreparedEstamaDiary = {
   jobId: string;
   browserbaseContextId: string;
   soulStatus?: string | null;
+  soulLoginUrl?: string | null;
   soulCredentials?: SoulCredentials;
   allowPendingReset?: boolean;
   cast: {
@@ -1514,6 +1515,23 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
         && !await page.locator('input[type="password"]:visible').count()) {
         accountPage = page;
       }
+    }
+    if (!accountPage && input.soulLoginUrl) {
+      const soulLoginUrl = new URL(input.soulLoginUrl);
+      const isEstamaUrl = soulLoginUrl.protocol === "https:"
+        && (soulLoginUrl.hostname === "estama.jp" || soulLoginUrl.hostname.endsWith(".estama.jp"));
+      if (!isEstamaUrl) throw new Error("保存された魂セラピスト専用ログインURLが不正です");
+      await page.goto(soulLoginUrl.toString(), { waitUntil: "domcontentloaded" });
+      if (await page.locator('input[type="password"]:visible').count()) {
+        if (!input.soulCredentials) {
+          throw new LoginRequiredError("魂セラピストの専用ログインページで再ログインが必要です");
+        }
+        await configureSoulLogin(page, input.soulCredentials);
+      }
+      if (await page.locator('input[type="password"]:visible').count()) {
+        throw new LoginRequiredError("魂セラピストの専用ログインページで再ログインが必要です");
+      }
+      accountPage = page;
     }
     if (!accountPage) {
       await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });

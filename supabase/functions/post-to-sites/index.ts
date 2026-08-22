@@ -96,7 +96,7 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   const [{ data: connection }, { data: cast }, { data: external }, { data: post }, { data: soulCredential }] = await Promise.all([
     admin.from("automation_connections").select("browserbase_context_id,status").eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
     admin.from("casts").select("name,o2_login_email").eq("id", job.cast_id).maybeSingle(),
-    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status,soul_status").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
+    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status,soul_status,soul_login_url").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
     admin.from("cast_posts").select("title,body,image_urls").eq("id", postId).eq("cast_id", job.cast_id).maybeSingle(),
     admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("site", "o2").maybeSingle(),
   ]);
@@ -109,7 +109,8 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   const soulStatus = stringValue(external.soul_status);
   const soulReady = soulStatus === "configured";
   const needsSoulSetup = !soulReady;
-  if (needsSoulSetup && (!soulCredential?.login_id || !soulCredential?.password)) {
+  const hasSoulCredential = Boolean(soulCredential?.login_id && soulCredential?.password);
+  if (needsSoulSetup && !hasSoulCredential) {
     return json(req, { error: "魂セラピスト本人ログイン情報が未設定です" }, 409);
   }
   return json(req, {
@@ -117,11 +118,12 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
       jobId: job.id,
       browserbaseContextId: connection.browserbase_context_id,
       soulStatus,
+      soulLoginUrl: stringValue(external.soul_login_url) || undefined,
       allowPendingReset: payload.reset_soul_pending === true,
-      ...(needsSoulSetup ? {
+      ...(hasSoulCredential ? {
         soulCredentials: {
-          loginId: soulCredential.login_id,
-          password: soulCredential.password,
+          loginId: soulCredential!.login_id,
+          password: soulCredential!.password,
           email: cast.o2_login_email || undefined,
         },
       } : {}),
