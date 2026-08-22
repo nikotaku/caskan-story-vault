@@ -247,6 +247,7 @@ const Shift = () => {
         .from('shifts')
         .insert([{
           cast_id: formData.cast_id,
+          store_id: storeId,
           shift_date: format(formData.shift_date, 'yyyy-MM-dd'),
           start_time: formData.start_time,
           end_time: formData.end_time,
