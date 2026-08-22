@@ -233,6 +233,7 @@ export default function PromotionSchedule() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-promotion-schedule", {
         body: {
+          storeId,
           therapists: selectedCasts.map((cast) => ({
             name: cast.name,
             profile: cast.profile,
