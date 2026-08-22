@@ -143,6 +143,8 @@ import KeikaBooking from "./pages/public/KeikaBooking";
 import SurveysAdmin from "./pages/SurveysAdmin";
 import ReviewsAdmin from "./pages/ReviewsAdmin";
 import Campaigns from "./pages/public/Campaigns";
+import DispatchRegistration from "./pages/public/DispatchRegistration";
+import DispatchRegistrationAdmin from "./pages/DispatchRegistrationAdmin";
 import { PublicSeo } from "@/components/public/PublicSeo";
 
 const queryClient = new QueryClient();
@@ -179,6 +181,7 @@ const App = () => {
           <Route path="/r/:castKey" element={<CastBooking />} />
           <Route path="/haru" element={<Navigate to="/r/4b2fc0c8" replace />} />
           <Route path="/voice" element={<Voice />} />
+          <Route path="/dispatch-registration/:token" element={<DispatchRegistration />} />
           
           {/* Admin/Staff Pages */}
           <Route path="/login" element={<Auth />} />
@@ -189,6 +192,7 @@ const App = () => {
           <Route path="/schedule/reservations-list" element={<ReservationsList />} />
           <Route path="/schedule/available-slots" element={<AvailableSlots />} />
           <Route path="/staff" element={<Staff />} />
+          <Route path="/staff/dispatch-registration" element={<DispatchRegistrationAdmin />} />
           <Route path="/shift" element={<Shift />} />
           <Route path="/shift/submission" element={<ShiftSubmission />} />
           <Route path="/reservations" element={<Navigate to="/schedule/reservations-list" replace />} />
