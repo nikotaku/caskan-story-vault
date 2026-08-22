@@ -9,6 +9,7 @@ import {
   Loader2,
   Megaphone,
   PackageCheck,
+  Pencil,
   Plus,
   RefreshCw,
   Sparkles,
@@ -38,10 +39,28 @@ import type { Database } from "@/integrations/supabase/types";
 
 type PromotionPlan = Database["public"]["Tables"]["promotion_plans"]["Row"];
 type PromotionTask = Database["public"]["Tables"]["promotion_plan_tasks"]["Row"];
+type PromotionChannel = Database["public"]["Tables"]["promotion_plan_channels"]["Row"];
 type CastOption = Pick<
   Database["public"]["Tables"]["casts"]["Row"],
   "id" | "name" | "photo" | "profile" | "message" | "tags" | "x_account" | "o2_url"
->;
+> & { linkedCastIds: string[] };
+
+type PromotionChannelKey =
+  | "hp_top_banner"
+  | "estama_top_banner"
+  | "x_post"
+  | "o2_post"
+  | "o2_story"
+  | "line_official";
+
+type PromotionChannelDraft = {
+  key: PromotionChannelKey;
+  label: string;
+  enabled: boolean;
+  count: number;
+  sizeSpec: string;
+  sortOrder: number;
+};
 
 type GeneratedSchedule = {
   title: string;
@@ -50,9 +69,29 @@ type GeneratedSchedule = {
   posting: Array<{
     scheduled_on: string;
     group_label: string;
-    labels: string[];
+    items: Array<{
+      channel_key: PromotionChannelKey;
+      label: string;
+    }>;
   }>;
 };
+
+const CHANNEL_DEFINITIONS: Array<Pick<PromotionChannelDraft, "key" | "label" | "sortOrder">> = [
+  { key: "hp_top_banner", label: "HPトップバナー", sortOrder: 10 },
+  { key: "estama_top_banner", label: "エステ魂トップバナー", sortOrder: 20 },
+  { key: "x_post", label: "X投稿", sortOrder: 30 },
+  { key: "o2_post", label: "02投稿", sortOrder: 40 },
+  { key: "o2_story", label: "02ストーリー", sortOrder: 50 },
+  { key: "line_official", label: "LINE公式アカウントでの宣伝", sortOrder: 60 },
+];
+
+const createDefaultChannelDrafts = (): PromotionChannelDraft[] =>
+  CHANNEL_DEFINITIONS.map((channel) => ({
+    ...channel,
+    enabled: true,
+    count: 1,
+    sizeSpec: "",
+  }));
 
 const DAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -97,9 +136,12 @@ const isGeneratedSchedule = (value: unknown): value is GeneratedSchedule => {
     schedule.posting.every((group) =>
       typeof group?.scheduled_on === "string" &&
       typeof group?.group_label === "string" &&
-      Array.isArray(group?.labels) &&
-      group.labels.length > 0 &&
-      group.labels.every((label) => typeof label === "string")
+      Array.isArray(group?.items) &&
+      group.items.length > 0 &&
+      group.items.every((item) =>
+        CHANNEL_DEFINITIONS.some((channel) => channel.key === item?.channel_key) &&
+        typeof item?.label === "string"
+      )
     )
   );
 };
@@ -108,6 +150,7 @@ export default function PromotionSchedule() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [plans, setPlans] = useState<PromotionPlan[]>([]);
   const [tasks, setTasks] = useState<PromotionTask[]>([]);
+  const [channels, setChannels] = useState<PromotionChannel[]>([]);
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
   const [savingTaskIds, setSavingTaskIds] = useState<Set<string>>(new Set());
   const [castOptions, setCastOptions] = useState<CastOption[]>([]);
@@ -116,6 +159,10 @@ export default function PromotionSchedule() {
   const [startsOn, setStartsOn] = useState(() => toLocalDateString());
   const [endsOn, setEndsOn] = useState(() => toLocalDateString(7));
   const [promotionGoal, setPromotionGoal] = useState("");
+  const [createChannels, setCreateChannels] = useState<PromotionChannelDraft[]>(createDefaultChannelDrafts);
+  const [channelEditorPlan, setChannelEditorPlan] = useState<PromotionPlan | null>(null);
+  const [editChannels, setEditChannels] = useState<PromotionChannelDraft[]>([]);
+  const [savingChannels, setSavingChannels] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -132,7 +179,7 @@ export default function PromotionSchedule() {
     setLoading(true);
     setErrorMessage("");
 
-    const [plansResult, tasksResult, castsResult] = await Promise.all([
+    const [plansResult, tasksResult, channelsResult, castsResult] = await Promise.all([
       supabase
         .from("promotion_plans")
         .select("*")
@@ -145,6 +192,11 @@ export default function PromotionSchedule() {
         .eq("store_id", storeId)
         .order("sort_order", { ascending: true }),
       supabase
+        .from("promotion_plan_channels")
+        .select("*")
+        .eq("store_id", storeId)
+        .order("sort_order", { ascending: true }),
+      supabase
         .from("casts")
         .select("id, name, photo, profile, message, tags, x_account, o2_url")
         .eq("is_active", true)
@@ -152,13 +204,14 @@ export default function PromotionSchedule() {
         .order("name", { ascending: true }),
     ]);
 
-    if (plansResult.error || tasksResult.error) {
-      const message = plansResult.error?.message || tasksResult.error?.message || "読み込みに失敗しました";
+    if (plansResult.error || tasksResult.error || channelsResult.error) {
+      const message = plansResult.error?.message || tasksResult.error?.message || channelsResult.error?.message || "読み込みに失敗しました";
       setErrorMessage(message);
       toast.error("投稿宣伝スケジュールを読み込めませんでした");
     } else {
       setPlans(plansResult.data || []);
       setTasks(tasksResult.data || []);
+      setChannels(channelsResult.data || []);
     }
     if (castsResult.error) {
       console.error("セラピスト一覧の取得に失敗しました:", castsResult.error);
@@ -167,7 +220,9 @@ export default function PromotionSchedule() {
       // リブランド前後で同じ人が別の店舗IDにいる場合も、選択肢は名前単位で1件にまとめる
       const uniqueCasts = new Map<string, CastOption>();
       for (const cast of castsResult.data || []) {
-        if (!uniqueCasts.has(cast.name)) uniqueCasts.set(cast.name, cast);
+        const existing = uniqueCasts.get(cast.name);
+        if (existing) existing.linkedCastIds.push(cast.id);
+        else uniqueCasts.set(cast.name, { ...cast, linkedCastIds: [cast.id] });
       }
       setCastOptions([...uniqueCasts.values()]);
     }
@@ -210,6 +265,7 @@ export default function PromotionSchedule() {
     setStartsOn(toLocalDateString());
     setEndsOn(toLocalDateString(7));
     setPromotionGoal("");
+    setCreateChannels(createDefaultChannelDrafts());
   };
 
   const createAiSchedule = async () => {
@@ -224,6 +280,19 @@ export default function PromotionSchedule() {
     }
     if (startsOn > endsOn) {
       toast.error("終了日は開始日以降にしてください");
+      return;
+    }
+    const enabledChannels = createChannels.filter((channel) => channel.enabled);
+    if (enabledChannels.length === 0) {
+      toast.error("宣伝先を1つ以上選んでください");
+      return;
+    }
+    if (enabledChannels.some((channel) => !Number.isInteger(channel.count) || channel.count < 1 || channel.count > 30)) {
+      toast.error("掲載数・回数は1〜30で入力してください");
+      return;
+    }
+    if (enabledChannels.reduce((total, channel) => total + channel.count, 0) > 100) {
+      toast.error("掲載数・回数の合計は100以内にしてください");
       return;
     }
 
@@ -245,6 +314,11 @@ export default function PromotionSchedule() {
           startsOn,
           endsOn,
           goal: promotionGoal.trim() || undefined,
+          channels: enabledChannels.map((channel) => ({
+            channelKey: channel.key,
+            count: channel.count,
+            sizeSpec: channel.sizeSpec.trim() || undefined,
+          })),
         },
       });
 
@@ -268,12 +342,27 @@ export default function PromotionSchedule() {
           starts_on: startsOn,
           ends_on: endsOn,
           is_active: true,
+          cast_ids: [...new Set(selectedCasts.flatMap((cast) => cast.linkedCastIds))],
         })
         .select("id")
         .single();
 
       if (planError) throw planError;
       createdPlanId = createdPlan.id;
+
+      const { error: channelsError } = await supabase
+        .from("promotion_plan_channels")
+        .insert(createChannels.map((channel) => ({
+          store_id: storeId,
+          plan_id: createdPlan.id,
+          channel_key: channel.key,
+          channel_label: channel.label,
+          is_enabled: channel.enabled,
+          placement_count: channel.enabled ? channel.count : 0,
+          size_spec: channel.sizeSpec.trim() || null,
+          sort_order: channel.sortOrder,
+        })));
+      if (channelsError) throw channelsError;
 
       const preparationTasks = schedule.preparation.map((item, index) => ({
         store_id: storeId,
@@ -286,15 +375,16 @@ export default function PromotionSchedule() {
         sort_order: (index + 1) * 10,
       }));
       const postingTasks = schedule.posting.flatMap((group, groupIndex) =>
-        group.labels.map((label, labelIndex) => ({
+        group.items.map((item, itemIndex) => ({
           store_id: storeId,
           plan_id: createdPlan.id,
-          task_key: `post-${String(groupIndex + 1).padStart(3, "0")}-${String(labelIndex + 1).padStart(2, "0")}`,
+          task_key: `post-${String(groupIndex + 1).padStart(3, "0")}-${String(itemIndex + 1).padStart(2, "0")}`,
           task_type: "posting",
           scheduled_on: group.scheduled_on,
           group_label: group.group_label,
-          label,
-          sort_order: 1000 + (groupIndex + 1) * 100 + (labelIndex + 1) * 10,
+          label: item.label,
+          channel_key: item.channel_key,
+          sort_order: 1000 + (groupIndex + 1) * 100 + (itemIndex + 1) * 10,
         }))
       );
 
@@ -317,6 +407,59 @@ export default function PromotionSchedule() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const openChannelEditor = (plan: PromotionPlan) => {
+    const savedChannels = channels.filter((channel) => channel.plan_id === plan.id);
+    setEditChannels(CHANNEL_DEFINITIONS.map((definition) => {
+      const saved = savedChannels.find((channel) => channel.channel_key === definition.key);
+      return {
+        ...definition,
+        enabled: saved?.is_enabled ?? false,
+        count: saved?.is_enabled ? Math.max(saved.placement_count, 1) : 1,
+        sizeSpec: saved?.size_spec || "",
+      };
+    }));
+    setChannelEditorPlan(plan);
+  };
+
+  const saveChannelSettings = async () => {
+    if (!channelEditorPlan) return;
+    const enabledChannels = editChannels.filter((channel) => channel.enabled);
+    if (enabledChannels.length === 0) {
+      toast.error("宣伝先を1つ以上選んでください");
+      return;
+    }
+    if (enabledChannels.some((channel) => !Number.isInteger(channel.count) || channel.count < 1 || channel.count > 30)) {
+      toast.error("掲載数・回数は1〜30で入力してください");
+      return;
+    }
+
+    setSavingChannels(true);
+    const { error } = await supabase
+      .from("promotion_plan_channels")
+      .upsert(editChannels.map((channel) => ({
+        store_id: storeId,
+        plan_id: channelEditorPlan.id,
+        channel_key: channel.key,
+        channel_label: channel.label,
+        is_enabled: channel.enabled,
+        placement_count: channel.enabled ? channel.count : 0,
+        size_spec: channel.sizeSpec.trim() || null,
+        sort_order: channel.sortOrder,
+        updated_at: new Date().toISOString(),
+      })), { onConflict: "plan_id,channel_key" });
+    setSavingChannels(false);
+
+    if (error) {
+      console.error("宣伝先設定の保存に失敗しました:", error);
+      toast.error("宣伝先の設定を保存できませんでした");
+      return;
+    }
+
+    await load();
+    setChannelEditorPlan(null);
+    toast.success("宣伝先・掲載量・サイズを保存しました");
   };
 
   const toggleTask = async (task: PromotionTask, nextValue: boolean) => {
@@ -426,6 +569,7 @@ export default function PromotionSchedule() {
             <div className="space-y-4">
               {plans.map((plan) => {
                 const planTasks = tasks.filter((task) => task.plan_id === plan.id);
+                const planChannels = channels.filter((channel) => channel.plan_id === plan.id);
                 const preparationTasks = planTasks.filter((task) => task.task_type === "preparation");
                 const postingTasks = planTasks.filter((task) => task.task_type === "posting");
                 const overall = taskProgress(planTasks);
@@ -483,6 +627,30 @@ export default function PromotionSchedule() {
                     {expanded && (
                       <div id={`promotion-plan-${plan.id}`} className="space-y-6 border-t bg-muted/10 p-4 sm:p-5">
                         {plan.description && <p className="text-sm text-muted-foreground">{plan.description}</p>}
+
+                        <div>
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="flex items-center gap-2 font-bold"><Megaphone size={18} className="text-primary" />宣伝先・掲載量</h3>
+                            <Button type="button" variant="outline" size="sm" onClick={() => openChannelEditor(plan)}>
+                              <Pencil size={14} className="mr-1.5" />編集
+                            </Button>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {planChannels.map((channel) => (
+                              <div key={channel.id} className={`rounded-lg border p-3 ${channel.is_enabled ? "bg-background" : "bg-muted/30 text-muted-foreground"}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold">{channel.channel_label}</p>
+                                  <Badge variant={channel.is_enabled ? "secondary" : "outline"}>
+                                    {channel.is_enabled ? `${channel.placement_count}回` : "使用しない"}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1.5 text-xs text-muted-foreground">
+                                  サイズ・仕様：{channel.size_spec || "未設定"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
 
                         <div>
                           <div className="mb-3 flex items-center justify-between">
@@ -602,6 +770,16 @@ export default function PromotionSchedule() {
                 placeholder="例：新人の初出勤に向けて予約を増やしたい。動画を中心に、02・X・店舗HPで告知したい。"
               />
             </div>
+
+            <div className="space-y-2">
+              <div>
+                <Label>宣伝先・掲載量・サイズ</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  AIは選択した宣伝先と回数に合わせて投稿日程を作成します。
+                </p>
+              </div>
+              <ChannelSettingsEditor channels={createChannels} onChange={setCreateChannels} disabled={generating} />
+            </div>
           </div>
 
           <DialogFooter>
@@ -613,6 +791,84 @@ export default function PromotionSchedule() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!channelEditorPlan} onOpenChange={(open) => !open && !savingChannels && setChannelEditorPlan(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>宣伝先・掲載量・サイズを編集</DialogTitle>
+            <DialogDescription>
+              {channelEditorPlan?.therapist_label}の宣伝計画に保存する掲載条件です。変更後も、作成済みの日別タスクはそのまま残ります。
+            </DialogDescription>
+          </DialogHeader>
+          <ChannelSettingsEditor channels={editChannels} onChange={setEditChannels} disabled={savingChannels} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChannelEditorPlan(null)} disabled={savingChannels}>キャンセル</Button>
+            <Button onClick={() => void saveChannelSettings()} disabled={savingChannels}>
+              {savingChannels && <Loader2 size={16} className="mr-1.5 animate-spin" />}
+              保存する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ChannelSettingsEditor({
+  channels,
+  onChange,
+  disabled,
+}: {
+  channels: PromotionChannelDraft[];
+  onChange: (channels: PromotionChannelDraft[]) => void;
+  disabled?: boolean;
+}) {
+  const updateChannel = (key: PromotionChannelKey, patch: Partial<PromotionChannelDraft>) => {
+    onChange(channels.map((channel) => channel.key === key ? { ...channel, ...patch } : channel));
+  };
+
+  return (
+    <div className="space-y-2">
+      {channels.map((channel) => (
+        <div key={channel.key} className={`rounded-xl border p-3 ${channel.enabled ? "border-primary/30 bg-primary/5" : "bg-muted/20"}`}>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={`promotion-channel-${channel.key}`}
+              checked={channel.enabled}
+              disabled={disabled}
+              onCheckedChange={(checked) => updateChannel(channel.key, { enabled: checked === true })}
+            />
+            <Label htmlFor={`promotion-channel-${channel.key}`} className="cursor-pointer font-semibold">
+              {channel.label}
+            </Label>
+          </div>
+          <div className="mt-3 grid grid-cols-[110px_1fr] gap-2">
+            <div className="space-y-1">
+              <Label htmlFor={`promotion-channel-count-${channel.key}`} className="text-xs">掲載数・回数</Label>
+              <Input
+                id={`promotion-channel-count-${channel.key}`}
+                type="number"
+                min={1}
+                max={30}
+                value={channel.count}
+                disabled={disabled || !channel.enabled}
+                onChange={(event) => updateChannel(channel.key, { count: Number(event.target.value) })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`promotion-channel-size-${channel.key}`} className="text-xs">画像サイズ・仕様</Label>
+              <Input
+                id={`promotion-channel-size-${channel.key}`}
+                value={channel.sizeSpec}
+                maxLength={120}
+                disabled={disabled || !channel.enabled}
+                placeholder="例：横1200×縦628px、動画15秒以内"
+                onChange={(event) => updateChannel(channel.key, { sizeSpec: event.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
