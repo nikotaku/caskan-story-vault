@@ -68,7 +68,7 @@ export default function MonthlyShift() {
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"calendar" | "matrix">("calendar");
+  const [viewMode, setViewMode] = useState<"calendar" | "dummy">("calendar");
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -281,16 +281,9 @@ export default function MonthlyShift() {
     .filter(s => s.approval_status === "pending")
     .sort((a, b) => (a.shift_date < b.shift_date ? -1 : a.shift_date > b.shift_date ? 1 : a.start_time.localeCompare(b.start_time)));
 
-  // セラピスト×日付マトリクス用: シフトがある人だけ表示
-  const activeCastIds = [...new Set(shifts.map(s => s.cast_id))];
-  const activeCasts = casts.filter(c => activeCastIds.includes(c.id));
-
-  const shiftMap = new Map<string, Shift[]>(); // key: castId_date
-  shifts.forEach(s => {
-    const key = `${s.cast_id}_${s.shift_date}`;
-    if (!shiftMap.has(key)) shiftMap.set(key, []);
-    shiftMap.get(key)!.push(s);
-  });
+  // ダミー用: 当月のカレンダーに1件も表示されていないセラピストだけを候補にする
+  const scheduledCastIds = new Set(shifts.map(s => s.cast_id));
+  const dummyCasts = casts.filter(c => !scheduledCastIds.has(c.id));
 
   // カレンダーグリッド用: 月初の週の日曜から始まる6週×7日
   const calendarStart = startOfWeek(startOfMonth(selectedMonth), { weekStartsOn: 0 });
@@ -341,10 +334,10 @@ export default function MonthlyShift() {
                 <LayoutGrid size={13} />カレンダー
               </button>
               <button
-                onClick={() => setViewMode("matrix")}
-                className={cn("px-3 py-1.5 text-xs flex items-center gap-1 border-l", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                onClick={() => setViewMode("dummy")}
+                className={cn("px-3 py-1.5 text-xs flex items-center gap-1 border-l", viewMode === "dummy" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
               >
-                <Table2 size={13} />マトリクス
+                <Table2 size={13} />ダミー用
               </button>
             </div>
             {usedRooms.length > 0 && (
@@ -507,10 +500,13 @@ export default function MonthlyShift() {
             </div>
           </div>
 
-            {/* ===== マトリクスビュー ===== */}
-            <div className={viewMode === "matrix" ? "" : "hidden"}>
-              {activeCasts.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12">この月のシフトはありません</div>
+            {/* ===== ダミー用ビュー ===== */}
+            <div className={viewMode === "dummy" ? "" : "hidden"}>
+              <p className="mb-2 text-xs text-muted-foreground">
+                当月のカレンダーに表示されていないセラピストだけを表示しています。
+              </p>
+              {dummyCasts.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12">ダミー用の候補はいません</div>
               ) : (
               <div className="overflow-x-auto rounded-lg border">
             <table className="text-xs border-collapse min-w-max">
@@ -538,61 +534,25 @@ export default function MonthlyShift() {
                 </tr>
               </thead>
               <tbody>
-                {activeCasts.map(cast => (
+                {dummyCasts.map(cast => (
                   <tr key={cast.id} className="border-t border-border hover:bg-muted/20">
                     <td className="sticky left-0 z-10 bg-background border-r border-border px-2 py-1 font-medium whitespace-nowrap">
                       {cast.name}
                     </td>
                     {days.map(day => {
                       const dateStr = format(day, "yyyy-MM-dd");
-                      const cell = shiftMap.get(`${cast.id}_${dateStr}`) || [];
                       const dow = getDay(day);
                       return (
                         <td
                           key={dateStr}
                           className={cn(
-                            "border-r border-border px-1 py-1 align-top cursor-pointer hover:bg-primary/5",
+                            "h-10 border-r border-border px-1 py-1 align-top cursor-pointer hover:bg-primary/5",
                             dow === 0 && "bg-red-50/40 dark:bg-red-950/10",
                             dow === 6 && "bg-blue-50/40 dark:bg-blue-950/10"
                           )}
                           onClick={() => openAdd({ cast_id: cast.id, shift_date: dateStr })}
-                        >
-                          {cell.map(s => (
-                            <div key={s.id}
-                              onClick={e => { e.stopPropagation(); openEdit(s); }}
-                              title="クリックで編集"
-                              className={cn(
-                              "relative rounded px-1 py-0.5 mb-0.5 cursor-pointer",
-                              s.approval_status === "pending" && "bg-amber-100 dark:bg-amber-900/30",
-                              s.approval_status === "rejected" && "bg-rose-100 dark:bg-rose-900/20 line-through opacity-60",
-                              s.approval_status === "approved" && (roomColor(s.room)?.chip ?? "bg-primary/10")
-                            )}>
-                              {s.estama_human_confirmed && (
-                                <span className="absolute -top-1 -left-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title="エスたま公開表示を確認済み" aria-label="エスたま公開表示を確認済み"><Check className="h-2.5 w-2.5 stroke-[3]" /></span>
-                              )}
-                              {s.esran_registered && (
-                                <span className="absolute -top-0.5 left-2 w-2 h-2 bg-blue-500 rounded-full z-10" title="エスラン登録済み" />
-                              )}
-                              <div className={cn(
-                                "font-semibold leading-tight",
-                                s.approval_status === "rejected"
-                                  ? "text-rose-600"
-                                  : s.approval_status === "approved"
-                                    ? roomColor(s.room)?.text ?? "text-primary"
-                                    : "text-primary"
-                              )}>
-                                {s.approval_status === "pending" && <span className="text-amber-600 mr-0.5" title="承認待ち">●</span>}
-                                {s.start_time.slice(0, 5)}
-                              </div>
-                              <div className="text-muted-foreground leading-tight">
-                                ~{s.end_time.slice(0, 5)}
-                              </div>
-                              {s.room && (
-                                <div className={cn("text-[10px] truncate max-w-[48px]", roomColor(s.room)?.text ?? "text-primary/70")}>{s.room}</div>
-                              )}
-                            </div>
-                          ))}
-                        </td>
+                          title={`${cast.name}のダミー出勤を追加`}
+                        />
                       );
                     })}
                   </tr>
@@ -643,7 +603,9 @@ export default function MonthlyShift() {
               <Select value={form.cast_id} onValueChange={v => setForm({ ...form, cast_id: v })}>
                 <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
                 <SelectContent>
-                  {casts.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {(viewMode === "dummy" && !editingId ? dummyCasts : casts).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
