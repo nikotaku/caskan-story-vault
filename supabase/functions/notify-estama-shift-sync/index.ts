@@ -89,6 +89,28 @@ const jstLabel = (value?: string) => new Intl.DateTimeFormat("ja-JP", {
 const compact = (value: unknown, limit = 180) =>
   typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, limit) : "";
 
+const shiftDateLabel = (value?: string) => {
+  const date = compact(value, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date || "日付不明";
+  const [, month, day] = date.split("-");
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  const weekday = weekdays[new Date(`${date}T00:00:00.000Z`).getUTCDay()];
+  return `${Number(month)}/${Number(day)}(${weekday})`;
+};
+
+const addDateDays = (date: string, days: number) => {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+};
+
+const shiftLine = (item: ShiftResult) => {
+  const time = item.startTime && item.endTime
+    ? ` ${String(item.startTime).slice(0, 5)}〜${String(item.endTime).slice(0, 5)}`
+    : "";
+  return `・${compact(item.castName, 40) || "セラピスト"} ${shiftDateLabel(item.shiftDate)}${time}`;
+};
+
 function buildEvidenceMessage(report: EvidenceReport, imageLabels: string[]) {
   const results = Array.isArray(report.results) ? report.results : [];
   const evidence = Array.isArray(report.evidence) ? report.evidence : [];
@@ -96,45 +118,68 @@ function buildEvidenceMessage(report: EvidenceReport, imageLabels: string[]) {
     ? report.missingProfiles.filter((item): item is string => typeof item === "string")
     : [];
   const failures = results.filter((item) => item.ok !== true);
+  const successes = results.filter((item) => item.ok === true);
   const evidenceFailures = evidence.filter((item) => item.verified !== true);
   const fatal = compact(report.fatalError, 400);
-  const critical = Boolean(fatal || failures.length || evidenceFailures.length || missingProfiles.length);
+  const requiresAttention = Boolean(fatal || failures.length || evidenceFailures.length || missingProfiles.length);
+  const castNames = [...new Set([
+    ...results.map((item) => compact(item.castName, 40)),
+    ...evidence.map((item) => compact(item.castName, 40)),
+  ].filter(Boolean))];
+  const title = fatal
+    ? "🚨 エスたま同期処理が停止しました"
+    : requiresAttention
+    ? "⚠️ エスたまの出勤を公開ページで確認できません"
+    : "✅ エスたまの出勤掲載を確認しました";
   const lines = [
-    critical ? "🚨【致命的】エスたま公開表示の確認に失敗" : "✅ エスたま公開表示まで確認完了",
-    `実行: ${jstLabel(report.finishedAt)}`,
-    `シフト: ${results.filter((item) => item.ok === true).length}/${results.length}件 成功`,
-    `公開ページ: ${evidence.filter((item) => item.verified === true).length}/${evidence.length}ページ 一致`,
+    title,
+    `確認日時: ${jstLabel(report.finishedAt)}`,
   ];
-
-  if (fatal) lines.push("", `実行エラー: ${fatal}`);
-  if (missingProfiles.length) {
-    lines.push("", `紐付け未完了: ${missingProfiles.slice(0, 12).join("、")}`);
+  if (castNames.length) lines.push(`対象: ${castNames.join("、")}`);
+  if (results.length) {
+    lines.push(
+      requiresAttention
+        ? `結果: ${successes.length}/${results.length}件を掲載確認`
+        : `結果: ${results.length}件すべて掲載済み`,
+    );
   }
 
-  const failureLines = failures.slice(0, 12).map((item) => {
-    const time = item.startTime && item.endTime
-      ? ` ${String(item.startTime).slice(0, 5)}-${String(item.endTime).slice(0, 5)}`
-      : "";
-    return `・${compact(item.castName, 40) || "セラピスト"} ${compact(item.shiftDate, 10)}${time}: ${compact(item.error) || "公開確認失敗"}`;
-  });
-  if (failureLines.length) lines.push("", "未反映・失敗:", ...failureLines);
+  if (fatal) lines.push("", `停止した原因: ${fatal}`);
+  if (missingProfiles.length) {
+    lines.push("", `エスたま連携が未設定: ${missingProfiles.slice(0, 12).join("、")}`);
+  }
+
+  const failureLines = failures.slice(0, 12).map(shiftLine);
+  if (failureLines.length) lines.push("", "確認できなかった出勤:", ...failureLines);
 
   const unmatched = evidenceFailures.flatMap((entry) =>
     (entry.expected || []).filter((item) => item.verified !== true).map((item) =>
-      `・${compact(entry.castName, 40) || "セラピスト"} ${compact(item.shiftDate, 10)}: ${compact(item.error) || compact(entry.error) || "表示不一致"}`
+      `・${compact(entry.castName, 40) || "セラピスト"} ${shiftDateLabel(item.shiftDate)}`
     )
   ).slice(0, 12);
-  if (!failureLines.length && unmatched.length) lines.push("", "公開ページ不一致:", ...unmatched);
+  if (!failureLines.length && unmatched.length) lines.push("", "確認できなかった出勤:", ...unmatched);
 
-  if (imageLabels.length) {
-    lines.push("", "📷 公開ページ証跡（この順番で画像を送信）");
-    imageLabels.slice(0, 30).forEach((label, index) => lines.push(`${index + 1}. ${label}`));
-  } else if (!fatal) {
-    lines.push("", "⚠️ 証跡画像を取得できませんでした");
+  if (!requiresAttention && successes.length) {
+    lines.push("", "掲載を確認した出勤:", ...successes.slice(0, 12).map(shiftLine));
+    if (successes.length > 12) lines.push(`ほか${successes.length - 12}件`);
   }
 
-  if (critical) {
-    lines.push("", "公開ページに出勤が表示されるまで同期済み扱いにはしていません。至急確認してください。");
+  if (imageLabels.length) {
+    lines.push("", "📷 公開ページの確認画像");
+    imageLabels.slice(0, 30).forEach((label, index) => lines.push(`${index + 1}. ${label}`));
+  } else if (!fatal) {
+    lines.push("", "確認画像は取得できませんでした");
+  }
+
+  if (failures.length && !fatal) {
+    const publicCheckOnly = failures.every((item) => /公開ページ|公開確認/.test(compact(item.error)));
+    lines.push(
+      "",
+      publicCheckOnly
+        ? "状態: 管理画面への保存後、公開ページを3回確認しましたが一致を確認できませんでした。"
+        : "状態: 同期処理の一部でエラーが発生しました。",
+      "掲載を確認できるまで未完了扱いです。",
+    );
   }
   return lines.join("\n").slice(0, 4_900);
 }
@@ -229,7 +274,11 @@ Deno.serve(async (request: Request) => {
       const { data } = admin.storage.from(evidenceBucket).getPublicUrl(path);
       const publicUrl = data.publicUrl;
       if (!publicUrl.startsWith("https://")) throw new Error("証跡画像URLを発行できませんでした");
-      const label = `${compact(item.castName, 40) || "セラピスト"} ${weekStart}週 ${item.verified === true ? "✅" : "🚨"}`;
+      const rangeEnd = /^\d{4}-\d{2}-\d{2}$/.test(weekStart) ? addDateDays(weekStart, 6) : "";
+      const range = rangeEnd
+        ? `${shiftDateLabel(weekStart)}〜${shiftDateLabel(rangeEnd)}`
+        : "表示期間不明";
+      const label = `${compact(item.castName, 40) || "セラピスト"} ${range} ${item.verified === true ? "✅ 一致" : "⚠️ 要確認"}`;
       uploaded.push({ path, publicUrl, label });
       imageLabels.push(label);
       imageMessages.push({ type: "image", originalContentUrl: publicUrl, previewImageUrl: publicUrl });

@@ -1975,19 +1975,13 @@ async function verifyEstamaAdminSchedule(page: Page, item: EstamaShiftBatchItem)
 const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
   `https://estama.jp/shop/${encodeURIComponent(shopId)}/cast/${encodeURIComponent(externalId)}/`;
 
-const sundayOf = (date: string) => {
-  const value = new Date(`${date}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() - value.getUTCDay());
-  return value.toISOString().slice(0, 10);
-};
-
 const currentEstamaDate = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
-const weekOffsetFromCurrent = (weekStart: string) => {
-  const currentSunday = new Date(`${sundayOf(currentEstamaDate())}T00:00:00.000Z`).getTime();
-  const targetSunday = new Date(`${weekStart}T00:00:00.000Z`).getTime();
-  return Math.max(0, Math.round((targetSunday - currentSunday) / (7 * 86_400_000)));
+const publicScheduleWindowOffset = (shiftDate: string, publicStartDate: string) => {
+  const currentStart = new Date(`${publicStartDate}T00:00:00.000Z`).getTime();
+  const targetDate = new Date(`${shiftDate}T00:00:00.000Z`).getTime();
+  return Math.max(0, Math.floor((targetDate - currentStart) / (7 * 86_400_000)));
 };
 
 const compactScheduleText = (value: string) => value
@@ -2011,7 +2005,7 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
   if (dateIndex < 0) {
     return item.action === "delete"
       ? { verified: true }
-      : { verified: false, error: `${label}の出勤表示がありません` };
+      : { verified: false, error: `${label}の出勤を公開ページで確認できません` };
   }
 
   const nextDate = normalized.slice(dateIndex + label.length).search(/\b\d{1,2}\/\d{1,2}(?:\([^)]*\))?/);
@@ -2031,7 +2025,7 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
   const expected = new RegExp(`${escapeRegExp(start)}\\s*～\\s*${escapeRegExp(end)}`);
   return expected.test(dateBlock)
     ? { verified: true }
-    : { verified: false, error: `${label} ${start}～${end}が公開ページにありません` };
+    : { verified: false, error: `${label} ${start}～${end}を公開ページで確認できません` };
 }
 
 async function clickNextPublicScheduleWeek(page: Page, targetOffset: number) {
@@ -2117,15 +2111,22 @@ async function verifyPublicShiftGroup(
   if (!first.externalId) throw new Error(`${first.castName}のエステ魂公開ページIDがありません`);
 
   const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
-  const byWeek = new Map<string, EstamaShiftBatchItem[]>();
+  // エステ魂の公開出勤表は固定曜日の週ではなく、当日から7日間ずつ表示される。
+  // 例: 8/21に開くと初期表示は8/21〜8/27、次画面は8/28〜9/3。
+  const publicStartDate = currentEstamaDate();
+  const byWindow = new Map<number, EstamaShiftBatchItem[]>();
   for (const item of group) {
-    const weekStart = sundayOf(item.shiftDate);
-    byWeek.set(weekStart, [...(byWeek.get(weekStart) || []), item]);
+    const offset = publicScheduleWindowOffset(item.shiftDate, publicStartDate);
+    byWindow.set(offset, [...(byWindow.get(offset) || []), item]);
   }
-  const weeks = [...byWeek.entries()]
-    .map(([weekStart, expected]) => ({ weekStart, expected, offset: weekOffsetFromCurrent(weekStart) }))
+  const windows = [...byWindow.entries()]
+    .map(([offset, expected]) => ({
+      weekStart: addDays(publicStartDate, offset * 7),
+      expected,
+      offset,
+    }))
     .sort((left, right) => left.offset - right.offset);
-  const maxOffset = Math.min(2, Math.max(...weeks.map((week) => week.offset)));
+  const maxOffset = Math.min(2, Math.max(...windows.map((window) => window.offset)));
   let finalEvidence: EstamaShiftEvidence[] = [];
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -2140,7 +2141,7 @@ async function verifyPublicShiftGroup(
         } catch (error) {
           const screenshotBase64 = await capturePublicScheduleScreenshot(page);
           const message = error instanceof Error ? error.message : String(error);
-          for (const remaining of weeks.filter((candidate) => candidate.offset >= offset)) {
+          for (const remaining of windows.filter((candidate) => candidate.offset >= offset)) {
             attemptEvidence.push({
               castId: first.castId,
               castName: first.castName,
@@ -2166,13 +2167,13 @@ async function verifyPublicShiftGroup(
           break;
         }
       }
-      const week = weeks.find((candidate) => candidate.offset === offset);
-      if (!week) continue;
+      const window = windows.find((candidate) => candidate.offset === offset);
+      if (!window) continue;
       const rawText = await page.locator("body").innerText();
       if (/Site Unavailable|Unable to access this site|アクセスできません/i.test(rawText)) {
         throw new Error("エステ魂の公開ページを取得できませんでした");
       }
-      const expected = week.expected.map((item) => ({
+      const expected = window.expected.map((item) => ({
         jobId: item.jobId,
         action: item.action,
         shiftDate: item.shiftDate,
@@ -2186,7 +2187,7 @@ async function verifyPublicShiftGroup(
         castId: first.castId,
         castName: first.castName,
         externalId: first.externalId,
-        weekStart: week.weekStart,
+        weekStart: window.weekStart,
         publicUrl: page.url(),
         capturedAt: new Date().toISOString(),
         verified,
@@ -2198,7 +2199,7 @@ async function verifyPublicShiftGroup(
     }
 
     finalEvidence = attemptEvidence;
-    if (attemptEvidence.length === weeks.length && attemptEvidence.every((item) => item.verified)) break;
+    if (attemptEvidence.length === windows.length && attemptEvidence.every((item) => item.verified)) break;
     if (attempt < 3) await page.waitForTimeout(attempt === 1 ? 15_000 : 30_000);
   }
   return finalEvidence;
@@ -2436,7 +2437,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
           } else {
             await recordFailure(
               item,
-              new Error(`公開ページ未反映: ${verification?.error || itemEvidence?.error || "証跡を確認できませんでした"}`),
+              new Error(`公開確認できません: ${verification?.error || itemEvidence?.error || "証跡を確認できませんでした"}`),
             );
           }
         }
