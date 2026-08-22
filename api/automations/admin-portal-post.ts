@@ -51,11 +51,13 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       return;
     }
 
-    const { data: cast } = await admin.from("casts")
+    const { data: castToken, error: tokenError } = await admin.from("cast_access_tokens")
       .select("access_token")
-      .eq("id", post.cast_id)
+      .eq("cast_id", post.cast_id)
       .maybeSingle();
-    if (!cast?.access_token) throw new Error("セラピストの投稿トークンがありません");
+    if (tokenError) throw tokenError;
+    const accessToken = stringValue(castToken?.access_token);
+    if (!accessToken) throw new Error("セラピストの投稿トークンがありません");
 
     const baseUrl = process.env.SUPABASE_URL
       || process.env.VITE_SUPABASE_URL
@@ -63,7 +65,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const response = await fetch(`${baseUrl}/functions/v1/post-to-sites`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post_id: post.id, access_token: cast.access_token, target }),
+      body: JSON.stringify({ post_id: post.id, access_token: accessToken, target }),
       signal: AbortSignal.timeout(target === "esutama" ? 300_000 : 60_000),
     });
     const payload = await response.json().catch(() => ({}));
@@ -75,6 +77,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     res.status(200).json({ status: status || "posted", result: payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.warn(JSON.stringify({
+      level: "warn",
+      msg: "admin_portal_post_failed",
+      postId: stringValue(req.body?.postId),
+      target: stringValue(req.body?.target),
+      error: message,
+    }));
     res.status(/認証|ログイン|権限/.test(message) ? 401 : 400).json({ error: message });
   }
 }
+
