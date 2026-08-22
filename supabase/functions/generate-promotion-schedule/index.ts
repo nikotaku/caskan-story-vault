@@ -103,6 +103,17 @@ serve(async (req) => {
     }
 
     const body = await req.json();
+    const storeId = cleanText(body?.storeId, 36);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storeId)) {
+      return jsonResponse({ error: "店舗情報が正しくありません" }, 400);
+    }
+    const { data: canManage, error: permissionError } = await authClient.rpc("can_manage_store", {
+      p_store_id: storeId,
+    });
+    if (permissionError || !canManage) {
+      return jsonResponse({ error: "この店舗の宣伝計画を作成する権限がありません" }, 403);
+    }
+
     const therapists = Array.isArray(body?.therapists)
       ? (body.therapists as TherapistInput[]).slice(0, 6)
       : [];
