@@ -85,6 +85,7 @@ interface ReservationFormProps {
   optionRates: OptionRate[];
   nominationRates: NominationRate[];
   discounts: DiscountItem[];
+  storeId?: string;
   onSubmit: () => void;
   submitLabel?: string;
 }
@@ -139,6 +140,7 @@ export function ReservationForm({
   optionRates,
   nominationRates,
   discounts,
+  storeId,
   onSubmit,
   submitLabel = "予約を追加",
 }: ReservationFormProps) {
@@ -166,11 +168,13 @@ export function ReservationForm({
   };
 
   useEffect(() => {
-    supabase
+    let query = supabase
       .from("payment_settings")
-      .select("id, payment_method, payment_link, fee_percentage")
+      .select("id, payment_method, payment_link, fee_percentage");
+    if (storeId) query = query.eq("store_id", storeId);
+    query
       .then(({ data }) => setPaymentSettings((data || []) as PaymentSetting[]));
-  }, []);
+  }, [storeId]);
 
   const courseTypes = useMemo(() => {
     const types = [...new Set(backRates.map(r => r.course_type))];
