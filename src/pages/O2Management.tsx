@@ -25,6 +25,8 @@ type O2Row = {
   o2_login_email: string | null;
   estama_profile_url: string | null;
   estama_credential_configured: boolean;
+  soul_login_url: string | null;
+  soul_status: string | null;
   last_o2_status: string | null;
   last_o2_error: string | null;
   last_posted_at: string | null;
@@ -37,6 +39,7 @@ type EditForm = {
   o2LoginId: string;
   o2Password: string;
   estamaProfileUrl: string;
+  soulLoginUrl: string;
 };
 
 const normalizeO2Id = (value: string) => value
@@ -49,6 +52,20 @@ const buildO2ProfileUrl = (value: string) => {
   const id = normalizeO2Id(value);
   return id ? `https://m-sns.net/profile/@${id}` : "";
 };
+
+const normalizeSoulLoginUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    const isEstamaHost = parsed.hostname === "estama.jp" || parsed.hostname.endsWith(".estama.jp");
+    return parsed.protocol === "https:" && isEstamaHost ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+const isSoulConfigured = (row: O2Row) => row.soul_status === "configured" && Boolean(row.soul_login_url);
 
 const rpc = (name: string, args: Record<string, unknown>) =>
   (supabase.rpc as unknown as (rpcName: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
@@ -66,8 +83,10 @@ export default function O2Management() {
   const [rows, setRows] = useState<O2Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSoulLoginUrl, setSavingSoulLoginUrl] = useState(false);
+  const [soulLoginUrlEditing, setSoulLoginUrlEditing] = useState(false);
   const [editing, setEditing] = useState<O2Row | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2Email: "", o2LoginId: "", o2Password: "", estamaProfileUrl: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2Email: "", o2LoginId: "", o2Password: "", estamaProfileUrl: "", soulLoginUrl: "" });
   const [showO2Password, setShowO2Password] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const { storeId, store, loading: storeLoading } = useAdminStore();
@@ -80,9 +99,23 @@ export default function O2Management() {
   const load = useCallback(async () => {
     if (!user || storeLoading) return;
     setLoading(true);
-    const { data, error } = await rpc("get_sns_connection_overview_v4", { p_store_id: storeId });
+    const [{ data, error }, { data: soulProfiles, error: soulProfilesError }] = await Promise.all([
+      rpc("get_sns_connection_overview_v4", { p_store_id: storeId }),
+      supabase
+        .from("external_cast_profiles")
+        .select("cast_id,soul_login_url,soul_status")
+        .eq("store_id", storeId)
+        .eq("provider", "estama"),
+    ]);
     if (error) toast.error(error.message);
-    setRows((data || []) as O2Row[]);
+    if (soulProfilesError) toast.error(soulProfilesError.message);
+    const soulByCast = new Map((soulProfiles || []).map((profile) => [profile.cast_id, profile]));
+    const overviewRows = (data || []) as Omit<O2Row, "soul_login_url" | "soul_status">[];
+    setRows(overviewRows.map((row) => ({
+      ...row,
+      soul_login_url: soulByCast.get(row.cast_id)?.soul_login_url || null,
+      soul_status: soulByCast.get(row.cast_id)?.soul_status || null,
+    })));
     setLoading(false);
   }, [storeId, storeLoading, user]);
 
@@ -91,7 +124,7 @@ export default function O2Management() {
   const summary = useMemo(() => ({
     total: rows.length,
     credentials: rows.filter((row) => row.credential_configured).length,
-    estamaCredentials: rows.filter((row) => row.estama_credential_configured).length,
+    soulConfigured: rows.filter(isSoulConfigured).length,
     created: rows.filter((row) => row.o2_created).length,
     linked: rows.filter((row) => row.o2_linkage_requested).length,
     errors: rows.filter((row) => row.last_o2_status === "failed").length,
@@ -99,7 +132,7 @@ export default function O2Management() {
   const cards = [
     { label: "在籍", value: summary.total, icon: Users },
     { label: "O2連携済み", value: summary.credentials, icon: ShieldCheck },
-    { label: "魂連携済み", value: summary.estamaCredentials, icon: ShieldCheck },
+    { label: "魂連携済み", value: summary.soulConfigured, icon: ShieldCheck },
     { label: "O2作成済み", value: summary.created, icon: CheckCircle },
     { label: "店舗連携申請", value: summary.linked, icon: Link2 },
     { label: "投稿エラー", value: summary.errors, icon: XCircle },
@@ -108,6 +141,7 @@ export default function O2Management() {
   const openEdit = (row: O2Row) => {
     setEditing(row);
     setShowO2Password(false);
+    setSoulLoginUrlEditing(!row.soul_login_url);
     setEditForm({
       created: row.o2_created,
       linkageRequested: row.o2_linkage_requested,
@@ -115,6 +149,7 @@ export default function O2Management() {
       o2LoginId: row.login_id || normalizeO2Id(row.profile_url || ""),
       o2Password: "",
       estamaProfileUrl: row.estama_profile_url || "",
+      soulLoginUrl: row.soul_login_url || "",
     });
   };
 
@@ -124,6 +159,10 @@ export default function O2Management() {
 
   const save = async () => {
     if (!editing) return;
+    if (soulLoginUrlEditing && editForm.soulLoginUrl.trim() !== (editing.soul_login_url || "")) {
+      toast.error("魂セラピストの専用ログインURLを先に保存してください");
+      return;
+    }
     const o2Email = editForm.o2Email.trim();
     const o2LoginId = normalizeO2Id(editForm.o2LoginId);
     if (o2LoginId && (!o2Email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o2Email))) {
@@ -168,6 +207,34 @@ export default function O2Management() {
     await load();
   };
 
+  const saveSoulLoginUrl = async () => {
+    if (!editing) return;
+    const soulLoginUrl = normalizeSoulLoginUrl(editForm.soulLoginUrl);
+    if (!soulLoginUrl) {
+      toast.error("魂セラピストの専用ログインページURLを入力してください");
+      return;
+    }
+    setSavingSoulLoginUrl(true);
+    const { error } = await supabase.from("external_cast_profiles").upsert({
+      cast_id: editing.cast_id,
+      store_id: storeId,
+      provider: "estama",
+      soul_login_url: soulLoginUrl,
+      soul_status: "configured",
+    }, { onConflict: "cast_id,provider" });
+    setSavingSoulLoginUrl(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    const updatedRow = { ...editing, soul_login_url: soulLoginUrl, soul_status: "configured" };
+    setEditing(updatedRow);
+    setRows((current) => current.map((row) => row.cast_id === editing.cast_id ? updatedRow : row));
+    setEditForm((current) => ({ ...current, soulLoginUrl }));
+    setSoulLoginUrlEditing(false);
+    toast.success("専用ログインURLを保存し、魂セラピストを設定済みにしました");
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader onToggleSidebar={() => setSidebarOpen((value) => !value)} />
@@ -190,14 +257,14 @@ export default function O2Management() {
           </div>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            O2のメールアドレス・ID・パスワードを登録すると、魂セラピストの初回設定には登録メールアドレスと同じパスワードを使用します。公開URLはセラピストカードと詳細ページへ反映されます。パスワードは保存後に再表示しません。
+            魂セラピストは初回ログインまで手動で完了し、発行されたセラピスト専用ログインページURLを保存してください。URLの保存時点を設定完了として扱い、保存後は「編集」を押すまで変更できません。
           </div>
 
           <div className="grid gap-3 md:hidden">
             {loading ? <div className="rounded-xl border bg-card py-16 text-center"><Loader2 className="inline-block animate-spin text-primary" /></div> : rows.length === 0 ? <div className="rounded-xl border bg-card py-12 text-center text-muted-foreground">セラピストがいません</div> : rows.map((row) => (
               <div key={row.cast_id} className="rounded-xl border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">{row.photo ? <img src={row.photo} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="h-11 w-11 rounded-full bg-muted" />}<div className="min-w-0"><p className="font-medium truncate">{row.cast_name}</p><div className="mt-1 flex flex-wrap gap-1"><Badge variant={row.credential_configured ? "default" : "outline"}>O2</Badge><Badge variant={row.estama_credential_configured ? "default" : "outline"}>魂</Badge></div></div></div>
+                  <div className="flex min-w-0 items-center gap-2">{row.photo ? <img src={row.photo} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="h-11 w-11 rounded-full bg-muted" />}<div className="min-w-0"><p className="font-medium truncate">{row.cast_name}</p><div className="mt-1 flex flex-wrap gap-1"><Badge variant={row.credential_configured ? "default" : "outline"}>O2</Badge><Badge variant={isSoulConfigured(row) ? "default" : "outline"}>魂</Badge></div></div></div>
                   <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Pencil size={13} className="mr-1" />編集</Button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -221,7 +288,7 @@ export default function O2Management() {
                   {loading ? <tr><td colSpan={7} className="py-16 text-center"><Loader2 className="inline-block animate-spin text-primary" /></td></tr> : rows.length === 0 ? <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">セラピストがいません</td></tr> : rows.map((row) => (
                     <tr key={row.cast_id} className="align-top">
                       <td className="px-4 py-3"><div className="flex items-center gap-2">{row.photo ? <img src={row.photo} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="h-9 w-9 rounded-full bg-muted" />}<span className="font-medium">{row.cast_name}</span></div></td>
-                      <td className="px-3 py-3"><div className="flex flex-wrap gap-1"><Badge variant={row.credential_configured ? "default" : "outline"}>O2</Badge><Badge variant={row.estama_credential_configured ? "default" : "outline"}>魂</Badge></div></td>
+                      <td className="px-3 py-3"><div className="flex flex-wrap gap-1"><Badge variant={row.credential_configured ? "default" : "outline"}>O2</Badge><Badge variant={isSoulConfigured(row) ? "default" : "outline"}>魂</Badge></div></td>
                       <td className="px-3 py-3">{row.o2_created ? <span className="text-green-700">✓ 作成済み</span> : <span className="text-muted-foreground">未作成</span>}</td>
                       <td className="px-3 py-3">{row.o2_linkage_requested ? <span className="text-green-700">✓ 申請済み</span> : <span className="text-muted-foreground">未申請</span>}</td>
                       <td className="px-3 py-3"><span>{statusLabel[row.last_o2_status || ""] || "投稿なし"}</span>{row.last_posted_at && <p className="text-[11px] text-muted-foreground mt-1">{new Date(row.last_posted_at).toLocaleString("ja-JP")}</p>}</td>
@@ -257,12 +324,25 @@ export default function O2Management() {
             </section>
 
             <section className="rounded-xl border p-4 space-y-3">
-              <div className="flex items-center justify-between"><h3 className="font-semibold">魂セラピスト</h3>{editing?.estama_credential_configured && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
-              <div className="rounded-lg bg-muted/60 p-3 text-sm"><p className="font-medium">登録メール・パスワードを自動使用</p><p className="mt-1 text-xs text-muted-foreground">魂セラピストはO2登録メールアドレスでログインし、パスワードはO2と共通で設定します。</p></div>
+              <div className="flex items-center justify-between"><h3 className="font-semibold">魂セラピスト</h3>{editing && isSoulConfigured(editing) && <Badge className="bg-green-100 text-green-700 hover:bg-green-100">設定済み</Badge>}</div>
+              <div className="rounded-lg bg-muted/60 p-3 text-sm"><p className="font-medium">初回ログインは手動で設定</p><p className="mt-1 text-xs text-muted-foreground">初回ログインまで完了したあと、発行されたセラピスト専用URLを下に保存してください。</p></div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2"><Label htmlFor="soul-login-url">専用ログインページURL</Label>{editing?.soul_login_url && !soulLoginUrlEditing && <Badge variant="outline">保存済み・編集ロック中</Badge>}</div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input id="soul-login-url" type="url" autoComplete="off" readOnly={!soulLoginUrlEditing} placeholder="https://estama.jp/..." value={editForm.soulLoginUrl} onChange={(event) => setEditForm({ ...editForm, soulLoginUrl: event.target.value })} className={!soulLoginUrlEditing ? "bg-muted/60" : ""} />
+                  {soulLoginUrlEditing ? (
+                    <Button type="button" onClick={saveSoulLoginUrl} disabled={savingSoulLoginUrl} className="shrink-0">{savingSoulLoginUrl && <Loader2 size={14} className="mr-1 animate-spin" />}URLを保存</Button>
+                  ) : (
+                    <Button type="button" variant="outline" onClick={() => setSoulLoginUrlEditing(true)} className="shrink-0"><Pencil size={14} className="mr-1" />編集</Button>
+                  )}
+                </div>
+                {!soulLoginUrlEditing && editing?.soul_login_url && <a href={editing.soul_login_url} target="_blank" rel="noreferrer" className="inline-flex items-center text-xs text-primary">保存したログインページを開く<ExternalLink size={12} className="ml-1" /></a>}
+                <p className="text-xs text-muted-foreground">保存すると設定完了になり、次回の投稿ではこのURLを優先して使用します。</p>
+              </div>
               <div><Label htmlFor="estama-profile-url">プロフィールURL</Label><Input id="estama-profile-url" type="url" placeholder="https://estama.jp/shop/..." value={editForm.estamaProfileUrl} onChange={(event) => setEditForm({ ...editForm, estamaProfileUrl: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">公開側のセラピストカードと詳細ページへ自動反映されます。</p></div>
             </section>
 
-            <p className="text-xs text-muted-foreground">O2はIDから公開URLを自動生成します。魂セラピストはO2登録メールアドレスと共通パスワードを使い、入力したプロフィールURLを公開側へ反映します。</p>
+            <p className="text-xs text-muted-foreground">O2はIDから公開URLを自動生成します。魂セラピストのプロフィールURLは公開側へ、専用ログインURLは投稿処理だけに使用します。</p>
             <Button className="w-full" onClick={save} disabled={saving}>{saving && <Loader2 size={14} className="mr-1 animate-spin" />}保存</Button>
           </div>
         </DialogContent>
