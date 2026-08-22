@@ -539,4 +539,3 @@ async function downloadImage(rawUrl: string, index: number) {
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   return { blob: new Blob([buffer], { type: contentType }), name: `photo-${index + 1}.${extension}` };
 }
-
