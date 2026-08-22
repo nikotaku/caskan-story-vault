@@ -164,7 +164,12 @@ export default function PromotionSchedule() {
       console.error("セラピスト一覧の取得に失敗しました:", castsResult.error);
       toast.error("セラピスト一覧を読み込めませんでした");
     } else {
-      setCastOptions(castsResult.data || []);
+      // リブランド前後で同じ人が別の店舗IDにいる場合も、選択肢は名前単位で1件にまとめる
+      const uniqueCasts = new Map<string, CastOption>();
+      for (const cast of castsResult.data || []) {
+        if (!uniqueCasts.has(cast.name)) uniqueCasts.set(cast.name, cast);
+      }
+      setCastOptions([...uniqueCasts.values()]);
     }
     setLoading(false);
   }, [storeId, storeLoading, user]);
