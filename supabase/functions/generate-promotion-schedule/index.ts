@@ -53,6 +53,12 @@ type AiSchedule = {
   }>;
 };
 
+const STANDARD_PREPARATION: AiSchedule["preparation"] = [
+  { label: "ショート動画 3本（各5秒／ティザー・中盤・最終で使い分け）" },
+  { label: "2ショット宣材写真 3パターン" },
+  { label: "告知バナー 1点（横長／X・エステ魂ヘッダー想定）" },
+];
+
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: {
@@ -79,12 +85,7 @@ const normalizeSchedule = (
   const parsed = JSON.parse(jsonMatch[0]) as Partial<AiSchedule>;
   const title = cleanText(parsed.title, 80);
   const description = cleanText(parsed.description, 300);
-  const preparation = Array.isArray(parsed.preparation)
-    ? parsed.preparation
-      .map((item) => ({ label: cleanText(item?.label, 120) }))
-      .filter((item) => item.label)
-      .slice(0, 12)
-    : [];
+  const preparation = STANDARD_PREPARATION.map((item) => ({ ...item }));
   const posting = Array.isArray(parsed.posting)
     ? parsed.posting
       .map((group) => ({
@@ -237,7 +238,12 @@ serve(async (req) => {
 宣伝先は指定されたものだけを使い、宣伝先ごとの掲載数・回数を必ず一致させてください。
 各投稿作業には対応するchannel_keyを必ず付けてください。
 本人媒体が未登録の場合は、その宣伝先を店舗媒体として計画してください。
-準備物には写真、短い動画、告知画像、紹介文など、投稿に必要な素材を具体的に含めてください。
+準備物は次の3項目だけに固定し、追加・削除・数量変更をしないでください。
+- ショート動画 3本（各5秒／ティザー・中盤・最終で使い分け）
+- 2ショット宣材写真 3パターン
+- 告知バナー 1点（横長／X・エステ魂ヘッダー想定）
+ショート動画は序盤にティザー、中盤に中盤用、終盤に最終用を使う計画にしてください。
+2ショット宣材写真は3パターンを分散して使い、同じ写真の連続使用を避けてください。
 画像サイズ・仕様が指定されている場合は、準備物と作業名にも反映してください。
 投稿回数は期間に合わせ、同じ内容の過剰な連投を避けてください。
 回答はJSONオブジェクトのみとし、説明文やMarkdownを付けないでください。`;
@@ -258,7 +264,9 @@ ${channelRequirements}
   "title": "計画名",
   "description": "狙いと流れの説明",
   "preparation": [
-    { "label": "準備する素材や作業" }
+    { "label": "ショート動画 3本（各5秒／ティザー・中盤・最終で使い分け）" },
+    { "label": "2ショット宣材写真 3パターン" },
+    { "label": "告知バナー 1点（横長／X・エステ魂ヘッダー想定）" }
   ],
   "posting": [
     {
