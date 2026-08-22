@@ -2275,6 +2275,86 @@ export type Database = {
           },
         ]
       }
+      dispatch_registration_forms: {
+        Row: {
+          created_at: string
+          is_active: boolean
+          store_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          is_active?: boolean
+          store_id: string
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          is_active?: boolean
+          store_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_registration_forms_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_registrations: {
+        Row: {
+          created_at: string
+          dispatch_end: string
+          dispatch_start: string
+          entry_source: string
+          form_id: string
+          id: string
+          name: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          dispatch_end: string
+          dispatch_start: string
+          entry_source: string
+          form_id: string
+          id?: string
+          name: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          dispatch_end?: string
+          dispatch_start?: string
+          entry_source?: string
+          form_id?: string
+          id?: string
+          name?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_registrations_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_registration_forms"
+            referencedColumns: ["token"]
+          },
+          {
+            foreignKeyName: "dispatch_registrations_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deductions: {
         Row: {
           amount: number
@@ -5450,6 +5530,16 @@ export type Database = {
       dispatch_estama_worker_request: {
         Args: { p_payload: Json }
         Returns: number
+      }
+      submit_dispatch_registration: {
+        Args: {
+          p_dispatch_end: string
+          p_dispatch_start: string
+          p_entry_source: string
+          p_name: string
+          p_token: string
+        }
+        Returns: string
       }
       enqueue_estama_job: {
         Args: {

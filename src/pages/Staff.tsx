@@ -1881,6 +1881,16 @@ export default function Staff() {
                   </DialogContent>
                 </Dialog>
               )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="col-span-2 sm:col-auto"
+                  onClick={() => navigate("/staff/dispatch-registration")}
+                >
+                  <LinkIcon size={16} />
+                  派遣登録フォーム
+                </Button>
+              )}
               </div>
             </div>
 
