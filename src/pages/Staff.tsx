@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { runEstamaCastAutomation, runEstamaProfileSync } from "@/lib/estamaAutomation";
@@ -323,6 +324,7 @@ export default function Staff() {
   
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
+  const { storeId, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
 
   // 認証チェック
@@ -499,6 +501,14 @@ export default function Staff() {
       return;
     }
 
+    if (storeLoading) {
+      toast({
+        title: "店舗情報を確認中です",
+        description: "少し待ってからもう一度登録してください",
+      });
+      return;
+    }
+
     if (!!formData.estama_account_login_id !== !!formData.estama_account_password) {
       toast({
         title: "魂セラピスト初回設定を確認してください",
@@ -522,6 +532,7 @@ export default function Staff() {
       const { data: inserted, error } = await supabase
         .from('casts')
         .insert([{
+          store_id: storeId,
           name: formData.name.trim() || "名称未設定",
           type: formData.type,
           room: formData.room,
@@ -586,6 +597,9 @@ export default function Staff() {
         if (profileError) throw profileError;
       }
 
+      // Realtime通知の有無に関係なく、登録結果を一覧へ確実に反映する。
+      await fetchCasts();
+      setCategoryTab("ノーステータス");
       toast({ title: "追加しました", description: "新しいセラピストが登録されました" });
       setIsAddDialogOpen(false);
       if (inserted?.id && formData.estama_auto_register) {
@@ -843,10 +857,24 @@ export default function Staff() {
         instagram_url: editingCast.instagram_url || null,
         profile_format: editingCast.profile_format || null,
       };
-      const { error: updateError } = await supabase.from('casts')
+      const expectedName = basePayload.name as string;
+      const { data: updatedCast, error: updateError } = await supabase.from('casts')
         .update({ ...basePayload, ...profilePayload })
-        .eq('id', editingCast.id);
+        .eq('id', editingCast.id)
+        .select('id, name')
+        .single();
       if (updateError) throw updateError;
+      if (!updatedCast || updatedCast.name !== expectedName) {
+        throw new Error("名前の更新結果を確認できませんでした");
+      }
+
+      // 画面を即時更新した上でDBから再取得し、古い名前が残らないようにする。
+      setCasts((previous) => previous.map((cast) => (
+        cast.id === editingCast.id
+          ? { ...cast, ...basePayload, ...profilePayload }
+          : cast
+      )));
+      await fetchCasts();
 
       toast({ title: "保存しました", description: "セラピスト情報を更新しました" });
 
