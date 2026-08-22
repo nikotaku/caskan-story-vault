@@ -122,6 +122,7 @@ export const ShiftCalendar = ({ dates, casts, shifts, onShiftUpdate }: ShiftCale
           .from('shifts')
           .insert({
             cast_id: selectedCell.castId,
+            store_id: storeId,
             shift_date: selectedCell.date,
             start_time: formData.startTime,
             end_time: formData.endTime,
