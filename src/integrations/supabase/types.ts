@@ -4328,6 +4328,9 @@ export type Database = {
           created_by: string | null
           end_time: string
           esran_registered: boolean
+          estama_confirmed_at: string | null
+          estama_confirmed_by: string | null
+          estama_human_confirmed: boolean
           estama_registered: boolean
           id: string
           notes: string | null
@@ -4346,6 +4349,9 @@ export type Database = {
           created_by?: string | null
           end_time: string
           esran_registered?: boolean
+          estama_confirmed_at?: string | null
+          estama_confirmed_by?: string | null
+          estama_human_confirmed?: boolean
           estama_registered?: boolean
           id?: string
           notes?: string | null
@@ -4364,6 +4370,9 @@ export type Database = {
           created_by?: string | null
           end_time?: string
           esran_registered?: boolean
+          estama_confirmed_at?: string | null
+          estama_confirmed_by?: string | null
+          estama_human_confirmed?: boolean
           estama_registered?: boolean
           id?: string
           notes?: string | null

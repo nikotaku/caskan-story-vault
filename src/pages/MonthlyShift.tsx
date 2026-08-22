@@ -28,6 +28,9 @@ interface Shift {
   approval_status: string;
   approval_comment: string | null;
   estama_registered: boolean;
+  estama_human_confirmed: boolean;
+  estama_confirmed_at: string | null;
+  estama_confirmed_by: string | null;
   esran_registered: boolean;
   casts: { name: string };
 }
@@ -76,6 +79,7 @@ export default function MonthlyShift() {
     end_time: "21:00",
     room: "",
     estama_registered: false,
+    estama_human_confirmed: false,
     esran_registered: false,
   });
   const [bulkMode, setBulkMode] = useState(false);
@@ -95,6 +99,7 @@ export default function MonthlyShift() {
       end_time: "21:00",
       room: "",
       estama_registered: false,
+      estama_human_confirmed: false,
       esran_registered: false,
       ...preset,
     });
@@ -110,6 +115,7 @@ export default function MonthlyShift() {
       end_time: shift.end_time.slice(0, 5),
       room: shift.room || "",
       estama_registered: shift.estama_registered ?? false,
+      estama_human_confirmed: shift.estama_human_confirmed ?? false,
       esran_registered: shift.esran_registered ?? false,
     });
     setShowDialog(true);
@@ -186,6 +192,7 @@ export default function MonthlyShift() {
         end_time: form.end_time,
         room: form.room || null,
         estama_registered: false,
+        estama_human_confirmed: false,
         esran_registered: form.esran_registered,
         approval_status: "approved",
       }));
@@ -214,6 +221,7 @@ export default function MonthlyShift() {
       end_time: form.end_time,
       room: form.room || null,
       estama_registered: syncFieldsChanged ? false : currentShift?.estama_registered ?? false,
+      estama_human_confirmed: syncFieldsChanged ? false : form.estama_human_confirmed,
       esran_registered: form.esran_registered,
       approval_status: "approved",
     };
@@ -236,13 +244,24 @@ export default function MonthlyShift() {
   };
 
   const updateStatus = async (id: string, approval_status: "approved" | "rejected", room?: string | null, comment?: string) => {
-    const patch: { approval_status: string; room?: string | null; approval_comment?: string | null; estama_registered: boolean } = { approval_status, estama_registered: false };
+    const patch: { approval_status: string; room?: string | null; approval_comment?: string | null; estama_registered: boolean; estama_human_confirmed: boolean } = {
+      approval_status,
+      estama_registered: false,
+      estama_human_confirmed: false,
+    };
     if (room !== undefined) patch.room = room;
     patch.approval_comment = comment || null;
     const { error } = await supabase.from("shifts").update(patch).eq("id", id);
     if (error) { toast.error("更新に失敗しました"); return; }
     toast.success(approval_status === "approved" ? "承認しました" : "却下しました");
-    setShifts(prev => prev.map(s => (s.id === id ? { ...s, approval_status, approval_comment: comment || null, estama_registered: false, ...(room !== undefined ? { room } : {}) } : s)));
+    setShifts(prev => prev.map(s => (s.id === id ? {
+      ...s,
+      approval_status,
+      approval_comment: comment || null,
+      estama_registered: false,
+      estama_human_confirmed: false,
+      ...(room !== undefined ? { room } : {}),
+    } : s)));
     triggerEstamaSync();
   };
 
@@ -451,8 +470,8 @@ export default function MonthlyShift() {
                           onClick={e => { e.stopPropagation(); openEdit(s); }}
                           title="クリックで編集"
                         >
-                          {s.estama_registered && (
-                            <span className="absolute -top-1 -left-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title="エスたま同期済み" aria-label="エスたま同期済み"><Check className="h-2.5 w-2.5 stroke-[3]" /></span>
+                          {s.estama_human_confirmed && (
+                            <span className="absolute -top-1 -left-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title="エスたま公開表示を確認済み" aria-label="エスたま公開表示を確認済み"><Check className="h-2.5 w-2.5 stroke-[3]" /></span>
                           )}
                           {s.esran_registered && (
                             <span className="absolute -top-0.5 left-2 w-2 h-2 bg-blue-500 rounded-full z-10" title="エスラン登録済み" />
@@ -548,8 +567,8 @@ export default function MonthlyShift() {
                               s.approval_status === "rejected" && "bg-rose-100 dark:bg-rose-900/20 line-through opacity-60",
                               s.approval_status === "approved" && (roomColor(s.room)?.chip ?? "bg-primary/10")
                             )}>
-                              {s.estama_registered && (
-                                <span className="absolute -top-1 -left-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title="エスたま同期済み" aria-label="エスたま同期済み"><Check className="h-2.5 w-2.5 stroke-[3]" /></span>
+                              {s.estama_human_confirmed && (
+                                <span className="absolute -top-1 -left-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm" title="エスたま公開表示を確認済み" aria-label="エスたま公開表示を確認済み"><Check className="h-2.5 w-2.5 stroke-[3]" /></span>
                               )}
                               {s.esran_registered && (
                                 <span className="absolute -top-0.5 left-2 w-2 h-2 bg-blue-500 rounded-full z-10" title="エスラン登録済み" />
@@ -667,21 +686,34 @@ export default function MonthlyShift() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>エスたま同期</Label>
-              <div className="mt-1 flex h-10 items-center gap-2 rounded-md border px-3 text-sm">
-                {form.estama_registered ? (
-                  <>
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white">
-                      <Check className="h-3 w-3 stroke-[3]" />
-                    </span>
-                    <span>同期済み</span>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">未同期（保存後に自動同期）</span>
-                )}
+            {editingId ? <div>
+              <Label>エスたま公開表示の最終確認</Label>
+              <div className="mt-1 space-y-2 rounded-md border p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">自動同期</span>
+                  <span>{form.estama_registered ? "完了" : "未完了"}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant={form.estama_human_confirmed ? "destructive" : "outline"}
+                  className="w-full"
+                  onClick={() => setForm({ ...form, estama_human_confirmed: !form.estama_human_confirmed })}
+                >
+                  {form.estama_human_confirmed ? (
+                    <><Check className="mr-1 h-4 w-4 stroke-[3]" />確認済み（赤チェック）</>
+                  ) : (
+                    "公開ページを確認済みにする"
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  エスたまの公開ページに出勤が表示されていることを人が確認してから押してください。
+                </p>
               </div>
-            </div>
+            </div> : (
+              <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                エスたまへの自動同期後、シフトを再度開いて公開表示を最終確認できます。
+              </div>
+            )}
             <div>
               <Label>エスランに登録</Label>
               <Select
