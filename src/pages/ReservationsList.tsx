@@ -36,6 +36,7 @@ import { ImportModal } from "@/components/ImportModal";
 import { GoogleSheetPanel } from "@/components/GoogleSheetPanel";
 import { mapReservationRows, batchInsert } from "@/lib/importMappers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ENKA_STORE_ID } from "@/lib/storeSwitch";
 
 interface Reservation {
   id: string;
@@ -59,15 +60,20 @@ interface Reservation {
   notes: string | null;
   room: string | null;
   status: string;
+  store_id: string;
   casts: { name: string } | null;
 }
 
-interface Cast { id: string; name: string; }
-interface Room { id: string; name: string; address: string | null; }
-interface BackRate { id: string; course_type: string; duration: number; customer_price: number; therapist_back: number; }
-interface OptionRate { id: string; option_name: string; customer_price: number; therapist_back: number; }
-interface NominationRate { id: string; nomination_type: string; customer_price: number; therapist_back: number | null; }
-interface Discount { id: string; name: string; discount_type: "fixed" | "percentage"; discount_value: number; is_active: boolean; }
+interface Cast { id: string; name: string; store_id: string; }
+interface Room { id: string; name: string; address: string | null; store_id: string; }
+interface BackRate { id: string; course_type: string; duration: number; customer_price: number; therapist_back: number; store_id: string; }
+interface OptionRate { id: string; option_name: string; customer_price: number; therapist_back: number; store_id: string; }
+interface NominationRate { id: string; nomination_type: string; customer_price: number; therapist_back: number | null; store_id: string; }
+interface Discount { id: string; name: string; discount_type: "fixed" | "percentage"; discount_value: number; is_active: boolean; store_id: string; }
+
+function forStore<T extends { store_id: string }>(items: T[], storeId: string): T[] {
+  return items.filter((item) => item.store_id === storeId);
+}
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-blue-100 text-blue-900",
@@ -171,12 +177,12 @@ export default function ReservationsList() {
   }, [user]);
 
   const fetchCasts = async () => {
-    const { data } = await supabase.from("casts").select("id, name").order("name");
+    const { data } = await supabase.from("casts").select("id, name, store_id").order("name");
     setCasts(data || []);
   };
 
   const fetchRooms = async () => {
-    const { data } = await supabase.from("rooms").select("id, name, address").eq("is_active", true).order("name");
+    const { data } = await supabase.from("rooms").select("id, name, address, store_id").eq("is_active", true).order("name");
     setRooms(data || []);
   };
 
@@ -185,7 +191,7 @@ export default function ReservationsList() {
       supabase.from("back_rates").select("*").order("display_order"),
       supabase.from("option_rates").select("*").order("display_order"),
       supabase.from("nomination_rates").select("*"),
-      supabase.from("discounts").select("id, name, discount_type, discount_value, is_active").eq("is_active", true).order("name"),
+      supabase.from("discounts").select("id, name, discount_type, discount_value, is_active, store_id").eq("is_active", true).order("name"),
     ]);
     if (backData) setBackRates(backData);
     if (optionData) setOptionRates(optionData);
@@ -224,6 +230,7 @@ export default function ReservationsList() {
         payment_details: formData.payment_details || null,
         notes: formData.notes || null,
         room: formData.room || null,
+        store_id: ENKA_STORE_ID,
         created_by: user!.id,
       }]);
       if (error) throw error;
@@ -430,12 +437,13 @@ export default function ReservationsList() {
                       <ReservationForm
                         formData={formData}
                         setFormData={setFormData}
-                        casts={casts}
-                        rooms={rooms}
-                        backRates={backRates}
-                        optionRates={optionRates}
-                        nominationRates={nominationRates}
-                        discounts={discounts}
+                        casts={forStore(casts, ENKA_STORE_ID)}
+                        rooms={forStore(rooms, ENKA_STORE_ID)}
+                        backRates={forStore(backRates, ENKA_STORE_ID)}
+                        optionRates={forStore(optionRates, ENKA_STORE_ID)}
+                        nominationRates={forStore(nominationRates, ENKA_STORE_ID)}
+                        discounts={forStore(discounts, ENKA_STORE_ID)}
+                        storeId={ENKA_STORE_ID}
                         onSubmit={handleAddReservation}
                       />
                     </div>
@@ -619,12 +627,13 @@ export default function ReservationsList() {
             <ReservationForm
               formData={editFormData}
               setFormData={setEditFormData}
-              casts={casts}
-              rooms={rooms}
-              backRates={backRates}
-              optionRates={optionRates}
-              nominationRates={nominationRates}
-              discounts={discounts}
+              casts={forStore(casts, editingReservation.store_id)}
+              rooms={forStore(rooms, editingReservation.store_id)}
+              backRates={forStore(backRates, editingReservation.store_id)}
+              optionRates={forStore(optionRates, editingReservation.store_id)}
+              nominationRates={forStore(nominationRates, editingReservation.store_id)}
+              discounts={forStore(discounts, editingReservation.store_id)}
+              storeId={editingReservation.store_id}
               onSubmit={handleUpdateReservation}
               submitLabel="更新する"
             />
