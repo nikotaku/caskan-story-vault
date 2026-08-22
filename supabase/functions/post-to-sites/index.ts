@@ -6,6 +6,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const PORTAL_WORKER_URL = Deno.env.get("ESTAMA_PORTAL_WORKER_URL") || "https://newkyasukan.vercel.app/api/automations/estama-portal-worker";
 const O2_BASE = "https://m-sns.net";
 const O2_LOGIN = `${O2_BASE}/cast/login/`;
+const O2_POST_CREATE = `${O2_BASE}/cast/post/create/`;
 const ALLOWED_ORIGINS = new Set([
   "https://zenryokuesthe.com",
   "https://www.zenryokuesthe.com",
@@ -399,10 +400,16 @@ async function request(jar: CookieJar, url: string, init: RequestInit = {}) {
   return response;
 }
 
-async function follow(jar: CookieJar, response: Response, fallbackUrl: string) {
-  if (![301, 302, 303, 307, 308].includes(response.status)) return response;
-  const location = response.headers.get("location");
-  return request(jar, location ? new URL(location, fallbackUrl).toString() : O2_BASE, { method: "GET" });
+async function follow(jar: CookieJar, response: Response, fallbackUrl: string, maxRedirects = 5) {
+  let current = response;
+  let currentUrl = fallbackUrl;
+  for (let index = 0; index < maxRedirects && [301, 302, 303, 307, 308].includes(current.status); index += 1) {
+    const location = current.headers.get("location");
+    const nextUrl = location ? new URL(location, currentUrl).toString() : O2_BASE;
+    current = await request(jar, nextUrl, { method: "GET", headers: { Referer: currentUrl } });
+    currentUrl = nextUrl;
+  }
+  return current;
 }
 
 type HtmlForm = { action: string; method: string; html: string; attributes: Record<string, string> };
@@ -426,14 +433,17 @@ const hiddenFields = (html: string) => {
   return fields;
 };
 
-const fieldNames = (html: string, tag: "input" | "textarea") => [...html.matchAll(new RegExp(`<${tag}\\b([^>]*)>`, "gi"))]
+const fieldNames = (html: string, tag: "input" | "textarea" | "button") => [...html.matchAll(new RegExp(`<${tag}\\b([^>]*)>`, "gi"))]
   .map((match) => attributes(match[1]))
   .filter((attrs) => attrs.name);
 
-const pageLinks = (html: string, baseUrl: string) => [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)]
-  .map((match) => ({ attrs: attributes(match[1]), text: match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() }))
-  .filter(({ attrs }) => attrs.href)
-  .map(({ attrs, text }) => ({ url: new URL(attrs.href, baseUrl).toString(), text }));
+const findO2PostForm = (html: string, baseUrl: string) => formsFrom(html, baseUrl).find((form) => {
+  const textareas = fieldNames(form.html, "textarea");
+  const controls = [...fieldNames(form.html, "button"), ...fieldNames(form.html, "input")];
+  return new URL(form.action).pathname === "/cast/post/create/" &&
+    textareas.some((field) => field.name === "content") &&
+    controls.some((field) => field.name === "status" && field.value === "published");
+});
 
 async function postToO2(loginId: string, password: string, post: PostRecord) {
   const jar = new CookieJar();
@@ -465,36 +475,34 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
     throw new Error("O2へログインできません。ID・パスワードを確認してください");
   }
 
-  let postForm = formsFrom(currentHtml, currentUrl).find((form) =>
-    /<textarea\b/i.test(form.html) && !/type=["']password/i.test(form.html),
-  );
-  if (!postForm) {
-    const links = pageLinks(currentHtml, currentUrl).filter(({ text, url }) =>
-      /投稿|タイムライン|写メ日記|新規作成/.test(text) || /post|timeline|diary|create/i.test(url),
-    ).slice(0, 8);
-    for (const link of links) {
-      const page = await request(jar, link.url, { headers: { Referer: currentUrl } });
-      if (page.status >= 400) continue;
-      const html = await page.text();
-      const candidate = formsFrom(html, link.url).find((form) => /<textarea\b/i.test(form.html) && !/type=["']password/i.test(form.html));
-      if (candidate) {
-        postForm = candidate;
-        currentUrl = link.url;
-        break;
-      }
-    }
+  let createPage = await request(jar, O2_POST_CREATE, { headers: { Referer: currentUrl } });
+  createPage = await follow(jar, createPage, O2_POST_CREATE);
+  currentUrl = createPage.url || O2_POST_CREATE;
+  const createHtml = await createPage.text();
+  if (/name=["'](?:username|password)["']/i.test(createHtml) && /ログイン/.test(createHtml)) {
+    throw new Error("O2のログイン有効期限が切れました。投稿は完了していません");
   }
+  const postForm = findO2PostForm(createHtml, currentUrl);
   if (!postForm) throw new Error("O2の投稿フォームが見つかりません（画面仕様変更の可能性）。投稿は行っていません");
 
   const form = new FormData();
   for (const [name, value] of hiddenFields(postForm.html)) form.set(name, value);
   const textareas = fieldNames(postForm.html, "textarea");
   const inputs = fieldNames(postForm.html, "input");
+  const buttons = fieldNames(postForm.html, "button");
   const bodyName = textareas.find((field) => /body|content|text|message|post|caption/i.test(field.name))?.name || textareas[0]?.name;
   if (!bodyName) throw new Error("O2の投稿本文欄を特定できません。投稿は行っていません");
   form.set(bodyName, post.body);
   const titleName = inputs.find((field) => /title|subject/i.test(field.name))?.name;
   if (titleName && post.title) form.set(titleName, post.title);
+  const publicVisibility = inputs.find((field) =>
+    (field.type || "").toLowerCase() === "radio" && field.name === "visibility" && field.value === "public"
+  );
+  if (publicVisibility?.name) form.set(publicVisibility.name, publicVisibility.value || "public");
+  const publishControl = [...buttons, ...inputs].find((field) =>
+    (field.type || "").toLowerCase() === "submit" && field.name === "status" && field.value === "published"
+  );
+  if (publishControl?.name) form.set(publishControl.name, publishControl.value || "published");
 
   const fileFields = inputs.filter((field) => (field.type || "").toLowerCase() === "file");
   const imageUrls = Array.isArray(post.image_urls) ? post.image_urls.slice(0, 3) : [];
@@ -519,7 +527,24 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
     .map((match) => match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
   if (errors.length) throw new Error(`O2: ${errors.join(" / ").slice(0, 300)}`);
-  return { status: "posted", url: posted.url || postForm.action, images: Math.min(imageUrls.length, fileFields.length) };
+  const responseUrl = posted.url || postForm.action;
+  if (/\/cast\/post\/create\/?(?:\?|$)/i.test(responseUrl) && formsFrom(responseHtml, responseUrl).some((form) => /<textarea\b/i.test(form.html))) {
+    throw new Error("O2が投稿を受け付けませんでした。入力項目の仕様変更を確認してください");
+  }
+  let verification = await request(jar, `${O2_BASE}/cast/post/`, { headers: { Referer: responseUrl } });
+  verification = await follow(jar, verification, `${O2_BASE}/cast/post/`);
+  const verificationHtml = await verification.text();
+  const verificationText = decodeHtml(verificationHtml)
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const expectedText = post.body.replace(/\s+/g, " ").trim();
+  if (!expectedText || !verificationText.includes(expectedText)) {
+    throw new Error("O2の投稿一覧で公開完了を確認できませんでした。投稿状態を確認してください");
+  }
+  return { status: "posted", url: verification.url || `${O2_BASE}/cast/post/`, images: Math.min(imageUrls.length, fileFields.length) };
 }
 
 async function downloadImage(rawUrl: string, index: number) {
@@ -541,3 +566,4 @@ async function downloadImage(rawUrl: string, index: number) {
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   return { blob: new Blob([buffer], { type: contentType }), name: `photo-${index + 1}.${extension}` };
 }
+
