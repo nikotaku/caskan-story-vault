@@ -180,6 +180,7 @@ export default function MonthlyShift() {
       const dates = eachDayOfInterval({ start, end });
       const rows = dates.map(d => ({
         cast_id: form.cast_id,
+        store_id: storeId,
         shift_date: format(d, "yyyy-MM-dd"),
         start_time: form.start_time,
         end_time: form.end_time,
@@ -218,7 +219,7 @@ export default function MonthlyShift() {
     };
     const { error } = editingId
       ? await supabase.from("shifts").update(payload).eq("id", editingId)
-      : await supabase.from("shifts").insert([payload]);
+      : await supabase.from("shifts").insert([{ ...payload, store_id: storeId }]);
     setSaving(false);
     if (error) { toast.error("保存に失敗しました"); return; }
     toast.success(editingId ? "シフトを更新しました" : "シフトを追加しました");
