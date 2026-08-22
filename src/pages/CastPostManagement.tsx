@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { CheckCircle, ChevronDown, ChevronUp, Clock, Link2, Loader2, Plus, RefreshCw, Send, XCircle } from "lucide-react";
@@ -54,17 +54,28 @@ const STATUS_ICON: Record<string, JSX.Element> = {
 const rpc = (name: string, args: Record<string, unknown>) =>
   (supabase.rpc as unknown as (rpcName: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
 
+const createTestPostBody = () => `【動作確認】\nO2・魂セラピスト連携のテスト投稿です。\n${format(new Date(), "yyyy年M月d日 HH:mm", { locale: ja })}`;
+
 export default function CastPostManagement() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedCastId = searchParams.get("cast") || "";
+  const requestedTestMode = searchParams.get("mode") === "test";
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [credentials, setCredentials] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
+  const [showDialog, setShowDialog] = useState(() => Boolean(requestedCastId));
+  const [testMode, setTestMode] = useState(requestedTestMode);
   const [showConnections, setShowConnections] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
-  const [form, setForm] = useState({ castId: "", title: "", body: "", imageUrls: "" });
+  const [form, setForm] = useState(() => ({
+    castId: requestedCastId,
+    title: requestedTestMode ? "動作確認" : "",
+    body: requestedTestMode ? createTestPostBody() : "",
+    imageUrls: "",
+  }));
   const { user, loading: authLoading } = useAuth();
   const { storeId, store, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
@@ -95,6 +106,25 @@ export default function CastPostManagement() {
   }, [storeId, storeLoading, user]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const clearPostQuery = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("cast");
+    nextParams.delete("mode");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const openNewPost = () => {
+    setTestMode(false);
+    setForm({ castId: "", title: "", body: "", imageUrls: "" });
+    clearPostQuery();
+    setShowDialog(true);
+  };
+
+  const changeDialogOpen = (open: boolean) => {
+    setShowDialog(open);
+    if (!open) clearPostQuery();
+  };
 
   const publishTarget = async (postId: string, target: Target) => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -143,6 +173,8 @@ export default function CastPostManagement() {
       });
       if (error || typeof data !== "string") throw new Error(error?.message || "投稿を作成できませんでした");
       setShowDialog(false);
+      setTestMode(false);
+      clearPostQuery();
       setForm({ castId: "", title: "", body: "", imageUrls: "" });
       toast.success("O2・魂セラピストへ送信中です");
       await load();
@@ -204,7 +236,7 @@ export default function CastPostManagement() {
               <h1 className="text-2xl font-bold">一括投稿管理</h1>
               <p className="text-sm text-muted-foreground">{store?.name || "店舗"}のO2・魂セラピストへ同時投稿します</p>
             </div>
-            <Button onClick={() => setShowDialog(true)}><Plus size={16} className="mr-1" />新規投稿</Button>
+            <Button onClick={openNewPost}><Plus size={16} className="mr-1" />新規投稿</Button>
           </div>
 
           <div className="rounded-lg border bg-card">
@@ -256,16 +288,16 @@ export default function CastPostManagement() {
         </div>
       </main>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={changeDialogOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>2媒体へ一括投稿</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{testMode ? "O2・魂セラピストへテスト投稿" : "2媒体へ一括投稿"}</DialogTitle></DialogHeader>
           <div className="mt-2 space-y-4">
             <div><Label>セラピスト</Label><Select value={form.castId} onValueChange={(value) => setForm({ ...form, castId: value })}><SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger><SelectContent>{casts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>タイトル（任意）</Label><Input maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
             <div><Label>本文</Label><Textarea rows={6} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="投稿内容を入力" /></div>
             <div><Label>画像URL（任意・1行1URL・3件まで）</Label><Textarea rows={3} value={form.imageUrls} onChange={(event) => setForm({ ...form, imageUrls: event.target.value })} placeholder="https://..." /></div>
             <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">O2と魂セラピストへ同時送信します。HP写メ日記やその他のSNSには掲載しません。</p>
-            <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}一括投稿</Button><Button variant="outline" className="flex-1" onClick={() => setShowDialog(false)} disabled={submitting}>キャンセル</Button></div>
+            <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{testMode ? "テスト投稿" : "一括投稿"}</Button><Button variant="outline" className="flex-1" onClick={() => changeDialogOpen(false)} disabled={submitting}>キャンセル</Button></div>
           </div>
         </DialogContent>
       </Dialog>

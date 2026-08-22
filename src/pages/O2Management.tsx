@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, ExternalLink, Eye, EyeOff, Link2, Loader2, Pencil, RefreshCw, ShieldCheck, Users, XCircle } from "lucide-react";
+import { CheckCircle, ExternalLink, Eye, EyeOff, Link2, Loader2, Pencil, RefreshCw, Send, ShieldCheck, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -118,6 +118,10 @@ export default function O2Management() {
     });
   };
 
+  const openPostForm = (row: O2Row) => {
+    navigate(`/post-management?cast=${encodeURIComponent(row.cast_id)}&mode=test`);
+  };
+
   const save = async () => {
     if (!editing) return;
     const o2Email = editForm.o2Email.trim();
@@ -203,6 +207,7 @@ export default function O2Management() {
                   <div className="rounded-lg bg-muted/60 p-2"><p className="text-muted-foreground">公開URL</p>{row.profile_url ? <a className="mt-1 inline-flex items-center text-primary" href={row.profile_url} target="_blank" rel="noreferrer">確認<ExternalLink size={12} className="ml-1" /></a> : <p className="mt-1">未設定</p>}</div>
                   <div className="rounded-lg bg-muted/60 p-2"><p className="text-muted-foreground">魂URL</p>{row.estama_profile_url ? <a className="mt-1 inline-flex items-center text-primary" href={row.estama_profile_url} target="_blank" rel="noreferrer">確認<ExternalLink size={12} className="ml-1" /></a> : <p className="mt-1">未設定</p>}</div>
                 </div>
+                <Button className="w-full" onClick={() => openPostForm(row)}><Send size={14} className="mr-1" />投稿フォーム</Button>
                 {row.last_o2_error && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-600 break-words">{row.last_o2_error}</p>}
               </div>
             ))}
@@ -221,7 +226,7 @@ export default function O2Management() {
                       <td className="px-3 py-3">{row.o2_linkage_requested ? <span className="text-green-700">✓ 申請済み</span> : <span className="text-muted-foreground">未申請</span>}</td>
                       <td className="px-3 py-3"><span>{statusLabel[row.last_o2_status || ""] || "投稿なし"}</span>{row.last_posted_at && <p className="text-[11px] text-muted-foreground mt-1">{new Date(row.last_posted_at).toLocaleString("ja-JP")}</p>}</td>
                       <td className="px-3 py-3 max-w-[250px] text-xs text-red-600 break-words">{row.last_o2_error || "—"}</td>
-                      <td className="px-4 py-3"><div className="flex justify-end gap-2">{row.profile_url && <Button size="sm" variant="outline" asChild><a href={row.profile_url} target="_blank" rel="noreferrer">O2<ExternalLink size={13} className="ml-1" /></a></Button>}{row.estama_profile_url && <Button size="sm" variant="outline" asChild><a href={row.estama_profile_url} target="_blank" rel="noreferrer">魂<ExternalLink size={13} className="ml-1" /></a></Button>}<Button size="sm" variant="outline" onClick={() => openEdit(row)}><Pencil size={13} className="mr-1" />編集</Button></div></td>
+                      <td className="px-4 py-3"><div className="flex flex-wrap justify-end gap-2"><Button size="sm" onClick={() => openPostForm(row)}><Send size={13} className="mr-1" />投稿フォーム</Button>{row.profile_url && <Button size="sm" variant="outline" asChild><a href={row.profile_url} target="_blank" rel="noreferrer">O2<ExternalLink size={13} className="ml-1" /></a></Button>}{row.estama_profile_url && <Button size="sm" variant="outline" asChild><a href={row.estama_profile_url} target="_blank" rel="noreferrer">魂<ExternalLink size={13} className="ml-1" /></a></Button>}<Button size="sm" variant="outline" onClick={() => openEdit(row)}><Pencil size={13} className="mr-1" />編集</Button></div></td>
                     </tr>
                   ))}
                 </tbody>
