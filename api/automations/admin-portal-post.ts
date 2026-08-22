@@ -78,4 +78,3 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     res.status(/認証|ログイン|権限/.test(message) ? 401 : 400).json({ error: message });
   }
 }
-
