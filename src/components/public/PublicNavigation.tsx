@@ -25,7 +25,7 @@ export const PublicNavigation = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { telHref, phoneDisplay, hours } = useStoreContact();
   const { store } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
   // デフォルト店舗は既存ロゴ画像、その他店舗は logo_url かテキストロゴ
   const logoUrl = store?.logo_url || ((store?.is_default ?? true) ? SHOP_LOGO : null);
   usePageTracking();

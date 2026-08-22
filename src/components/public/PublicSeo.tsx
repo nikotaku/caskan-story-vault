@@ -48,11 +48,11 @@ export function PublicSeo() {
 
     const page = PAGE_LABELS.find(({ pattern }) => pattern.test(pathname));
     const indexable = Boolean(page);
-    const storeName = store?.name ?? "全力エステ 仙台";
+    const storeName = store?.name ?? "艶華";
     const origin = store?.custom_domain
       ? `https://${store.custom_domain.replace(/^https?:\/\//, "").replace(/\/$/, "")}`
       : (store?.is_default ?? true)
-        ? "https://zenryokuesthe.com"
+        ? "https://enka-salon.jp"
         : window.location.origin;
 
     if (!indexable || !page) {

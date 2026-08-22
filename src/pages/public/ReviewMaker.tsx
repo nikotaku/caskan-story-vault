@@ -156,7 +156,7 @@ export default function ReviewMaker() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white">
       <header className="bg-white border-b py-4 px-4 text-center">
-        <p className="text-xs text-muted-foreground">全力エステ</p>
+        <p className="text-xs text-muted-foreground">艶華</p>
         <h1 className="text-lg font-bold mt-0.5">口コミ自動作成ツール</h1>
       </header>
 

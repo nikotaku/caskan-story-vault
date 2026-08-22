@@ -109,7 +109,7 @@ const Casts = () => {
 
   const titleBadgeMap = useTitleBadges();
   const { store } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
 
   const filteredCasts = casts.filter((cast) => {
     if (filter === 'today') return todayShiftCastIds.has(cast.id);

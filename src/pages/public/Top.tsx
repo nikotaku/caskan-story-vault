@@ -122,7 +122,7 @@ const NewsContent = ({ content }: { content: string }) => {
 
 const Top = () => {
   const { store } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
   const brandEn = (store?.settings as any)?.brand_en ?? "ZR";
   const [snsContent, setSnsContent] = useState<Record<string, string>>({});
   const [articles, setArticles] = useState<HpArticle[]>([]);

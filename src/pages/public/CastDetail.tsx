@@ -128,7 +128,7 @@ const CastDetail = () => {
       if (castRes.error) throw castRes.error;
       setCast(castRes.data);
       setProfile(profileRes.data ?? null);
-      document.title = `${castRes.data.name} | ${store?.name ?? "全力エステ"}`;
+      document.title = `${castRes.data.name} | ${store?.name ?? "艶華"}`;
 
       // 口コミは担当セラピスト（この人）宛のお客様投稿のみ表示。
       // 担当名は短縮名（例「かずは」）で投稿されることがあるため、

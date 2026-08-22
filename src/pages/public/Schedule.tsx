@@ -108,7 +108,7 @@ const Schedule = () => {
 
   const titleBadgeMap = useTitleBadges();
   const { store } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
 
   const stripDays = useMemo(
     () => Array.from({ length: VISIBLE_DAYS }, (_, i) => addDays(stripStart, i)),

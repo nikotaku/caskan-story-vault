@@ -140,7 +140,7 @@ const BookingReservation = () => {
   const [intervalMinutes, setIntervalMinutes] = useState(30);
 
   useEffect(() => {
-    document.title = "全力エステ - WEB予約";
+    document.title = "艶華 - WEB予約";
   }, []);
 
   const { toast } = useToast();

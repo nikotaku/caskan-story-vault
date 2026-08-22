@@ -49,12 +49,12 @@ interface Shift {
 const Home = () => {
   const { telHref, phoneDisplay } = useStoreContact();
   const { store, storeId } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
   // 店舗情報テーブル用：独自ドメインがあればそれを、なければ既定値を表示
   const siteUrl = store?.custom_domain
     ? `https://${store.custom_domain}`
     : (store?.is_default ?? true)
-      ? "https://zenryoku-esthe.com"
+      ? "https://enka-salon.jp"
       : window.location.origin;
   const titleBadgeMap = useTitleBadges();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -62,7 +62,7 @@ const Home = () => {
   const [todayShifts, setTodayShifts] = useState<Shift[]>([]);
   const [allCasts, setAllCasts] = useState<Cast[]>([]);
 
-  // 店舗ごとのヒーローバナー（stores.settings.hero_banners）。未設定なら全力エステの既定バナー。
+  // 店舗ごとのヒーローバナー（stores.settings.hero_banners）。未設定なら既定バナー。
   const heroBanners = ((store?.settings as any)?.hero_banners as string[] | undefined) ?? [];
   const usingCustomHero = heroBanners.length > 0;
   const slides = usingCustomHero

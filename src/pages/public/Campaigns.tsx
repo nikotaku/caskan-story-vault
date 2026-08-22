@@ -52,7 +52,7 @@ const summary = (content: string | null) =>
 
 export default function Campaigns() {
   const { store, storeId, loading: storeLoading } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
   const [banners, setBanners] = useState<Banner[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [events, setEvents] = useState<CampaignArticle[]>([]);

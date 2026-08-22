@@ -11,7 +11,7 @@ export const PublicFooter = () => {
   const { store, storeId, loading: storeLoading } = useStore();
   const [xUrl, setXUrl] = useState(DEFAULT_X_URL);
   const [o2Url, setO2Url] = useState("");
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
 
   useEffect(() => {
     if (storeLoading) return;

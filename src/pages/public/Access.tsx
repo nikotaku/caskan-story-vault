@@ -21,7 +21,7 @@ interface StoreInfo {
 }
 
 const DEFAULTS: StoreInfo = {
-  name: "全力エステ 仙台",
+  name: "艶華",
   address: "宮城県仙台市青葉区",
   phone: "090-8126-4042",
   hours: "12:00〜26:00（24:40最終受付）",
@@ -35,7 +35,7 @@ const Access = () => {
   const [store, setStore] = useState<StoreInfo>(DEFAULTS);
 
   useEffect(() => {
-    document.title = "全力エステ - アクセス";
+    document.title = "艶華 - アクセス";
   }, []);
 
   useEffect(() => {

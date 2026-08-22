@@ -50,7 +50,7 @@ const reviewDate = (review: Review) => {
 
 export default function Voice() {
   const { store, storeId } = useStore();
-  const storeName = store?.name ?? "全力エステ 仙台";
+  const storeName = store?.name ?? "艶華";
   const [reviews, setReviews] = useState<Review[]>([]);
   const [casts, setCasts] = useState<CastLite[]>([]);
   const [loading, setLoading] = useState(true);
