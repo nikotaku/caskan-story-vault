@@ -5715,6 +5715,29 @@ export type Database = {
           x_profile_url: string
         }[]
       }
+      get_sns_connection_overview_v5: {
+        Args: { p_store_id: string }
+        Returns: {
+          cast_id: string
+          cast_name: string
+          credential_configured: boolean
+          estama_credential_configured: boolean
+          estama_login_id: string
+          estama_profile_url: string
+          last_o2_error: string
+          last_o2_status: string
+          last_posted_at: string
+          login_id: string
+          o2_created: boolean
+          o2_linkage_requested: boolean
+          o2_login_email: string
+          photo: string
+          profile_url: string
+          x_credential_configured: boolean
+          x_login_id: string
+          x_profile_url: string
+        }[]
+      }
       get_therapist_customers: {
         Args: { p_token: string }
         Returns: {
@@ -5933,6 +5956,23 @@ export type Database = {
       save_sns_connection_admin_v4: {
         Args: {
           p_cast_id: string
+          p_estama_profile_url: string
+          p_login_id: string
+          p_o2_created: boolean
+          p_o2_linkage_requested: boolean
+          p_o2_login_email: string
+          p_password: string
+          p_store_id: string
+          p_x_login_id: string
+          p_x_password: string
+        }
+        Returns: undefined
+      }
+      save_sns_connection_admin_v5: {
+        Args: {
+          p_cast_id: string
+          p_estama_login_id: string
+          p_estama_password: string
           p_estama_profile_url: string
           p_login_id: string
           p_o2_created: boolean
