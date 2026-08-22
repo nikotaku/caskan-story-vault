@@ -34,11 +34,13 @@ import { openSmsApp } from "@/lib/sms";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { PaymentReminderPopup } from "@/components/PaymentReminderPopup";
 import { loadReceptionEndGuide, shareReceptionEndContent } from "@/lib/receptionEndShare";
+import { ENKA_STORE_ID } from "@/lib/storeSwitch";
 
 interface Cast {
   id: string;
   name: string;
   photo: string | null;
+  store_id: string;
 }
 
 interface Shift {
@@ -72,6 +74,31 @@ interface Reservation {
   payment_status: string;
   room: string | null;
   notes: string | null;
+  store_id: string;
+}
+
+interface StoreRoom {
+  id: string;
+  name: string;
+  address: string | null;
+  sms_text: string | null;
+  map_url: string | null;
+  caution_text: string | null;
+  store_id: string;
+}
+
+interface StoreDiscount {
+  id: string;
+  name: string;
+  discount_type: "fixed" | "percentage";
+  discount_value: number;
+  store_id: string;
+}
+
+type StorePaymentSetting = PaymentSetting & { store_id: string };
+
+function forStore<T extends { store_id: string }>(items: T[], storeId: string): T[] {
+  return items.filter((item) => item.store_id === storeId);
 }
 
 function RoomBadges({ rooms, compact = false }: { rooms: string[]; compact?: boolean }) {
@@ -329,12 +356,12 @@ export default function Schedule() {
   });
 
   const [casts, setCasts] = useState<Cast[]>([]);
-  const [rooms, setRooms] = useState<{ id: string; name: string; address: string | null; sms_text: string | null; map_url: string | null; caution_text: string | null }[]>([]);
+  const [rooms, setRooms] = useState<StoreRoom[]>([]);
   const [backRates, setBackRates] = useState<any[]>([]);
   const [optionRates, setOptionRates] = useState<any[]>([]);
   const [nominationRates, setNominationRates] = useState<any[]>([]);
-  const [discounts, setDiscounts] = useState<{ id: string; name: string; discount_type: "fixed" | "percentage"; discount_value: number }[]>([]);
-  const [paymentSettings, setPaymentSettings] = useState<PaymentSetting[]>([]);
+  const [discounts, setDiscounts] = useState<StoreDiscount[]>([]);
+  const [paymentSettings, setPaymentSettings] = useState<StorePaymentSetting[]>([]);
   const [thanksTemplate, setThanksTemplate] = useState<string | null>(null);
   const [couponTemplate, setCouponTemplate] = useState<string | null>(null);
 
@@ -343,6 +370,14 @@ export default function Schedule() {
   const reviewBaseUrl = adminStore?.custom_domain
     ? `https://${adminStore.custom_domain}`
     : "https://zenryokuesthe.com";
+
+  // 旧「全力」のマスタは履歴編集用に保持し、新規予約では艶華のマスタだけを使う。
+  const enkaCasts = useMemo(() => forStore(casts, ENKA_STORE_ID), [casts]);
+  const enkaRooms = useMemo(() => forStore(rooms, ENKA_STORE_ID), [rooms]);
+  const enkaBackRates = useMemo(() => forStore(backRates, ENKA_STORE_ID), [backRates]);
+  const enkaOptionRates = useMemo(() => forStore(optionRates, ENKA_STORE_ID), [optionRates]);
+  const enkaNominationRates = useMemo(() => forStore(nominationRates, ENKA_STORE_ID), [nominationRates]);
+  const enkaDiscounts = useMemo(() => forStore(discounts, ENKA_STORE_ID), [discounts]);
 
   // iPhoneではボタン操作直後に共有画面を開く必要があるため、画像を先にFile化しておく。
   useEffect(() => {
@@ -414,13 +449,13 @@ export default function Schedule() {
 
   // 新規予約フォームの初期コースが自店舗に存在しない場合、先頭のコースに合わせる
   useEffect(() => {
-    if (backRates.length === 0) return;
+    if (enkaBackRates.length === 0) return;
     setFormData((prev) => {
-      if (backRates.some((r: any) => r.course_type === prev.course_type)) return prev;
-      const first = backRates[0];
+      if (enkaBackRates.some((r: any) => r.course_type === prev.course_type)) return prev;
+      const first = enkaBackRates[0];
       return { ...prev, course_type: first.course_type, course_name: `${first.course_type} ${prev.duration}分` };
     });
-  }, [backRates]);
+  }, [enkaBackRates]);
 
   useEffect(() => {
     if (user && adminStore?.id && storeDayStartLoaded) fetchData();
@@ -433,13 +468,13 @@ export default function Schedule() {
   const fetchFormData = async () => {
     if (!adminStore?.id) return;
     const [{ data: c }, { data: r }, { data: b }, { data: o }, { data: n }, { data: d }, { data: p }, { data: t }, { data: cp }, tokenResult] = await Promise.all([
-      supabase.from("casts").select("id, name, photo").order("name"),
-      supabase.from("rooms").select("id, name, address, sms_text, map_url, caution_text").eq("is_active", true).order("name"),
+      supabase.from("casts").select("id, name, photo, store_id").order("name"),
+      supabase.from("rooms").select("id, name, address, sms_text, map_url, caution_text, store_id").eq("is_active", true).order("name"),
       supabase.from("back_rates").select("*").order("display_order"),
       supabase.from("option_rates").select("*").order("display_order"),
       supabase.from("nomination_rates").select("*"),
-      supabase.from("discounts").select("id, name, discount_type, discount_value, is_active").eq("is_active", true).order("name"),
-      supabase.from("payment_settings").select("id, payment_method, payment_link, fee_percentage"),
+      supabase.from("discounts").select("id, name, discount_type, discount_value, is_active, store_id").eq("is_active", true).order("name"),
+      supabase.from("payment_settings").select("id, payment_method, payment_link, fee_percentage, store_id"),
       supabase.from("sms_auto_templates").select("message").eq("store_id", adminStore.id).eq("trigger", "thanks").eq("is_active", true).limit(1),
       supabase.from("sms_auto_templates").select("message").eq("store_id", adminStore.id).eq("trigger", "coupon").eq("is_active", true).limit(1),
       supabase.rpc("get_cast_access_tokens"),
@@ -450,7 +485,7 @@ export default function Schedule() {
     if (o) setOptionRates(o);
     if (n) setNominationRates(n);
     if (d) setDiscounts(d as any);
-    if (p) setPaymentSettings(p as PaymentSetting[]);
+    if (p) setPaymentSettings(p as StorePaymentSetting[]);
     setThanksTemplate(t && t.length > 0 ? t[0].message : null);
     setCouponTemplate(cp && cp.length > 0 ? cp[0].message : null);
     if (tokenResult.error) {
@@ -630,6 +665,7 @@ export default function Schedule() {
           id: reservation.cast_id,
           name: "未設定",
           photo: null,
+          store_id: reservation.store_id,
         };
         row = { cast, shift: null, reservations: [] };
         map.set(reservation.cast_id, row);
@@ -735,6 +771,7 @@ export default function Schedule() {
         notes: formData.notes || null,
         room: formData.room || null,
         status: "confirmed",
+        store_id: ENKA_STORE_ID,
         created_by: user.id,
       }]);
       if (error) throw error;
@@ -752,30 +789,33 @@ export default function Schedule() {
     const nominationLabel = d.nomination_type && d.nomination_type !== "none" ? d.nomination_type : "フリー";
     const fee = d.payment_fee || 0;
     const grandTotal = d.price + fee;
-    const paySetting = findPaymentSetting(paymentSettings, d.payment_method || "");
+    const paySetting = findPaymentSetting(
+      paymentSettings.filter((setting) => setting.store_id === d.store_id),
+      d.payment_method || "",
+    );
     const payLink = fee > 0 && paySetting?.payment_link ? paySetting.payment_link : null;
-    const roomRecord = rooms.find((r) => r.name === d.room);
+    const roomRecord = rooms.find((r) => r.store_id === d.store_id && r.name === d.room);
     const roomSmsText = roomRecord?.sms_text ?? null;
     const roomAddress = roomRecord?.address ?? null;
     const roomMapUrl = roomRecord?.map_url ?? null;
     const roomCautionText = roomRecord?.caution_text ?? null;
 
     const backRate = backRates.find(
-      (r) => r.course_type === d.course_type && r.duration === d.duration
+      (r) => r.store_id === d.store_id && r.course_type === d.course_type && r.duration === d.duration
     );
     const coursePrice = backRate?.customer_price ?? 0;
     const optionsTotal = (d.options ?? []).reduce((sum, optName) => {
-      const opt = optionRates.find((r) => r.option_name === optName);
+      const opt = optionRates.find((r) => r.store_id === d.store_id && r.option_name === optName);
       return sum + (opt?.customer_price ?? 0);
     }, 0);
     const nominationFee = d.nomination_type && d.nomination_type !== "none"
-      ? (nominationRates.find((r) => r.nomination_type === d.nomination_type)?.customer_price ?? 0)
+      ? (nominationRates.find((r) => r.store_id === d.store_id && r.nomination_type === d.nomination_type)?.customer_price ?? 0)
       : 0;
     const discountAmount = d.discount ?? 0;
 
     // 「総額10,000円クーポン(初回)」選択時はLINE追加の案内を追記する
     const needsLineCouponNote = (d.discount_ids ?? []).some((discId) => {
-      const disc = discounts.find((x) => x.id === discId);
+      const disc = discounts.find((x) => x.store_id === d.store_id && x.id === discId);
       return !!disc && disc.name.includes("総額10,000円クーポン");
     });
 
@@ -1127,12 +1167,13 @@ export default function Schedule() {
                     <ReservationForm
                       formData={formData}
                       setFormData={setFormData}
-                      casts={casts}
-                      rooms={rooms}
-                      backRates={backRates}
-                      optionRates={optionRates}
-                      nominationRates={nominationRates}
-                      discounts={discounts}
+                      casts={enkaCasts}
+                      rooms={enkaRooms}
+                      backRates={enkaBackRates}
+                      optionRates={enkaOptionRates}
+                      nominationRates={enkaNominationRates}
+                      discounts={enkaDiscounts}
+                      storeId={ENKA_STORE_ID}
                       onSubmit={handleAddReservation}
                     />
                   </div>
@@ -1553,12 +1594,13 @@ export default function Schedule() {
                   <ReservationForm
                     formData={editFormData}
                     setFormData={setEditFormData}
-                    casts={casts}
-                    rooms={rooms}
-                    backRates={backRates}
-                    optionRates={optionRates}
-                    nominationRates={nominationRates}
-                    discounts={discounts}
+                    casts={forStore(casts, detailRes.store_id)}
+                    rooms={forStore(rooms, detailRes.store_id)}
+                    backRates={forStore(backRates, detailRes.store_id)}
+                    optionRates={forStore(optionRates, detailRes.store_id)}
+                    nominationRates={forStore(nominationRates, detailRes.store_id)}
+                    discounts={forStore(discounts, detailRes.store_id)}
+                    storeId={detailRes.store_id}
                     onSubmit={handleSaveEdit}
                     submitLabel="変更を保存"
                   />
