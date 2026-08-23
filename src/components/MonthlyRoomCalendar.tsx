@@ -143,7 +143,7 @@ export const MonthlyRoomCalendar = ({ shifts, reservations, casts }: MonthlyRoom
     }
 
     let template = "いつもお世話になっております。\n";
-    template += "全力エステ代表の加賀谷です。\n\n";
+    template += "艶華代表の加賀谷です。\n\n";
     template += `${monthStr}のルーム空き状況\n\n`;
 
     periods.forEach((period, index) => {

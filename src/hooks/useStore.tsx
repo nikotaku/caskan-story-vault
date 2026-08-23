@@ -112,7 +112,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
 
       // 公開ページ用パレット（settings.public_theme）をCSS変数として適用。
-      // 未設定の店舗はコード側の fallback（全力エステの黒×金）が使われる。
+      // 未設定の店舗はコード側の既定配色が使われる。
       const theme = (data?.settings as any)?.public_theme;
       if (theme) {
         const root = document.documentElement.style;

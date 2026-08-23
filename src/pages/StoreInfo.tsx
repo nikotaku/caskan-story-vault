@@ -139,7 +139,7 @@ export default function StoreInfo() {
                     <Input
                       value={formData.name}
                       onChange={(e) => set("name", e.target.value)}
-                      placeholder="全力エステ 仙台"
+                      placeholder="艶華"
                     />
                   </div>
                   <div>

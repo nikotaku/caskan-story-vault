@@ -22,7 +22,7 @@ const yen = (v: number) => `¥${v.toLocaleString()}`;
 
 export default function RecruitTalk() {
   const { store, storeId } = useStore();
-  const storeName = store?.name ?? "全力エステ";
+  const storeName = store?.name ?? "艶華";
   const isDefaultStore = store?.is_default ?? true;
   const brandEn = isDefaultStore
     ? "ZENRYOKU ESTHE"

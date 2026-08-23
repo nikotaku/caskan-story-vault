@@ -131,7 +131,7 @@ export default function NotionPageView() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/public" className="flex items-center space-x-2">
-            <img src={caskanLogo} alt="全力エステ" className="h-8 w-auto" />
+            <img src={caskanLogo} alt="艶華" className="h-8 w-auto" />
           </Link>
           <nav className="hidden md:flex gap-6">
             <Link to="/public" className="text-sm font-medium hover:text-primary transition-colors">
@@ -184,7 +184,7 @@ export default function NotionPageView() {
       {/* Footer */}
       <footer className="py-8 px-4 border-t mt-12">
         <div className="container max-w-6xl mx-auto text-center text-sm text-muted-foreground">
-          © 2025 全力エステ ZR. All rights reserved.
+          © 2025 艶華. All rights reserved.
         </div>
       </footer>
     </div>

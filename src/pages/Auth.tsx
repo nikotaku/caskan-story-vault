@@ -8,7 +8,7 @@ import { ENKA_STORE_ID, ZENRYOKU_STORE_ID } from "@/lib/storeSwitch";
 // 共通パスワードを入力後、どちらの店舗の管理画面に入るかを選ぶ。
 // 各店舗の管理アカウント（同一パスワード）へサインインする。
 const STORE_OPTIONS = [
-  { key: "zenryoku", label: "全力エステ 仙台", email: "saito.crow@gmail.com", storeId: ZENRYOKU_STORE_ID },
+  { key: "zenryoku", label: "過去データ", email: "saito.crow@gmail.com", storeId: ZENRYOKU_STORE_ID },
   { key: "enka", label: "艶華", email: "saito.crow+enka@gmail.com", storeId: ENKA_STORE_ID },
 ];
 

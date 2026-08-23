@@ -138,7 +138,7 @@ Deno.serve(async (req: Request) => {
     // そのままお客様へ送信できるSMS文面を下部に付加
     const smsLines = [
       `${booking.customer_name}様`,
-      "全力エステです。この度はご予約ありがとうございます。",
+      "艶華です。この度はご予約ありがとうございます。",
       "下記内容で承りました。",
       `■日付：${booking.reservation_date}`,
       `■時間：${booking.start_time}〜`,
@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
     lines.push(smsText);
 
     const message = lines.join("\n");
-    const subject = `【全力エステ】新規WEB予約 ${booking.reservation_date} ${booking.start_time}〜 ${booking.cast_name}`;
+    const subject = `【艶華】新規WEB予約 ${booking.reservation_date} ${booking.start_time}〜 ${booking.cast_name}`;
 
     // LINE とメールを独立して送信（どちらかが失敗してももう一方は届く）
     const [lineResult, emailResult] = await Promise.all([

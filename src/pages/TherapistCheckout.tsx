@@ -546,7 +546,7 @@ export default function TherapistCheckout() {
         <div className="text-4xl">💐</div>
         <p className="font-bold text-xl">お疲れさまでした💐</p>
         <div className="text-sm text-muted-foreground space-y-2 bg-muted/30 rounded-xl p-4 text-left">
-          <p>今回の勤務により全力エステより<strong className="text-primary">0.5pt</strong>が付与されました！</p>
+          <p>今回の勤務により艶華より<strong className="text-primary">0.5pt</strong>が付与されました！</p>
           {nextShift ? (
             <p>
               次回の勤務は

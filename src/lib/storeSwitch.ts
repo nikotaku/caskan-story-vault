@@ -17,7 +17,7 @@ export interface StoreDef {
 }
 
 export const STORE_DEFS: StoreDef[] = [
-  { id: ZENRYOKU_STORE_ID, name: "全力エステ", short: "ZR", email: "saito.crow@gmail.com" },
+  { id: ZENRYOKU_STORE_ID, name: "過去データ", short: "旧", email: "saito.crow@gmail.com" },
   { id: ENKA_STORE_ID, name: "艶華", short: "艶", email: "saito.crow+enka@gmail.com" },
 ];
 

@@ -9,14 +9,14 @@ import {
 /**
  * 面談用（画面共有）ページ。ビデオ通話で候補者に画面共有しながら、
  * 店舗詳細・条件（保証/女子給/交通費/ルーム環境/注意点）を説明する資料。
- * 「全力BOOK」マニュアルと店舗詳細をもとに構成。縦スクロール・大きめ文字で見やすく。
+ * 施術マニュアルと店舗詳細をもとに構成。縦スクロール・大きめ文字で見やすく。
  */
 
 export default function InterviewGuide() {
   const navigate = useNavigate();
 
   // 面談時の画面共有用ページのため、ログインなしで閲覧可能にしている
-  useEffect(() => { document.title = "全力エステ 仙台｜面談資料"; }, []);
+  useEffect(() => { document.title = "艶華｜面談資料"; }, []);
 
   const Section = ({ id, icon: Icon, title, sub, children, tone = "rose" }: {
     id?: string; icon: any; title: string; sub?: string; children: React.ReactNode; tone?: "rose" | "amber" | "gray";
@@ -72,8 +72,8 @@ export default function InterviewGuide() {
           <Sparkles className="absolute bottom-24 right-12" size={32} />
         </div>
         <div className="relative">
-          <p className="text-xs tracking-[0.4em] text-rose-300 mb-4">ZENRYOKU ESTHE SENDAI</p>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">全力エステ 仙台</h1>
+          <p className="text-xs tracking-[0.4em] text-rose-300 mb-4">ENKA SENDAI</p>
+          <h1 className="text-4xl md:text-5xl font-bold mb-4">艶華</h1>
           <p className="text-sm text-gray-300 mb-8">メンズエステ｜面談資料</p>
           <p className="text-base md:text-lg leading-relaxed text-gray-100 max-w-md mx-auto">
             仙台メンズエステの「頂点」を本気で狙う<br />ハイレベルサロン。
@@ -91,8 +91,8 @@ export default function InterviewGuide() {
           <p className="text-sm leading-relaxed text-gray-700">
             愛嬌があり、素直さや頑張る姿勢。<br />
             選び抜かれたビジュアル、洗練された施術、妥協のない接客。<br /><br />
-            “全力エステ”は、仙台のメンズエステ界における<span className="font-bold text-rose-600">「頂点」</span>を本気で狙うハイレベルサロンです。<br />
-            ただ癒すだけじゃない。あなたの五感すべてを圧倒する<span className="font-bold text-rose-600">「全力の一撃」</span>をご堪能ください。
+            “艶華”は、和を基調とした上品さとおもてなしを大切にするハイレベルサロンです。<br />
+            施術だけでなく、また会いたいと思っていただける<span className="font-bold text-rose-600">「特別なひととき」</span>をお届けします。
           </p>
         </Card>
       </Section>
@@ -100,11 +100,11 @@ export default function InterviewGuide() {
       {/* 店舗概要 */}
       <Section icon={MapPin} title="店舗概要" tone="gray">
         <Card>
-          <KV k="店舗名" v="全力エステ 仙台" />
+          <KV k="店舗名" v="艶華" />
           <KV k="業種" v="メンズエステ" />
           <KV k="営業時間" v="12:00〜26:00（25:00最終受付）" />
           <KV k="所在地" v="宮城県仙台市" />
-          <KV k="HP" v={<a href="https://zenryoku-esthe.com/" target="_blank" rel="noreferrer" className="text-rose-500 underline">zenryoku-esthe.com</a>} />
+          <KV k="HP" v={<a href="https://enka-salon.jp/" target="_blank" rel="noreferrer" className="text-rose-500 underline">enka-salon.jp</a>} />
         </Card>
         <div className="grid grid-cols-3 gap-3 mt-3">
           <Card className="py-4 text-center px-2">
@@ -125,8 +125,8 @@ export default function InterviewGuide() {
         </div>
       </Section>
 
-      {/* 各ルームの住所と鍵（全力BOOKより） */}
-      <Section icon={MapPin} title="各ルームの住所・アクセス・鍵" sub="全力BOOKより" tone="amber">
+      {/* 各ルームの住所と鍵（施術マニュアルより） */}
+      <Section icon={MapPin} title="各ルームの住所・アクセス・鍵" sub="施術マニュアルより" tone="amber">
         <div className="space-y-4">
           {[
             {
@@ -217,7 +217,7 @@ export default function InterviewGuide() {
       </Section>
 
       {/* 女子給（バック表） */}
-      <Section icon={Banknote} title="女子給（バック）" sub="全力エステ 料金・バック表" tone="amber">
+      <Section icon={Banknote} title="女子給（バック）" sub="艶華 料金・バック表" tone="amber">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-xs tabular-nums">
             <thead>
@@ -415,7 +415,7 @@ export default function InterviewGuide() {
       </Section>
 
       <footer className="py-10 text-center text-xs text-gray-400">
-        全力エステ 仙台 ｜ 面談資料
+        艶華 ｜ 面談資料
       </footer>
     </div>
   );

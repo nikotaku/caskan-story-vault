@@ -515,7 +515,7 @@ export default function Schedule() {
       clearanceResult,
       monthResResult,
     ] = await Promise.all([
-      // 旧「全力エステ」IDも履歴として同じタイムラインに含める
+      // 旧店舗IDも履歴として同じタイムラインに含める
       supabase.from("shifts").select("*, cast:casts(id, name, photo)").eq("shift_date", dateStr),
       supabase.from("reservations").select("*").eq("reservation_date", dateStr).gte("start_time", dayStartTime).neq("status", "cancelled"),
       // 深夜またぎ：翌日日付で保存されているが営業開始前の予約は当日扱い
