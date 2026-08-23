@@ -1290,6 +1290,7 @@ export type Database = {
           instagram_url: string | null
           interview_sheet_url: string | null
           is_active: boolean
+          is_estama_dummy: boolean
           is_online: boolean
           is_visible: boolean
           join_date: string
@@ -1389,6 +1390,7 @@ export type Database = {
           instagram_url?: string | null
           interview_sheet_url?: string | null
           is_active?: boolean
+          is_estama_dummy?: boolean
           is_online?: boolean
           is_visible?: boolean
           join_date?: string
@@ -1488,6 +1490,7 @@ export type Database = {
           instagram_url?: string | null
           interview_sheet_url?: string | null
           is_active?: boolean
+          is_estama_dummy?: boolean
           is_online?: boolean
           is_visible?: boolean
           join_date?: string
@@ -2695,6 +2698,67 @@ export type Database = {
           },
           {
             foreignKeyName: "external_cast_profiles_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estama_dummy_shifts: {
+        Row: {
+          cast_id: string
+          created_at: string
+          created_by: string | null
+          end_time: string
+          estama_registered: boolean
+          id: string
+          shift_date: string
+          start_time: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          cast_id: string
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          estama_registered?: boolean
+          id?: string
+          shift_date: string
+          start_time: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          cast_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          estama_registered?: boolean
+          id?: string
+          shift_date?: string
+          start_time?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estama_dummy_shifts_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estama_dummy_shifts_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts_admin_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estama_dummy_shifts_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, startOfWeek, addDays, isSameMonth, isToday, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, ChevronLeft, ChevronRight, Trash2, LayoutGrid, Table2, Check } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, LayoutGrid, CalendarDays, Check, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/hooks/useStore";
@@ -38,10 +38,31 @@ interface Shift {
 interface Cast {
   id: string;
   name: string;
+  is_estama_dummy: boolean;
 }
 
-const WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
+interface DummyShift {
+  id: string;
+  cast_id: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  estama_registered: boolean;
+  casts: { name: string };
+}
+
 const ROOMS = ["インルーム", "ラスルーム"];
+const DUMMY_CAST_NAMES = ["蒼井かずは", "華咲れみ", "萩原ゆの"] as const;
+const DUMMY_SHIFT_PATTERNS: Record<(typeof DUMMY_CAST_NAMES)[number], Record<number, [string, string]>> = {
+  蒼井かずは: { 1: ["12:00", "20:00"], 3: ["14:00", "22:00"], 6: ["12:00", "23:00"] },
+  華咲れみ: { 0: ["12:00", "20:00"], 2: ["13:00", "21:00"], 4: ["15:00", "23:00"] },
+  萩原ゆの: { 0: ["13:00", "21:00"], 5: ["15:00", "23:00"], 6: ["14:00", "23:00"] },
+};
+const DUMMY_PALETTE = [
+  { chip: "bg-sky-100 dark:bg-sky-900/30", text: "text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
+  { chip: "bg-fuchsia-100 dark:bg-fuchsia-900/30", text: "text-fuchsia-700 dark:text-fuchsia-300", dot: "bg-fuchsia-500" },
+  { chip: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
+];
 
 // ルームごとの色分け（承認済みシフトに適用。pending=amber / rejected=rose はそのまま）
 const ROOM_PALETTE = [
@@ -65,13 +86,17 @@ const roomColor = (room: string | null) => {
 export default function MonthlyShift() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [dummyShifts, setDummyShifts] = useState<DummyShift[]>([]);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<"calendar" | "dummy">("calendar");
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDummyId, setEditingDummyId] = useState<string | null>(null);
+  const [formKind, setFormKind] = useState<"regular" | "dummy">("regular");
   const [saving, setSaving] = useState(false);
+  const [generatingDummy, setGeneratingDummy] = useState(false);
   const [form, setForm] = useState({
     cast_id: "",
     shift_date: format(new Date(), "yyyy-MM-dd"),
@@ -87,8 +112,10 @@ export default function MonthlyShift() {
   const [pendingAction, setPendingAction] = useState<{id: string; status: "approved" | "rejected"; room?: string | null} | null>(null);
   const [actionComment, setActionComment] = useState("");
 
-  const openAdd = (preset?: Partial<typeof form>) => {
+  const openAdd = (preset?: Partial<typeof form>, kind: "regular" | "dummy" = viewMode === "dummy" ? "dummy" : "regular") => {
     setEditingId(null);
+    setEditingDummyId(null);
+    setFormKind(kind);
     setBulkMode(false);
     const startDate = preset?.shift_date ?? format(new Date(), "yyyy-MM-dd");
     setBulkEndDate(startDate);
@@ -108,6 +135,8 @@ export default function MonthlyShift() {
 
   const openEdit = (shift: Shift) => {
     setEditingId(shift.id);
+    setEditingDummyId(null);
+    setFormKind("regular");
     setForm({
       cast_id: shift.cast_id,
       shift_date: shift.shift_date,
@@ -121,6 +150,24 @@ export default function MonthlyShift() {
     setShowDialog(true);
   };
 
+  const openDummyEdit = (shift: DummyShift) => {
+    setEditingId(null);
+    setEditingDummyId(shift.id);
+    setFormKind("dummy");
+    setBulkMode(false);
+    setForm({
+      cast_id: shift.cast_id,
+      shift_date: shift.shift_date,
+      start_time: shift.start_time.slice(0, 5),
+      end_time: shift.end_time.slice(0, 5),
+      room: "",
+      estama_registered: shift.estama_registered,
+      estama_human_confirmed: false,
+      esran_registered: false,
+    });
+    setShowDialog(true);
+  };
+
   const { user, loading: authLoading } = useAuth();
   const { storeId } = useStore();
   const navigate = useNavigate();
@@ -128,6 +175,45 @@ export default function MonthlyShift() {
   const triggerEstamaSync = () => {
     void runQueuedEstamaAutomation(storeId).catch((error) => console.warn("Estama shift sync queued", error));
   };
+
+  const fetchMonthlyShifts = useCallback(async () => {
+    setLoading(true);
+    const startDate = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
+    const endDate = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+    const [shiftResult, dummyShiftResult] = await Promise.all([
+      supabase
+        .from("shifts")
+        .select("*, casts(name)")
+        .eq("store_id", storeId)
+        .gte("shift_date", startDate)
+        .lte("shift_date", endDate)
+        .order("shift_date"),
+      supabase
+        .from("estama_dummy_shifts")
+        .select("*, casts(name)")
+        .eq("store_id", storeId)
+        .gte("shift_date", startDate)
+        .lte("shift_date", endDate)
+        .order("shift_date")
+        .order("start_time"),
+    ]);
+    if (shiftResult.error) console.error(shiftResult.error);
+    if (dummyShiftResult.error) console.error(dummyShiftResult.error);
+    setShifts((shiftResult.data || []) as Shift[]);
+    setDummyShifts((dummyShiftResult.data || []) as DummyShift[]);
+    setLoading(false);
+  }, [selectedMonth, storeId]);
+
+  const fetchCasts = useCallback(async () => {
+    const { data } = await supabase
+      .from("casts")
+      .select("id, name, is_estama_dummy")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("name");
+    setCasts(data || []);
+  }, [storeId]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -140,7 +226,10 @@ export default function MonthlyShift() {
 
     const channel = supabase
       .channel("monthly-shift-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "shifts" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "shifts", filter: `store_id=eq.${storeId}` }, () => {
+        fetchMonthlyShifts();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "estama_dummy_shifts", filter: `store_id=eq.${storeId}` }, () => {
         fetchMonthlyShifts();
       })
       .subscribe();
@@ -148,35 +237,33 @@ export default function MonthlyShift() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, selectedMonth]);
-
-  const fetchMonthlyShifts = async () => {
-    setLoading(true);
-    const startDate = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
-    const endDate = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
-    const { data, error } = await supabase
-      .from("shifts")
-      .select("*, casts(name)")
-      .gte("shift_date", startDate)
-      .lte("shift_date", endDate)
-      .order("shift_date");
-    if (error) console.error(error);
-    setShifts((data || []) as Shift[]);
-    setLoading(false);
-  };
-
-  const fetchCasts = async () => {
-    const { data } = await supabase
-      .from("casts")
-      .select("id, name")
-      .order("display_order", { ascending: true })
-      .order("name");
-    setCasts(data || []);
-  };
+  }, [user, storeId, fetchMonthlyShifts, fetchCasts]);
 
   const handleSave = async () => {
     if (!form.cast_id) { toast.error("セラピストを選択してください"); return; }
     setSaving(true);
+
+    if (formKind === "dummy") {
+      const payload = {
+        cast_id: form.cast_id,
+        store_id: storeId,
+        shift_date: form.shift_date,
+        start_time: form.start_time,
+        end_time: form.end_time,
+        estama_registered: false,
+      };
+      const { error } = editingDummyId
+        ? await supabase.from("estama_dummy_shifts").update(payload).eq("id", editingDummyId)
+        : await supabase.from("estama_dummy_shifts").insert([payload]);
+      setSaving(false);
+      if (error) { toast.error("ダミーシフトの保存に失敗しました"); return; }
+      toast.success(editingDummyId ? "ダミーシフトを更新しました" : "ダミーシフトを追加しました");
+      setShowDialog(false);
+      setEditingDummyId(null);
+      fetchMonthlyShifts();
+      triggerEstamaSync();
+      return;
+    }
 
     if (!editingId && bulkMode) {
       // 連続追加: 開始日〜終了日の全日程をまとめてINSERT
@@ -237,9 +324,58 @@ export default function MonthlyShift() {
     triggerEstamaSync();
   };
 
-  const handleDelete = async (id: string) => {
-    await supabase.from("shifts").delete().eq("id", id);
-    setShifts(prev => prev.filter(s => s.id !== id));
+  const handleGenerateDummyShifts = async () => {
+    const missingNames = DUMMY_CAST_NAMES.filter(name => !casts.some(cast => cast.is_estama_dummy && cast.name === name));
+    if (missingNames.length) {
+      toast.error(`ダミー用セラピストが見つかりません: ${missingNames.join("、")}`);
+      return;
+    }
+
+    const today = format(new Date(), "yyyy-MM-dd");
+    const monthDays = eachDayOfInterval({ start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) });
+    const rows = DUMMY_CAST_NAMES.flatMap((name) => {
+      const cast = casts.find(item => item.is_estama_dummy && item.name === name)!;
+      const pattern = DUMMY_SHIFT_PATTERNS[name];
+      return monthDays.flatMap((day) => {
+        const shiftDate = format(day, "yyyy-MM-dd");
+        const times = pattern[getDay(day)];
+        if (!times || shiftDate < today) return [];
+        return [{
+          store_id: storeId,
+          cast_id: cast.id,
+          shift_date: shiftDate,
+          start_time: times[0],
+          end_time: times[1],
+          estama_registered: false,
+        }];
+      });
+    });
+    const existing = new Set(dummyShifts.map(shift => `${shift.cast_id}:${shift.shift_date}`));
+    const missingRows = rows.filter(row => !existing.has(`${row.cast_id}:${row.shift_date}`));
+    if (!missingRows.length) {
+      toast.info("この月のお任せシフトは作成済みです");
+      return;
+    }
+
+    setGeneratingDummy(true);
+    const { error } = await supabase
+      .from("estama_dummy_shifts")
+      .upsert(missingRows, { onConflict: "cast_id,shift_date", ignoreDuplicates: true });
+    setGeneratingDummy(false);
+    if (error) { toast.error("お任せシフトの作成に失敗しました"); return; }
+    toast.success(`${missingRows.length}件のお任せシフトを作成しました`);
+    fetchMonthlyShifts();
+    triggerEstamaSync();
+  };
+
+  const handleDelete = async (id: string, kind: "regular" | "dummy" = "regular") => {
+    if (kind === "dummy") {
+      await supabase.from("estama_dummy_shifts").delete().eq("id", id);
+      setDummyShifts(prev => prev.filter(s => s.id !== id));
+    } else {
+      await supabase.from("shifts").delete().eq("id", id);
+      setShifts(prev => prev.filter(s => s.id !== id));
+    }
     triggerEstamaSync();
   };
 
@@ -274,16 +410,15 @@ export default function MonthlyShift() {
   const prevMonth = () => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1));
   const nextMonth = () => setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1));
 
-  const days = eachDayOfInterval({ start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) });
-
   // 承認待ちの申請
   const pendingShifts = shifts
     .filter(s => s.approval_status === "pending")
     .sort((a, b) => (a.shift_date < b.shift_date ? -1 : a.shift_date > b.shift_date ? 1 : a.start_time.localeCompare(b.start_time)));
 
-  // ダミー用: 当月のカレンダーに1件も表示されていないセラピストだけを候補にする
-  const scheduledCastIds = new Set(shifts.map(s => s.cast_id));
-  const dummyCasts = casts.filter(c => !scheduledCastIds.has(c.id));
+  const regularCasts = casts.filter(c => !c.is_estama_dummy);
+  const dummyCasts = DUMMY_CAST_NAMES
+    .map(name => casts.find(cast => cast.is_estama_dummy && cast.name === name))
+    .filter((cast): cast is Cast => Boolean(cast));
 
   // カレンダーグリッド用: 月初の週の日曜から始まる6週×7日
   const calendarStart = startOfWeek(startOfMonth(selectedMonth), { weekStartsOn: 0 });
@@ -300,6 +435,14 @@ export default function MonthlyShift() {
     if (!dayShiftMap.has(s.shift_date)) dayShiftMap.set(s.shift_date, []);
     dayShiftMap.get(s.shift_date)!.push(s);
   });
+
+  const dummyDayShiftMap = new Map<string, DummyShift[]>();
+  dummyShifts.forEach(shift => {
+    if (!dummyDayShiftMap.has(shift.shift_date)) dummyDayShiftMap.set(shift.shift_date, []);
+    dummyDayShiftMap.get(shift.shift_date)!.push(shift);
+  });
+
+  const isEditing = Boolean(editingId || editingDummyId);
 
   return (
     <div className="min-h-screen bg-background">
@@ -321,7 +464,7 @@ export default function MonthlyShift() {
               <Button size="sm" variant="outline" onClick={nextMonth} className="h-8 w-8 p-0"><ChevronRight size={16} /></Button>
             </div>
             <Button onClick={() => openAdd()} size="sm" className="ml-auto shrink-0">
-              <Plus size={14} className="mr-1" />シフト追加
+              <Plus size={14} className="mr-1" />{viewMode === "dummy" ? "ダミーシフト追加" : "シフト追加"}
             </Button>
           </div>
           {/* 2行目: ビュー切り替え + ルーム凡例 */}
@@ -337,10 +480,10 @@ export default function MonthlyShift() {
                 onClick={() => setViewMode("dummy")}
                 className={cn("px-3 py-1.5 text-xs flex items-center gap-1 border-l", viewMode === "dummy" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
               >
-                <Table2 size={13} />ダミー用
+                <CalendarDays size={13} />ダミー用
               </button>
             </div>
-            {usedRooms.length > 0 && (
+            {viewMode === "calendar" && usedRooms.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {usedRooms.map(r => (
                   <span key={r} className="flex items-center gap-1">
@@ -502,78 +645,134 @@ export default function MonthlyShift() {
 
             {/* ===== ダミー用ビュー ===== */}
             <div className={viewMode === "dummy" ? "" : "hidden"}>
-              <p className="mb-2 text-xs text-muted-foreground">
-                当月のカレンダーに表示されていないセラピストだけを表示しています。
-              </p>
-              {dummyCasts.length === 0 ? (
-                <div className="text-center text-muted-foreground py-12">ダミー用の候補はいません</div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <div className="mr-auto">
+                  <p className="text-xs text-muted-foreground">
+                    エスたま専用の予定です。通常シフトと店舗HPには表示されません。
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                    {dummyCasts.map((cast, index) => (
+                      <span key={cast.id} className="flex items-center gap-1">
+                        <span className={cn("h-2.5 w-2.5 rounded-full", DUMMY_PALETTE[index]?.dot)} />
+                        {cast.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGenerateDummyShifts}
+                  disabled={generatingDummy || dummyCasts.length !== DUMMY_CAST_NAMES.length}
+                >
+                  <WandSparkles size={14} className="mr-1" />
+                  {generatingDummy ? "作成中..." : "お任せシフト作成"}
+                </Button>
+              </div>
+              {dummyCasts.length !== DUMMY_CAST_NAMES.length ? (
+                <div className="text-center text-muted-foreground py-12">指定されたダミー用セラピスト3名を確認できません</div>
               ) : (
-              <div className="overflow-x-auto rounded-lg border">
-            <table className="text-xs border-collapse min-w-max">
-              <thead>
-                <tr className="bg-muted/50">
-                  <th className="sticky left-0 z-10 bg-muted/80 px-2 py-2 text-left font-semibold min-w-[80px] border-r border-border">
-                    セラピスト
-                  </th>
-                  {days.map(day => {
-                    const dow = getDay(day);
-                    return (
-                      <th
-                        key={format(day, "yyyy-MM-dd")}
-                        className={cn(
-                          "px-1 py-1 text-center font-medium border-r border-border min-w-[52px] whitespace-nowrap",
-                          dow === 0 && "text-red-500",
-                          dow === 6 && "text-blue-500"
-                        )}
-                      >
-                        <div>{format(day, "d")}</div>
-                        <div className="text-muted-foreground font-normal">{WEEKDAY[dow]}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {dummyCasts.map(cast => (
-                  <tr key={cast.id} className="border-t border-border hover:bg-muted/20">
-                    <td className="sticky left-0 z-10 bg-background border-r border-border px-2 py-1 font-medium whitespace-nowrap">
-                      {cast.name}
-                    </td>
-                    {days.map(day => {
-                      const dateStr = format(day, "yyyy-MM-dd");
-                      const dow = getDay(day);
-                      return (
-                        <td
-                          key={dateStr}
+                <div className="overflow-x-auto rounded-lg border">
+                  <div className="min-w-[700px]">
+                    <div className="grid grid-cols-7 border-b bg-muted/40">
+                      {["日", "月", "火", "水", "木", "金", "土"].map((label, index) => (
+                        <div
+                          key={label}
                           className={cn(
-                            "h-10 border-r border-border px-1 py-1 align-top cursor-pointer hover:bg-primary/5",
-                            dow === 0 && "bg-red-50/40 dark:bg-red-950/10",
-                            dow === 6 && "bg-blue-50/40 dark:bg-blue-950/10"
+                            "py-1.5 text-center text-xs font-semibold",
+                            index === 0 && "text-red-500",
+                            index === 6 && "text-blue-500",
                           )}
-                          onClick={() => openAdd({ cast_id: cast.id, shift_date: dateStr })}
-                          title={`${cast.name}のダミー出勤を追加`}
-                        />
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        >
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7">
+                      {calendarDays.map((day) => {
+                        const dateStr = format(day, "yyyy-MM-dd");
+                        const inMonth = isSameMonth(day, selectedMonth);
+                        const today = isToday(day);
+                        const dow = getDay(day);
+                        const dayDummyShifts = dummyDayShiftMap.get(dateStr) || [];
+                        return (
+                          <div
+                            key={dateStr}
+                            className={cn(
+                              "min-h-[112px] border-r border-b p-1 transition-colors",
+                              inMonth ? "cursor-pointer hover:bg-muted/30" : "bg-muted/10",
+                              dow === 0 && inMonth && "bg-red-50/30 dark:bg-red-950/10",
+                              dow === 6 && inMonth && "bg-blue-50/30 dark:bg-blue-950/10",
+                            )}
+                            onClick={() => {
+                              if (inMonth) openAdd({ shift_date: dateStr }, "dummy");
+                            }}
+                          >
+                            <div className={cn(
+                              "mb-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
+                              today && "bg-primary text-primary-foreground",
+                              !inMonth && "text-muted-foreground/40",
+                              dow === 0 && inMonth && !today && "text-red-500",
+                              dow === 6 && inMonth && !today && "text-blue-500",
+                            )}>
+                              {format(day, "d")}
+                            </div>
+                            <div className="space-y-1">
+                              {dayDummyShifts.map((shift) => {
+                                const castIndex = Math.max(0, dummyCasts.findIndex(cast => cast.id === shift.cast_id));
+                                const palette = DUMMY_PALETTE[castIndex] || DUMMY_PALETTE[0];
+                                return (
+                                  <button
+                                    key={shift.id}
+                                    type="button"
+                                    className={cn(
+                                      "relative block w-full rounded px-1 py-1 text-left text-[10px] leading-tight",
+                                      palette.chip,
+                                      palette.text,
+                                    )}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openDummyEdit(shift);
+                                    }}
+                                    title={`${shift.casts.name} ${shift.start_time.slice(0, 5)}〜${shift.end_time.slice(0, 5)}${shift.estama_registered ? "（エスたま同期済み）" : ""}`}
+                                  >
+                                    {shift.estama_registered && (
+                                      <span className="absolute right-0.5 top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-600 text-white">
+                                        <Check className="h-2.5 w-2.5 stroke-[3]" />
+                                      </span>
+                                    )}
+                                    <span className="block truncate pr-3 font-semibold">{shift.casts.name}</span>
+                                    <span className="block opacity-80">
+                                      {shift.start_time.slice(0, 5)}〜{shift.end_time.slice(0, 5)}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </>
         )}
       </main>
 
-      <Dialog open={showDialog} onOpenChange={(o) => { setShowDialog(o); if (!o) { setEditingId(null); setBulkMode(false); } }}>
+      <Dialog open={showDialog} onOpenChange={(o) => { setShowDialog(o); if (!o) { setEditingId(null); setEditingDummyId(null); setBulkMode(false); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "シフト編集" : "シフト入力"}</DialogTitle>
+            <DialogTitle>
+              {formKind === "dummy"
+                ? (editingDummyId ? "ダミーシフト編集" : "ダミーシフト入力")
+                : (editingId ? "シフト編集" : "シフト入力")}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             {/* 連続追加トグル（新規追加時のみ） */}
-            {!editingId && (
+            {formKind === "regular" && !editingId && (
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <div
                   onClick={() => {
@@ -603,7 +802,7 @@ export default function MonthlyShift() {
               <Select value={form.cast_id} onValueChange={v => setForm({ ...form, cast_id: v })}>
                 <SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger>
                 <SelectContent>
-                  {(viewMode === "dummy" && !editingId ? dummyCasts : casts).map(c => (
+                  {(formKind === "dummy" ? dummyCasts : regularCasts).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -639,67 +838,81 @@ export default function MonthlyShift() {
                 <Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} />
               </div>
             </div>
-            <div>
-              <Label>ルーム</Label>
-              <Select value={form.room} onValueChange={v => setForm({ ...form, room: v })}>
-                <SelectTrigger><SelectValue placeholder="ルームを選択" /></SelectTrigger>
-                <SelectContent>
-                  {ROOMS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {editingId ? <div>
-              <Label>エスたま公開表示の最終確認</Label>
-              <div className="mt-1 space-y-2 rounded-md border p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">自動同期</span>
-                  <span>{form.estama_registered ? "完了" : "未完了"}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant={form.estama_human_confirmed ? "destructive" : "outline"}
-                  className="w-full"
-                  onClick={() => setForm({ ...form, estama_human_confirmed: !form.estama_human_confirmed })}
-                >
-                  {form.estama_human_confirmed ? (
-                    <><Check className="mr-1 h-4 w-4 stroke-[3]" />確認済み（赤チェック）</>
-                  ) : (
-                    "公開ページを確認済みにする"
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  エスたまの公開ページに出勤が表示されていることを人が確認してから押してください。
-                </p>
-              </div>
-            </div> : (
+            {formKind === "dummy" ? (
               <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                エスたまへの自動同期後、シフトを再度開いて公開表示を最終確認できます。
+                この予定はエスたまだけに同期され、通常の出勤カレンダーや店舗HPには表示されません。
               </div>
+            ) : (
+              <>
+                <div>
+                  <Label>ルーム</Label>
+                  <Select value={form.room} onValueChange={v => setForm({ ...form, room: v })}>
+                    <SelectTrigger><SelectValue placeholder="ルームを選択" /></SelectTrigger>
+                    <SelectContent>
+                      {ROOMS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editingId ? <div>
+                  <Label>エスたま公開表示の最終確認</Label>
+                  <div className="mt-1 space-y-2 rounded-md border p-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">自動同期</span>
+                      <span>{form.estama_registered ? "完了" : "未完了"}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={form.estama_human_confirmed ? "destructive" : "outline"}
+                      className="w-full"
+                      onClick={() => setForm({ ...form, estama_human_confirmed: !form.estama_human_confirmed })}
+                    >
+                      {form.estama_human_confirmed ? (
+                        <><Check className="mr-1 h-4 w-4 stroke-[3]" />確認済み（赤チェック）</>
+                      ) : (
+                        "公開ページを確認済みにする"
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      エスたまの公開ページに出勤が表示されていることを人が確認してから押してください。
+                    </p>
+                  </div>
+                </div> : (
+                  <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                    エスたまへの自動同期後、シフトを再度開いて公開表示を最終確認できます。
+                  </div>
+                )}
+                <div>
+                  <Label>エスランに登録</Label>
+                  <Select
+                    value={form.esran_registered ? "registered" : "unregistered"}
+                    onValueChange={v => setForm({ ...form, esran_registered: v === "registered" })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unregistered">未登録</SelectItem>
+                      <SelectItem value="registered">登録済み</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
-            <div>
-              <Label>エスランに登録</Label>
-              <Select
-                value={form.esran_registered ? "registered" : "unregistered"}
-                onValueChange={v => setForm({ ...form, esran_registered: v === "registered" })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unregistered">未登録</SelectItem>
-                  <SelectItem value="registered">登録済み</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div className="flex gap-2 pt-2">
               <Button className="flex-1" onClick={handleSave} disabled={saving}>{saving ? "保存中..." : "保存"}</Button>
-              {editingId && (
+              {isEditing && (
                 <Button
                   variant="destructive"
-                  onClick={() => { handleDelete(editingId); setShowDialog(false); setEditingId(null); }}
+                  onClick={() => {
+                    if (editingDummyId) handleDelete(editingDummyId, "dummy");
+                    else if (editingId) handleDelete(editingId, "regular");
+                    setShowDialog(false);
+                    setEditingId(null);
+                    setEditingDummyId(null);
+                  }}
                 >
                   <Trash2 size={14} className="mr-1" />削除
                 </Button>
               )}
-              <Button variant="outline" className="flex-1" onClick={() => { setShowDialog(false); setEditingId(null); }}>キャンセル</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { setShowDialog(false); setEditingId(null); setEditingDummyId(null); }}>キャンセル</Button>
             </div>
           </div>
         </DialogContent>

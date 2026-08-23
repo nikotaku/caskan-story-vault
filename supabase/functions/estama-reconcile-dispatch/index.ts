@@ -133,20 +133,42 @@ Deno.serve(async (req) => {
       const profileByCast = new Map((profiles || []).map((profile) => [profile.cast_id, profile]));
       const profileCastIds = [...profileByCast.keys()];
       let shiftRows: Array<Record<string, unknown>> = [];
+      let dummyShiftRows: Array<Record<string, unknown>> = [];
       if (profileCastIds.length) {
-        const { data, error } = await admin.from("shifts")
-          .select("id,cast_id,shift_date,start_time,end_time,status,approval_status,updated_at")
-          .eq("store_id", connection.store_id)
-          .in("cast_id", profileCastIds)
-          .gte("shift_date", startDate)
-          .lte("shift_date", endDate)
-          .order("updated_at", { ascending: false });
-        if (error) throw error;
-        shiftRows = (data || []) as Array<Record<string, unknown>>;
+        const [shiftResult, dummyShiftResult] = await Promise.all([
+          admin.from("shifts")
+            .select("id,cast_id,shift_date,start_time,end_time,status,approval_status,updated_at")
+            .eq("store_id", connection.store_id)
+            .in("cast_id", profileCastIds)
+            .gte("shift_date", startDate)
+            .lte("shift_date", endDate)
+            .order("updated_at", { ascending: false }),
+          admin.from("estama_dummy_shifts")
+            .select("id,cast_id,shift_date,start_time,end_time,updated_at")
+            .eq("store_id", connection.store_id)
+            .in("cast_id", profileCastIds)
+            .gte("shift_date", startDate)
+            .lte("shift_date", endDate)
+            .order("updated_at", { ascending: false }),
+        ]);
+        if (shiftResult.error) throw shiftResult.error;
+        if (dummyShiftResult.error) throw dummyShiftResult.error;
+        shiftRows = (shiftResult.data || []) as Array<Record<string, unknown>>;
+        dummyShiftRows = (dummyShiftResult.data || []).map((shift) => ({
+          ...shift,
+          is_dummy: true,
+          status: "scheduled",
+          approval_status: "approved",
+        })) as Array<Record<string, unknown>>;
       }
 
       const latestByCastDate = new Map<string, Record<string, unknown>>();
       for (const shift of shiftRows) {
+        const key = String(shift.cast_id) + ":" + String(shift.shift_date).slice(0, 10);
+        if (!latestByCastDate.has(key)) latestByCastDate.set(key, shift);
+      }
+      // A real store shift always wins over an Estama-only dummy row for the same day.
+      for (const shift of dummyShiftRows) {
         const key = String(shift.cast_id) + ":" + String(shift.shift_date).slice(0, 10);
         if (!latestByCastDate.has(key)) latestByCastDate.set(key, shift);
       }
@@ -160,15 +182,17 @@ Deno.serve(async (req) => {
         const action: "upsert" | "delete" =
           shift.approval_status === "approved" && shift.status !== "cancelled" ? "upsert" : "delete";
         const shiftId = String(shift.id);
+        const isDummy = shift.is_dummy === true;
         const { data: jobId, error: jobError } = await admin.rpc("enqueue_estama_job", {
           p_store_id: connection.store_id,
           p_job_type: "estama_sync_shift",
           p_cast_id: castId,
-          p_shift_id: shiftId,
-          p_dedupe_key: "estama:edge:" + shiftId,
+          p_shift_id: isDummy ? null : shiftId,
+          p_dedupe_key: "estama:edge:" + (isDummy ? "dummy:" : "") + shiftId,
           p_payload: {
             source: "supabase_cron",
             action,
+            ...(isDummy ? { dummy_shift_id: shiftId } : { shift_id: shiftId }),
             shift_date: String(shift.shift_date).slice(0, 10),
             start_time: String(shift.start_time),
             end_time: String(shift.end_time),

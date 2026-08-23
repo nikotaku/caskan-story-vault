@@ -63,6 +63,7 @@ type ShiftRecord = {
   end_time: string;
   approval_status?: string;
   status?: string;
+  is_dummy?: boolean;
 };
 
 type Connection = {
@@ -1256,9 +1257,13 @@ async function setTimeInRow(row: ReturnType<Page["locator"]>, kind: "start" | "e
 async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, connection: Connection) {
   const payload = job.payload || {};
   let shift: ShiftRecord | null = null;
+  const dummyShiftId = typeof payload.dummy_shift_id === "string" ? payload.dummy_shift_id : "";
   if (job.shift_id) {
     const { data } = await admin.from("shifts").select("*").eq("id", job.shift_id).maybeSingle();
     shift = data as ShiftRecord | null;
+  } else if (dummyShiftId) {
+    const { data } = await admin.from("estama_dummy_shifts").select("*").eq("id", dummyShiftId).maybeSingle();
+    shift = data ? { ...(data as ShiftRecord), is_dummy: true } : null;
   }
   const desired = shift || payload;
   const castIdValue = job.cast_id || desired.cast_id;
@@ -1269,12 +1274,15 @@ async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, con
     admin.from("external_cast_profiles").select("*").eq("cast_id", castId).eq("provider", "estama").maybeSingle(),
   ]);
   if (!external || external.sync_status !== "synced") throw new Error("先にセラピストをエステ魂へ登録する必要があります");
-  const action = payload.action || (shift?.approval_status === "approved" && shift?.status !== "cancelled" ? "upsert" : "delete");
+  const action = payload.action || (dummyShiftId
+    ? "upsert"
+    : shift?.approval_status === "approved" && shift?.status !== "cancelled" ? "upsert" : "delete");
   const date = String(desired.shift_date || "").slice(0, 10);
   if (!date) throw new Error("シフト日がありません");
   const window = estamaShiftWindow();
   if (date < window.startDate || date > window.endDate) {
     if (job.shift_id) await admin.from("shifts").update({ estama_registered: false }).eq("id", job.shift_id);
+    if (dummyShiftId) await admin.from("estama_dummy_shifts").update({ estama_registered: false }).eq("id", dummyShiftId);
     return {
       skipped: true,
       reason: "outside_estama_window",
@@ -1311,6 +1319,9 @@ async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, con
   }
   await clickSave(page);
   if (job.shift_id) await admin.from("shifts").update({ estama_registered: action !== "delete" }).eq("id", job.shift_id);
+  if (dummyShiftId) {
+    await admin.from("estama_dummy_shifts").update({ estama_registered: action !== "delete" }).eq("id", dummyShiftId);
+  }
   await admin.from("external_cast_profiles").update({
     last_shift_sync_at: new Date().toISOString(), last_error: null,
   }).eq("id", external.id);
@@ -1340,15 +1351,22 @@ async function reconcileShifts(admin: AdminClient, page: Page, job: AutomationJo
     }
   }
 
-  const [{ data: profiles }, { data: shifts }] = await Promise.all([
+  const [{ data: profiles }, { data: shifts }, { data: dummyShifts }] = await Promise.all([
     admin.from("external_cast_profiles").select("cast_id").eq("store_id", job.store_id).eq("provider", "estama").eq("sync_status", "synced"),
     admin.from("shifts").select("*").eq("store_id", job.store_id).gte("shift_date", startDate).lte("shift_date", endDate)
       .eq("approval_status", "approved").neq("status", "cancelled"),
+    admin.from("estama_dummy_shifts").select("*").eq("store_id", job.store_id)
+      .gte("shift_date", startDate).lte("shift_date", endDate),
   ]);
   const byKey = new Map((shifts || []).map((shift) => {
     const typedShift = shift as ShiftRecord;
     return [`${typedShift.cast_id}:${typedShift.shift_date}`, typedShift] as const;
   }));
+  for (const dummyShift of dummyShifts || []) {
+    const typedShift = { ...(dummyShift as ShiftRecord), is_dummy: true };
+    const key = `${typedShift.cast_id}:${typedShift.shift_date}`;
+    if (!byKey.has(key)) byKey.set(key, typedShift);
+  }
   let queued = 0;
   for (const profile of profiles || []) {
     for (let offset = 0; offset < ESTAMA_SHIFT_DAYS; offset += 1) {
@@ -1358,10 +1376,11 @@ async function reconcileShifts(admin: AdminClient, page: Page, job: AutomationJo
         p_store_id: job.store_id,
         p_job_type: "estama_sync_shift",
         p_cast_id: profile.cast_id,
-        p_shift_id: desired?.id || null,
+        p_shift_id: desired && !desired.is_dummy ? desired.id : null,
         p_dedupe_key: `estama:mirror:${profile.cast_id}:${day}`,
         p_payload: desired ? {
-          action: "upsert", cast_id: profile.cast_id, shift_id: desired.id,
+          action: "upsert", cast_id: profile.cast_id,
+          ...(desired.is_dummy ? { dummy_shift_id: desired.id } : { shift_id: desired.id }),
           shift_date: day, start_time: desired.start_time, end_time: desired.end_time, source: "daily_reconcile",
         } : { action: "delete", cast_id: profile.cast_id, shift_date: day, source: "daily_reconcile" },
       });
@@ -1385,6 +1404,10 @@ async function skipOutsideShiftWindow(admin: AdminClient, job: AutomationJob): P
   const window = estamaShiftWindow();
   if (date >= window.startDate && date <= window.endDate) return null;
   if (job.shift_id) await admin.from("shifts").update({ estama_registered: false }).eq("id", job.shift_id);
+  const dummyShiftId = typeof job.payload?.dummy_shift_id === "string" ? job.payload.dummy_shift_id : "";
+  if (dummyShiftId) {
+    await admin.from("estama_dummy_shifts").update({ estama_registered: false }).eq("id", dummyShiftId);
+  }
   return {
     skipped: true,
     reason: "outside_estama_window",
@@ -2026,6 +2049,12 @@ const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
 const currentEstamaDate = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
+const currentEstamaWeekStart = () => {
+  const date = new Date(`${currentEstamaDate()}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+  return date.toISOString().slice(0, 10);
+};
+
 const publicScheduleWindowOffset = (shiftDate: string, publicStartDate: string) => {
   const currentStart = new Date(`${publicStartDate}T00:00:00.000Z`).getTime();
   const targetDate = new Date(`${shiftDate}T00:00:00.000Z`).getTime();
@@ -2159,9 +2188,8 @@ async function verifyPublicShiftGroup(
   if (!first.externalId) throw new Error(`${first.castName}のエステ魂公開ページIDがありません`);
 
   const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
-  // エステ魂の公開出勤表は固定曜日の週ではなく、当日から7日間ずつ表示される。
-  // 例: 8/21に開くと初期表示は8/21〜8/27、次画面は8/28〜9/3。
-  const publicStartDate = currentEstamaDate();
+  // エステ魂の公開出勤表は日曜始まり。日曜の予定は必ず次週画面で確認する。
+  const publicStartDate = currentEstamaWeekStart();
   const byWindow = new Map<number, EstamaShiftBatchItem[]>();
   for (const item of group) {
     const offset = publicScheduleWindowOffset(item.shiftDate, publicStartDate);
