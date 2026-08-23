@@ -31,7 +31,7 @@ interface ManualSection {
   subSections?: SubSection[];
 }
 
-// 出典: 全力エステ 入店ガイドブック(施術編)
+// 出典: 旧入店ガイドブック（施術編）
 const SECTIONS: ManualSection[] = [
   {
     id: "flow",

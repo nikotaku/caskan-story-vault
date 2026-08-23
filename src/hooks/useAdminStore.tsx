@@ -6,7 +6,7 @@ import { STORE_DEFS } from "@/lib/storeSwitch";
 
 /**
  * 管理画面用：ログイン中ユーザーの所属店舗（user_stores→stores）を返す。
- * 全力エステのアカウントなら全力エステ、艶花のアカウントなら艶花になる。
+ * ログイン中のアカウントに対応する店舗情報を返す。
  */
 
 interface AdminStore {
@@ -52,7 +52,7 @@ export const useAdminStore = () => {
         const s = membership?.stores;
         const resolved: AdminStore = s
           ? { id: s.id, name: s.name, slug: s.slug, custom_domain: s.custom_domain }
-          : { id: DEFAULT_STORE_ID, name: "全力エステ 仙台", slug: "main", custom_domain: null };
+          : { id: DEFAULT_STORE_ID, name: "過去データ", slug: "main", custom_domain: null };
         try {
           localStorage.setItem("current_store_id", resolved.id);
         } catch {

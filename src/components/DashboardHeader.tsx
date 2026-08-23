@@ -31,13 +31,13 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
   const { toast } = useToast();
   const [switching, setSwitching] = useState(false);
 
-  // デフォルト店舗（全力エステ）以外は店舗ごとのアイコンに切り替える
+  // 過去データ以外は店舗ごとのアイコンに切り替える
   const currentStoreId = adminStore?.id ?? ZENRYOKU_STORE_ID;
   const isDefaultStore = currentStoreId === ZENRYOKU_STORE_ID;
   const shopIcon = isDefaultStore
     ? "https://cdn2-caskan.com/caskan/img/shop_icon/1401_icon_1750161414.jpeg"
     : "/favicon-tsuyaka.png";
-  const shopAlt = adminStore?.name ?? "全力エステ 仙台";
+  const shopAlt = adminStore?.name ?? "艶華";
   const target = otherStore(currentStoreId);
   const canSwitch = STORE_DEFS.some((s) => s.id === currentStoreId) && !!target;
 
@@ -100,7 +100,7 @@ export const DashboardHeader = ({ onToggleSidebar }: DashboardHeaderProps) => {
         {/* Account info（店舗アイコン＝店舗切替トグル） */}
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 whitespace-nowrap">
           <div className="hidden lg:block text-right">
-            <div className="text-xs text-muted-foreground">{adminStore?.name ?? "全力エステ.."}</div>
+            <div className="text-xs text-muted-foreground">{adminStore?.name ?? "艶華"}</div>
             {isAdmin && (
               <div className="text-xs text-primary font-medium">管理者</div>
             )}

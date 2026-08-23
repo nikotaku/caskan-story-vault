@@ -1,5 +1,5 @@
 // 各店舗の実データを根拠に、1日1回HPニュースを自動生成して公開する。
-// 既存のpg_cronからこの関数を1回呼べば、全力エステと艶華の両店舗を更新する。
+// 既存のpg_cronからこの関数を1回呼べば、過去データと艶華の両店舗を更新する。
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -10,7 +10,7 @@ const corsHeaders = {
 const STORES = [
   {
     id: "00000000-0000-0000-0000-000000000001",
-    name: "全力エステ 仙台",
+    name: "艶華（過去データ）",
     slugPrefix: "auto-news",
   },
   {
