@@ -2049,6 +2049,12 @@ const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
 const currentEstamaDate = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
+const currentEstamaWeekStart = () => {
+  const date = new Date(`${currentEstamaDate()}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+  return date.toISOString().slice(0, 10);
+};
+
 const publicScheduleWindowOffset = (shiftDate: string, publicStartDate: string) => {
   const currentStart = new Date(`${publicStartDate}T00:00:00.000Z`).getTime();
   const targetDate = new Date(`${shiftDate}T00:00:00.000Z`).getTime();
@@ -2182,9 +2188,8 @@ async function verifyPublicShiftGroup(
   if (!first.externalId) throw new Error(`${first.castName}のエステ魂公開ページIDがありません`);
 
   const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
-  // エステ魂の公開出勤表は固定曜日の週ではなく、当日から7日間ずつ表示される。
-  // 例: 8/21に開くと初期表示は8/21〜8/27、次画面は8/28〜9/3。
-  const publicStartDate = currentEstamaDate();
+  // エステ魂の公開出勤表は日曜始まり。日曜の予定は必ず次週画面で確認する。
+  const publicStartDate = currentEstamaWeekStart();
   const byWindow = new Map<number, EstamaShiftBatchItem[]>();
   for (const item of group) {
     const offset = publicScheduleWindowOffset(item.shiftDate, publicStartDate);
