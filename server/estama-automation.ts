@@ -2049,16 +2049,44 @@ const estamaPublicProfileUrl = (shopId: string, externalId: string) =>
 const currentEstamaDate = () =>
   new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
-const currentEstamaWeekStart = () => {
-  const date = new Date(`${currentEstamaDate()}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
-  return date.toISOString().slice(0, 10);
-};
-
 const publicScheduleWindowOffset = (shiftDate: string, publicStartDate: string) => {
   const currentStart = new Date(`${publicStartDate}T00:00:00.000Z`).getTime();
   const targetDate = new Date(`${shiftDate}T00:00:00.000Z`).getTime();
   return Math.max(0, Math.floor((targetDate - currentStart) / (7 * 86_400_000)));
+};
+
+const resolvePublicScheduleDate = (
+  month: number,
+  day: number,
+  referenceDate: string,
+) => {
+  const reference = new Date(`${referenceDate}T00:00:00.000Z`);
+  const candidates = [-1, 0, 1]
+    .map((offset) => {
+      const value = new Date(Date.UTC(reference.getUTCFullYear() + offset, month - 1, day));
+      return value.getUTCMonth() === month - 1 && value.getUTCDate() === day ? value : null;
+    })
+    .filter((value): value is Date => Boolean(value))
+    .sort((left, right) =>
+      Math.abs(left.getTime() - reference.getTime()) - Math.abs(right.getTime() - reference.getTime())
+    );
+  return candidates[0]?.toISOString().slice(0, 10) || null;
+};
+
+export const extractEstamaPublicWeekStart = (text: string, referenceDate: string) => {
+  const dates: string[] = [];
+  const matches = text.matchAll(/(?:^|[^\d])(\d{1,2})\/(\d{1,2})(?!\/?\d)/g);
+  for (const match of matches) {
+    const date = resolvePublicScheduleDate(Number(match[1]), Number(match[2]), referenceDate);
+    if (date && dates[dates.length - 1] !== date) dates.push(date);
+  }
+  for (let index = 0; index <= dates.length - 7; index += 1) {
+    const start = dates[index];
+    if (dates.slice(index, index + 7).every((date, offset) => date === addDays(start, offset))) {
+      return start;
+    }
+  }
+  return null;
 };
 
 const compactScheduleText = (value: string) => value
@@ -2159,17 +2187,32 @@ async function clickNextPublicScheduleWeek(page: Page, targetOffset: number) {
   throw new Error(`公開ページの${targetOffset}週後の出勤表が見つかりません`);
 }
 
-async function capturePublicScheduleScreenshot(page: Page) {
+async function findPublicScheduleSection(page: Page) {
   const heading = page.locator("h1, h2, h3, h4, dt").filter({ hasText: /今週のスケジュール|スケジュール/ }).first();
-  let buffer: Buffer | null = null;
   if (await heading.count()) {
-    await heading.scrollIntoViewIfNeeded().catch(() => undefined);
     const section = heading.locator("xpath=ancestor::*[.//table][1]").first();
-    if (await section.count()) {
-      const box = await section.boundingBox().catch(() => null);
-      if (box && box.width <= 1_600 && box.height <= 2_400) {
-        buffer = await section.screenshot({ type: "jpeg", quality: 72 }).catch(() => null);
-      }
+    if (await section.count()) return section;
+  }
+  return null;
+}
+
+async function readPublicScheduleWindow(page: Page, referenceDate: string) {
+  const section = await findPublicScheduleSection(page);
+  if (!section) throw new Error("エステ魂の公開出勤表が見つかりません");
+  const text = await section.innerText();
+  const weekStart = extractEstamaPublicWeekStart(text, referenceDate);
+  if (!weekStart) throw new Error("エステ魂の公開出勤表の日付を読み取れません");
+  return { section, text, weekStart };
+}
+
+async function capturePublicScheduleScreenshot(page: Page) {
+  const section = await findPublicScheduleSection(page);
+  let buffer: Buffer | null = null;
+  if (section) {
+    await section.scrollIntoViewIfNeeded().catch(() => undefined);
+    const box = await section.boundingBox().catch(() => null);
+    if (box && box.width <= 1_600 && box.height <= 2_400) {
+      buffer = await section.screenshot({ type: "jpeg", quality: 72 }).catch(() => null);
     }
   }
   if (!buffer || buffer.byteLength > 650_000) {
@@ -2188,21 +2231,7 @@ async function verifyPublicShiftGroup(
   if (!first.externalId) throw new Error(`${first.castName}のエステ魂公開ページIDがありません`);
 
   const publicUrl = estamaPublicProfileUrl(shopId, first.externalId);
-  // エステ魂の公開出勤表は日曜始まり。日曜の予定は必ず次週画面で確認する。
-  const publicStartDate = currentEstamaWeekStart();
-  const byWindow = new Map<number, EstamaShiftBatchItem[]>();
-  for (const item of group) {
-    const offset = publicScheduleWindowOffset(item.shiftDate, publicStartDate);
-    byWindow.set(offset, [...(byWindow.get(offset) || []), item]);
-  }
-  const windows = [...byWindow.entries()]
-    .map(([offset, expected]) => ({
-      weekStart: addDays(publicStartDate, offset * 7),
-      expected,
-      offset,
-    }))
-    .sort((left, right) => left.offset - right.offset);
-  const maxOffset = Math.min(2, Math.max(...windows.map((window) => window.offset)));
+  const referenceDate = currentEstamaDate();
   let finalEvidence: EstamaShiftEvidence[] = [];
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -2210,10 +2239,41 @@ async function verifyPublicShiftGroup(
     await page.goto(`${publicUrl}?sync_verify=${Date.now()}`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(attempt === 1 ? 2_500 : 5_000);
 
+    // 公開表の先頭日は実ページを正とする。深夜の表示切替や曜日境界を
+    // 現在日時から推測すると、画面にある出勤を別画面へ誤配分してしまう。
+    let activeWindow = await readPublicScheduleWindow(page, referenceDate);
+    const publicStartDate = activeWindow.weekStart;
+    const byWindow = new Map<number, EstamaShiftBatchItem[]>();
+    for (const item of group) {
+      const offset = publicScheduleWindowOffset(item.shiftDate, publicStartDate);
+      byWindow.set(offset, [...(byWindow.get(offset) || []), item]);
+    }
+    const windows = [...byWindow.entries()]
+      .map(([offset, expected]) => ({
+        weekStart: addDays(publicStartDate, offset * 7),
+        expected,
+        offset,
+      }))
+      .sort((left, right) => left.offset - right.offset);
+    const maxOffset = Math.min(2, Math.max(...windows.map((window) => window.offset)));
+
+    console.log(JSON.stringify({
+      level: "info",
+      msg: "estama_public_schedule_windows",
+      castName: first.castName,
+      publicStartDate,
+      windows: windows.map((window) => ({
+        offset: window.offset,
+        weekStart: window.weekStart,
+        shiftDates: window.expected.map((item) => item.shiftDate),
+      })),
+    }));
+
     for (let offset = 0; offset <= maxOffset; offset += 1) {
       if (offset > 0) {
         try {
           await clickNextPublicScheduleWeek(page, offset);
+          activeWindow = await readPublicScheduleWindow(page, referenceDate);
         } catch (error) {
           const screenshotBase64 = await capturePublicScheduleScreenshot(page);
           const message = error instanceof Error ? error.message : String(error);
@@ -2245,7 +2305,7 @@ async function verifyPublicShiftGroup(
       }
       const window = windows.find((candidate) => candidate.offset === offset);
       if (!window) continue;
-      const rawText = await page.locator("body").innerText();
+      const rawText = activeWindow.text;
       if (/Site Unavailable|Unable to access this site|アクセスできません/i.test(rawText)) {
         throw new Error("エステ魂の公開ページを取得できませんでした");
       }
@@ -2263,7 +2323,7 @@ async function verifyPublicShiftGroup(
         castId: first.castId,
         castName: first.castName,
         externalId: first.externalId,
-        weekStart: window.weekStart,
+        weekStart: activeWindow.weekStart,
         publicUrl: page.url(),
         capturedAt: new Date().toISOString(),
         verified,
