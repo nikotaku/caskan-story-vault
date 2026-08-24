@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CheckCircle, ChevronDown, ChevronUp, Clock, Link2, Loader2, Plus, RefreshCw, Send, Trash2, XCircle } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronUp, Clock, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -28,6 +28,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Cast { id: string; name: string; }
+interface PendingImage {
+  id: string;
+  file: File;
+  previewUrl: string;
+}
 interface Post {
   id: string;
   cast_id: string;
@@ -45,6 +50,10 @@ interface Post {
 }
 
 type Target = "o2" | "esutama";
+
+const MAX_IMAGES = 3;
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "送信待ち",
@@ -89,6 +98,7 @@ export default function CastPostManagement() {
   const [testMode, setTestMode] = useState(requestedTestMode);
   const [showConnections, setShowConnections] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Post | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -96,8 +106,9 @@ export default function CastPostManagement() {
     castId: requestedCastId,
     title: requestedTestMode ? "動作確認" : "",
     body: requestedTestMode ? createTestPostBody() : "",
-    imageUrls: "",
   }));
+  const [images, setImages] = useState<PendingImage[]>([]);
+  const imagesRef = useRef<PendingImage[]>([]);
   const { user, loading: authLoading } = useAuth();
   const { storeId, store, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
@@ -130,6 +141,14 @@ export default function CastPostManagement() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  useEffect(() => () => {
+    imagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  }, []);
+
+  useEffect(() => {
     if (loading || !requestedCastId || casts.some((cast) => cast.id === requestedCastId)) return;
     setShowDialog(false);
     setForm((current) => ({ ...current, castId: "" }));
@@ -149,14 +168,76 @@ export default function CastPostManagement() {
 
   const openNewPost = () => {
     setTestMode(false);
-    setForm({ castId: "", title: "", body: "", imageUrls: "" });
+    setImages((current) => {
+      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      return [];
+    });
+    setForm({ castId: "", title: "", body: "" });
     clearPostQuery();
     setShowDialog(true);
   };
 
   const changeDialogOpen = (open: boolean) => {
+    if (!open && submitting) return;
     setShowDialog(open);
     if (!open) clearPostQuery();
+  };
+
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!selectedFiles.length) return;
+    if (images.length + selectedFiles.length > MAX_IMAGES) {
+      toast.error(`画像は合計${MAX_IMAGES}枚までです`);
+      return;
+    }
+    const unsupported = selectedFiles.find((file) => !ALLOWED_IMAGE_TYPES.has(file.type));
+    if (unsupported) {
+      toast.error("画像はJPEG・PNG・WebPのみ対応しています。HEICは投稿先が非対応です");
+      return;
+    }
+    const oversized = selectedFiles.find((file) => file.size > MAX_IMAGE_SIZE);
+    if (oversized) {
+      toast.error("画像は1枚10MB以内にしてください");
+      return;
+    }
+    setImages((current) => [
+      ...current,
+      ...selectedFiles.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })),
+    ]);
+  };
+
+  const removeImage = (id: string) => {
+    setImages((current) => {
+      const removed = current.find((image) => image.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((image) => image.id !== id);
+    });
+  };
+
+  const uploadImages = async () => {
+    const paths: string[] = [];
+    const urls: string[] = [];
+    for (const image of images) {
+      const extension = image.file.type === "image/png" ? "png" : image.file.type === "image/webp" ? "webp" : "jpg";
+      const path = `admin-posts/${storeId}/${form.castId}/${crypto.randomUUID()}.${extension}`;
+      const { error } = await supabase.storage.from("cast-photos").upload(path, image.file, {
+        cacheControl: "3600",
+        contentType: image.file.type,
+        upsert: false,
+      });
+      if (error) {
+        if (paths.length) await supabase.storage.from("cast-photos").remove(paths);
+        throw new Error("画像をアップロードできませんでした");
+      }
+      paths.push(path);
+      urls.push(supabase.storage.from("cast-photos").getPublicUrl(path).data.publicUrl);
+    }
+    return { paths, urls };
   };
 
   const publishTarget = async (postId: string, target: Target) => {
@@ -193,26 +274,31 @@ export default function CastPostManagement() {
       toast.error("タイトル120文字、本文5000文字以内で入力してください");
       return;
     }
-    const imageUrls = form.imageUrls.split("\n").map((value) => value.trim()).filter(Boolean);
-    if (imageUrls.length > 3 || imageUrls.some((url) => !url.startsWith("https://"))) {
-      toast.error("画像URLはHTTPSで3件まで入力できます");
-      return;
-    }
-
     setSubmitting(true);
+    let uploadedPaths: string[] = [];
+    let postCreated = false;
     try {
+      setUploadingImages(true);
+      const uploaded = await uploadImages();
+      uploadedPaths = uploaded.paths;
+      setUploadingImages(false);
       const { data, error } = await rpc("create_admin_multi_post", {
         p_store_id: storeId,
         p_cast_id: form.castId,
         p_title: form.title || null,
         p_body: body,
-        p_image_urls: imageUrls.length ? imageUrls : null,
+        p_image_urls: uploaded.urls.length ? uploaded.urls : null,
       });
       if (error || typeof data !== "string") throw new Error(error?.message || "投稿を作成できませんでした");
+      postCreated = true;
       setShowDialog(false);
       setTestMode(false);
       clearPostQuery();
-      setForm({ castId: "", title: "", body: "", imageUrls: "" });
+      setForm({ castId: "", title: "", body: "" });
+      setImages((current) => {
+        current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+        return [];
+      });
       toast.success("O2・魂セラピストへ送信中です");
       await load();
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
@@ -223,8 +309,12 @@ export default function CastPostManagement() {
         toast.success("O2・魂セラピストへの投稿処理が完了しました");
       }
     } catch (error) {
+      if (!postCreated && uploadedPaths.length) {
+        await supabase.storage.from("cast-photos").remove(uploadedPaths);
+      }
       toast.error(error instanceof Error ? error.message : "投稿に失敗しました");
     } finally {
+      setUploadingImages(false);
       setSubmitting(false);
     }
   };
@@ -352,15 +442,60 @@ export default function CastPostManagement() {
       </main>
 
       <Dialog open={showDialog} onOpenChange={changeDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-h-[90dvh] max-w-lg overflow-y-auto"
+          onEscapeKeyDown={(event) => { if (submitting) event.preventDefault(); }}
+          onInteractOutside={(event) => { if (submitting) event.preventDefault(); }}
+        >
           <DialogHeader><DialogTitle>{testMode ? "O2・魂セラピストへテスト投稿" : "2媒体へ一括投稿"}</DialogTitle></DialogHeader>
           <div className="mt-2 space-y-4">
-            <div><Label>セラピスト</Label><Select value={form.castId} onValueChange={(value) => setForm({ ...form, castId: value })}><SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger><SelectContent>{casts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}</SelectContent></Select></div>
-            <div><Label>タイトル（任意）</Label><Input maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
-            <div><Label>本文</Label><Textarea rows={6} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="投稿内容を入力" /></div>
-            <div><Label>画像URL（任意・1行1URL・3件まで）</Label><Textarea rows={3} value={form.imageUrls} onChange={(event) => setForm({ ...form, imageUrls: event.target.value })} placeholder="https://..." /></div>
+            <div><Label>セラピスト</Label><Select value={form.castId} onValueChange={(value) => setForm({ ...form, castId: value })} disabled={submitting}><SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger><SelectContent>{casts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>タイトル（任意）</Label><Input maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} disabled={submitting} /></div>
+            <div><Label>本文</Label><Textarea rows={6} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="投稿内容を入力" disabled={submitting} /></div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="post-images">画像（任意・3枚まで）</Label>
+                <span className="text-xs text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
+              </div>
+              {images.length < MAX_IMAGES && (
+                <label
+                  htmlFor="post-images"
+                  className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-3 text-sm font-medium transition-colors ${submitting ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-accent"}`}
+                >
+                  <ImagePlus size={17} />写真ライブラリ・カメラから選択
+                  <input
+                    id="post-images"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="sr-only"
+                    onChange={handleImageSelect}
+                    disabled={submitting}
+                  />
+                </label>
+              )}
+              <p className="text-xs text-muted-foreground">JPEG・PNG・WebP／1枚10MBまで</p>
+              {images.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {images.map((image, index) => (
+                    <div key={image.id} className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
+                      <img src={image.previewUrl} alt={`添付画像${index + 1}`} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        aria-label={`画像${index + 1}を削除`}
+                        onClick={() => removeImage(image.id)}
+                        disabled={submitting}
+                        className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white disabled:opacity-50"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">O2と魂セラピストへ同時送信します。HP写メ日記やその他のSNSには掲載しません。</p>
-            <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{testMode ? "テスト投稿" : "一括投稿"}</Button><Button variant="outline" className="flex-1" onClick={() => changeDialogOpen(false)} disabled={submitting}>キャンセル</Button></div>
+            <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{uploadingImages ? "画像アップロード中" : testMode ? "テスト投稿" : "一括投稿"}</Button><Button variant="outline" className="flex-1" onClick={() => changeDialogOpen(false)} disabled={submitting}>キャンセル</Button></div>
           </div>
         </DialogContent>
       </Dialog>
