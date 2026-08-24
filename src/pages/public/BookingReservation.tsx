@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { User, Copy, Check, Zap, Users, LayoutGrid } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
@@ -69,6 +69,47 @@ interface NominationRate {
   customer_price: number;
 }
 
+interface PublicCoupon {
+  badge_text: string | null;
+  code: string | null;
+  id: string;
+  name: string;
+  discount_type: string;
+  discount_value: number;
+  display_order: number;
+  eligible_course_type: string | null;
+  eligible_duration: number | null;
+  min_advance_days: number;
+  terms: string[];
+}
+
+const tokyoToday = () => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+};
+
+const isEarlyMorningTime = (time: string) => Number(time.split(":")[0]) < 6;
+
+// 営業日は14:00〜翌朝として扱い、DBには実際の暦日を保存する。
+const reservationDateKey = (businessDate: Date, time: string) =>
+  format(isEarlyMorningTime(time) ? addDays(businessDate, 1) : businessDate, "yyyy-MM-dd");
+
+const businessMinutes = (time: string) => {
+  const [hour, minute] = time.split(":").map(Number);
+  return (hour < 6 ? hour + 24 : hour) * 60 + minute;
+};
+
+const businessTimeLabel = (time: string) => {
+  const [hour, minute] = time.split(":").map(Number);
+  return `${hour < 6 ? hour + 24 : hour}:${minute.toString().padStart(2, "0")}`;
+};
+
 const reservationSchema = z.object({
   customer_name: z.string().trim().min(1, "お名前を入力してください").max(100, "お名前は100文字以内で入力してください").regex(/^[\p{L}\p{N}\s\-\.]+$/u, "お名前に使用できない文字が含まれています"),
   customer_furigana: z.string().trim().min(1, "フリガナを入力してください").max(100, "フリガナは100文字以内で入力してください").regex(/^[\p{L}\p{N}\s\-\.]+$/u, "フリガナに使用できない文字が含まれています"),
@@ -93,6 +134,8 @@ const BookingReservation = () => {
   const [backRates, setBackRates] = useState<BackRate[]>([]);
   const [optionRates, setOptionRates] = useState<OptionRate[]>([]);
   const [nominationRates, setNominationRates] = useState<NominationRate[]>([]);
+  const [publicCoupons, setPublicCoupons] = useState<PublicCoupon[]>([]);
+  const [selectedCouponId, setSelectedCouponId] = useState<string>("");
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
@@ -121,7 +164,7 @@ const BookingReservation = () => {
     time: searchParams.get("time"),
   });
   const [selectedCastId, setSelectedCastId] = useState<string>("");
-  const [courseType, setCourseType] = useState<string>("全力"); // おすすめ（全力80分）を初期選択
+  const [courseType, setCourseType] = useState<string>("");
   const [startTime, setStartTime] = useState<string>("");
   const [duration, setDuration] = useState<number>(80);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -135,7 +178,6 @@ const BookingReservation = () => {
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [referralSource, setReferralSource] = useState<string>("");
   const [referralOther, setReferralOther] = useState<string>("");
-  const [totalPrice, setTotalPrice] = useState<number>(0);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSetting[]>([]);
   const [intervalMinutes, setIntervalMinutes] = useState(30);
 
@@ -279,10 +321,45 @@ const BookingReservation = () => {
     }
   }, [selectedCastId]);
 
-  // Calculate price when course, options, or nomination changes
+  const selectedCoupon = publicCoupons.find((coupon) => coupon.id === selectedCouponId) ?? null;
+
+  const isAdvanceCouponEligible = (coupon: PublicCoupon | null = selectedCoupon) => {
+    if (!coupon) return false;
+    const today = Date.parse(`${tokyoToday()}T00:00:00Z`);
+    const reservationDay = Date.parse(`${format(selectedDate, "yyyy-MM-dd")}T00:00:00Z`);
+    const advanceDays = Math.floor((reservationDay - today) / 86_400_000);
+    return (
+      (!coupon.eligible_course_type || coupon.eligible_course_type === courseType) &&
+      (!coupon.eligible_duration || coupon.eligible_duration === duration) &&
+      advanceDays >= coupon.min_advance_days
+    );
+  };
+
+  const calculatePricing = (
+    nomType: string,
+    coupon: PublicCoupon | null = selectedCoupon,
+    couponEligible = isAdvanceCouponEligible(),
+  ) => {
+    const subtotal = computePrice(nomType);
+    const discountAmount = coupon && couponEligible
+      ? Math.min(Math.max(0, Number(coupon.discount_value) || 0), subtotal)
+      : 0;
+    return {
+      subtotal,
+      discountAmount,
+      price: Math.max(0, subtotal - discountAmount),
+    };
+  };
+
+  const couponEligible = isAdvanceCouponEligible(selectedCoupon);
+  const currentPricing = calculatePricing(nominationType);
+
+  // 日付・コース変更で条件を外れたクーポンを残さない
   useEffect(() => {
-    setTotalPrice(computePrice(nominationType));
-  }, [courseType, duration, selectedOptions, nominationType, backRates, optionRates, nominationRates]);
+    if (selectedCouponId && !couponEligible) {
+      setSelectedCouponId("");
+    }
+  }, [selectedCouponId, couponEligible]);
 
   // 顧客DBを参照して本指名/ネット指名を判定（電話番号＋セラピストで過去予約があれば本指名）
   const resolveNominationType = async (phone: string): Promise<string> => {
@@ -307,6 +384,7 @@ const BookingReservation = () => {
     setNominationType(nom);
   };
 
+  const totalPrice = currentPricing.price;
   const paymentFee = calcPaymentFee(totalPrice, paymentSettings, paymentMethod);
   const grandTotal = totalPrice + paymentFee;
 
@@ -314,6 +392,7 @@ const BookingReservation = () => {
     setLoading(true);
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const nextDateStr = format(addDays(selectedDate, 1), "yyyy-MM-dd");
       
       // Get all shifts for the selected date (full data)
       const { data: shiftsData, error: shiftsError } = await supabase
@@ -324,14 +403,26 @@ const BookingReservation = () => {
 
       if (shiftsError) throw shiftsError;
 
-      // Get all reservation slots for the selected date (PII-free RPC)
-      const { data: reservationsData, error: reservationsError } = await supabase
-        .rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: null });
+      // 深夜枠は翌暦日で保存されるため、営業日当日と翌日の空き枠を合わせる。
+      const [currentReservations, nextReservations] = await Promise.all([
+        supabase.rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: null }),
+        supabase.rpc("get_reservation_slots", { p_date: nextDateStr, p_cast_id: null }),
+      ]);
 
-      if (reservationsError) throw reservationsError;
+      if (currentReservations.error) throw currentReservations.error;
+      if (nextReservations.error) throw nextReservations.error;
+
+      const reservationsData = [
+        ...((currentReservations.data || []) as Reservation[]).filter(
+          (reservation) => !isEarlyMorningTime(reservation.start_time),
+        ),
+        ...((nextReservations.data || []) as Reservation[]).filter(
+          (reservation) => isEarlyMorningTime(reservation.start_time),
+        ),
+      ];
 
       setAllShifts(shiftsData || []);
-      setAllReservations((reservationsData || []) as any);
+      setAllReservations(reservationsData);
 
       // Get unique cast IDs from shifts
       const castIds = [...new Set(shiftsData?.map(s => s.cast_id) || [])];
@@ -386,8 +477,7 @@ const BookingReservation = () => {
       const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
       const isBooked = castReservations.some(reservation => {
-        const [resHour, resMinute] = reservation.start_time.split(':').map(Number);
-        const resStart = resHour * 60 + resMinute;
+        const resStart = businessMinutes(reservation.start_time);
         const resEnd = resStart + reservation.duration + intervalMinutes;
         const newEnd = time + checkDuration;
         return (time < resEnd && newEnd > resStart);
@@ -415,13 +505,33 @@ const BookingReservation = () => {
 
       const { data: paymentData } = await supabase
         .from('payment_settings')
-        .select('id, payment_method, payment_link, fee_percentage');
+        .select('id, payment_method, payment_link, fee_percentage')
+        .eq('store_id', storeId);
+
+      const { data: discountData } = await supabase
+        .from('discounts')
+        .select('id, name, code, discount_type, discount_value, display_order, badge_text, terms, eligible_course_type, eligible_duration, min_advance_days')
+        .eq('store_id', storeId)
+        .eq('is_active', true)
+        .eq('public_booking_enabled', true)
+        .order('display_order', { ascending: true });
 
       // Wセラピスト専用コース・オプションは専用フォーム（/book/ペアキャスト）のみで販売
-      if (backData) setBackRates((backData as any[]).filter((r) => r.course_type !== "全力W") as any);
+      if (backData) {
+        const publicRates = (backData as BackRate[]).filter((rate) => rate.course_type !== "全力W");
+        setBackRates(publicRates);
+        const preferredRate = publicRates.find((rate) => rate.course_type === "艶華" && rate.duration === 80)
+          || publicRates.find((rate) => rate.course_type === "全力" && rate.duration === 80)
+          || publicRates[0];
+        if (preferredRate && !publicRates.some((rate) => rate.course_type === courseType && rate.duration === duration)) {
+          setCourseType(preferredRate.course_type);
+          setDuration(preferredRate.duration);
+        }
+      }
       if (optionData) setOptionRates(optionData.filter((o: any) => !["全力PKG1W", "全力PKG2W"].includes(o.option_name)));
       if (nominationData) setNominationRates(nominationData);
       if (paymentData) setPaymentSettings(paymentData as PaymentSetting[]);
+      if (discountData) setPublicCoupons(discountData as PublicCoupon[]);
     } catch (error) {
       console.error('Error fetching rates:', error);
     }
@@ -431,6 +541,7 @@ const BookingReservation = () => {
     if (!selectedDate || !selectedCastId) return;
 
     const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const nextDateStr = format(addDays(selectedDate, 1), "yyyy-MM-dd");
 
     try {
       const { data: shiftsData, error: shiftsError } = await supabase
@@ -439,14 +550,26 @@ const BookingReservation = () => {
         .eq("cast_id", selectedCastId)
         .eq("shift_date", dateStr);
 
-      const { data: reservationsData, error: reservationsError } = await supabase
-        .rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: selectedCastId });
+      const [currentReservations, nextReservations] = await Promise.all([
+        supabase.rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: selectedCastId }),
+        supabase.rpc("get_reservation_slots", { p_date: nextDateStr, p_cast_id: selectedCastId }),
+      ]);
 
       if (shiftsError) throw shiftsError;
-      if (reservationsError) throw reservationsError;
+      if (currentReservations.error) throw currentReservations.error;
+      if (nextReservations.error) throw nextReservations.error;
+
+      const reservationsData = [
+        ...((currentReservations.data || []) as Reservation[]).filter(
+          (reservation) => !isEarlyMorningTime(reservation.start_time),
+        ),
+        ...((nextReservations.data || []) as Reservation[]).filter(
+          (reservation) => isEarlyMorningTime(reservation.start_time),
+        ),
+      ];
 
       setShifts(shiftsData || []);
-      setReservations((reservationsData || []) as any);
+      setReservations(reservationsData);
     } catch (error) {
       console.error("Error fetching shifts and reservations:", error);
       toast({
@@ -489,8 +612,7 @@ const BookingReservation = () => {
 
       // この時間帯が予約可能かチェック（インターバルを考慮）
       const isBooked = reservations.some(reservation => {
-        const [resHour, resMinute] = reservation.start_time.split(':').map(Number);
-        const resStart = resHour * 60 + resMinute;
+        const resStart = businessMinutes(reservation.start_time);
         const resEnd = resStart + reservation.duration + intervalMinutes; // 予約終了後にインターバルを追加
         
         // 新しい予約の終了時刻
@@ -558,20 +680,36 @@ const BookingReservation = () => {
 
       // 顧客DBを参照して指名種別を確定（本指名 or ネット指名 or 指名なし）
       const finalNominationType = await resolveNominationType(customerPhone);
-      const finalPrice = computePrice(finalNominationType);
+      const couponEligibleAtSubmit = isAdvanceCouponEligible();
+      if (selectedCoupon && !couponEligibleAtSubmit) {
+        setSelectedCouponId("");
+        toast({
+          title: "クーポンを適用できません",
+          description: "事前予約クーポンは、前日までに予約する艶華コース80分でのみ利用できます。",
+          variant: "destructive",
+        });
+        setSubmitting(false);
+        return;
+      }
+      const appliedCoupon = couponEligibleAtSubmit ? selectedCoupon : null;
+      const finalPricing = calculatePricing(finalNominationType, appliedCoupon, couponEligibleAtSubmit);
+      const finalPrice = finalPricing.price;
       const finalPaymentFee = calcPaymentFee(finalPrice, paymentSettings, paymentMethod);
       const finalGrandTotal = finalPrice + finalPaymentFee;
       // 表示にも反映
       setNominationType(finalNominationType);
 
+      const reservationId = crypto.randomUUID();
       const { error } = await supabase
         .from("reservations")
         .insert([{
+          id: reservationId,
           cast_id: actualCastId,
           customer_name: customerName.trim(),
+          customer_furigana: customerFurigana.trim(),
           customer_phone: customerPhone.trim(),
           customer_email: customerEmail.trim(),
-          reservation_date: format(selectedDate, "yyyy-MM-dd"),
+          reservation_date: reservationDateKey(selectedDate, startTime),
           start_time: startTime,
           duration: duration,
           course_type: courseType,
@@ -579,9 +717,12 @@ const BookingReservation = () => {
           options: selectedOptions.length > 0 ? selectedOptions : null,
           nomination_type: finalNominationType !== 'none' ? finalNominationType : null,
           price: finalPrice,
+          discount: finalPricing.discountAmount,
+          discount_ids: appliedCoupon ? [appliedCoupon.id] : [],
           payment_method: paymentMethod || "cash",
           payment_fee: finalPaymentFee || 0,
           notes: notes.trim() || null,
+          referral_source: referralOther.trim() || referralSource || null,
           status: "confirmed",
           payment_status: "unpaid",
           created_by: null,
@@ -598,34 +739,25 @@ const BookingReservation = () => {
 
       // LINE通知（失敗しても予約完了表示は継続）
       try {
-        await supabase.functions.invoke("notify-line-booking", {
-          body: {
-            customer_name: customerName.trim(),
-            customer_phone: customerPhone.trim(),
-            cast_name: castName,
-            reservation_date: dateStr,
-            start_time: startTime,
-            course_name: `${courseType} ${duration}分`,
-            nomination_type: finalNominationType !== "none" ? finalNominationType : null,
-            options: selectedOptions.length > 0 ? selectedOptions : null,
-            price: finalPrice,
-            payment_fee: finalPaymentFee || 0,
-            payment_method: paymentMethod || null,
-            payment_link: paymentLink,
-            notes: notes.trim() || null,
-          },
+        const { error: notifyError } = await supabase.functions.invoke("notify-line-booking", {
+          body: { reservation_id: reservationId },
         });
+        if (notifyError) console.error("Booking notification failed:", notifyError.message);
       } catch (notifyErr) {
-        console.error("LINE notify failed:", notifyErr);
+        console.error("Booking notification failed:", notifyErr);
       }
       const summaryLines = [
         `【予約詳細】`,
         `日付: ${dateStr}`,
-        `時間: ${startTime}〜`,
+        `時間: ${businessTimeLabel(startTime)}〜`,
         `コース: ${courseType} ${duration}分`,
         `セラピスト: ${castName}`,
         ...(finalNominationType && finalNominationType !== 'none' ? [`指名: ${finalNominationType}`] : []),
         ...(selectedOptions.length > 0 ? [`オプション: ${selectedOptions.join(', ')}`] : []),
+        ...(appliedCoupon ? [
+          `クーポン: ${appliedCoupon.name}`,
+          `割引: -¥${finalPricing.discountAmount.toLocaleString()}`,
+        ] : []),
         `料金: ¥${finalPrice.toLocaleString()}`,
         ...(finalPaymentFee > 0 ? [`決済手数料: ¥${finalPaymentFee.toLocaleString()}`, `総額: ¥${finalGrandTotal.toLocaleString()}`] : []),
         ...(finalPaymentFee > 0 && paymentLink
@@ -1166,6 +1298,76 @@ const BookingReservation = () => {
                       });
                     })()}
 
+                    {/* 前日までの艶華80分限定クーポン（併用不可のため単一選択） */}
+                    {publicCoupons.length > 0 && (
+                      <div className="rounded-lg border-2 border-rose-200 bg-rose-50/50 p-4">
+                        <h3 className="font-semibold mb-1">事前予約クーポン</h3>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          前日までにご予約いただく艶華コース80分限定です。他のクーポンとは併用できません。
+                        </p>
+                        <div className="space-y-2">
+                          <label className="flex cursor-pointer items-center gap-3 rounded-lg border bg-white p-3">
+                            <input
+                              type="radio"
+                              name="advance-booking-coupon"
+                              checked={!selectedCouponId}
+                              onChange={() => setSelectedCouponId("")}
+                            />
+                            <span className="text-sm font-medium">クーポンを利用しない</span>
+                          </label>
+                          {publicCoupons.map((coupon) => {
+                            const basePrice = backRates.find(
+                              (rate) => rate.course_type === "艶華" && rate.duration === 80,
+                            )?.customer_price ?? 19000;
+                            const couponPrice = Math.max(0, basePrice - Number(coupon.discount_value));
+                            const badge = coupon.badge_text || `¥${Number(coupon.discount_value).toLocaleString()} OFF`;
+                            const eligible = isAdvanceCouponEligible(coupon);
+                            const unavailableReason = format(selectedDate, "yyyy-MM-dd") <= tokyoToday()
+                              ? "当日予約には利用できません"
+                              : !eligible
+                                ? "艶華コース80分を選択すると利用できます"
+                                : null;
+                            return (
+                              <label
+                                key={coupon.id}
+                                className={cn(
+                                  "block rounded-lg border bg-white p-3 transition-colors",
+                                  eligible ? "cursor-pointer hover:border-rose-300" : "cursor-not-allowed opacity-60",
+                                  selectedCouponId === coupon.id && "border-rose-400 ring-1 ring-rose-300",
+                                )}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <input
+                                    type="radio"
+                                    name="advance-booking-coupon"
+                                    className="mt-1"
+                                    checked={selectedCouponId === coupon.id}
+                                    disabled={!eligible}
+                                    onChange={() => setSelectedCouponId(coupon.id)}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-semibold">{coupon.name}</span>
+                                      <span className="rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{badge}</span>
+                                    </div>
+                                    <p className="mt-1 text-sm">
+                                      通常80分 ¥{basePrice.toLocaleString()} → <span className="font-bold text-rose-600">¥{couponPrice.toLocaleString()}</span>
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {(coupon.terms.length > 0 ? coupon.terms : ["前日までの事前予約のみ", "当日利用不可", "他クーポンとの併用不可"]).join("／")}
+                                    </p>
+                                    {unavailableReason && (
+                                      <p className="mt-1 text-xs font-medium text-amber-700">{unavailableReason}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* DRオプション（プルダウン） */}
                     {drOptionRates.length > 0 && (
                       <div>
@@ -1231,12 +1433,20 @@ const BookingReservation = () => {
                           </div>
                         );
                       })()}
+                      {(currentPricing.discountAmount > 0 || paymentFee > 0) && (
+                        <div className="flex justify-between items-center text-sm text-muted-foreground">
+                          <span>小計:</span>
+                          <span>¥{currentPricing.subtotal.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {currentPricing.discountAmount > 0 && (
+                        <div className="flex justify-between items-center text-sm text-rose-600">
+                          <span>事前予約クーポン:</span>
+                          <span>-¥{currentPricing.discountAmount.toLocaleString()}</span>
+                        </div>
+                      )}
                       {paymentFee > 0 && (
                         <>
-                          <div className="flex justify-between items-center text-sm text-muted-foreground">
-                            <span>小計:</span>
-                            <span>¥{totalPrice.toLocaleString()}</span>
-                          </div>
                           <div className="flex justify-between items-center text-sm text-muted-foreground mb-1">
                             <span>決済手数料:</span>
                             <span>+¥{paymentFee.toLocaleString()}</span>

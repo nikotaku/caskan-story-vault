@@ -31,7 +31,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.notify-line-booking]
-verify_jwt = false
+verify_jwt = true
 
 [functions.daily-kintore-advice]
 verify_jwt = true
