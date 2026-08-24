@@ -24,6 +24,7 @@ serve(async (req) => {
     const { data: therapists, error: castError } = await supabase
       .from("casts")
       .select("name, age, height, bust, waist, hip, cup_size, specialties, message, profile, tags, experience_years, hobbies, favorite_techniques, status, photo")
+      .eq("is_active", true)
       .eq("is_visible", true)
       .neq("status", "offline");
 

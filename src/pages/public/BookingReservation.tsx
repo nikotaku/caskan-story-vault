@@ -438,6 +438,7 @@ const BookingReservation = () => {
         .from("casts")
         .select("id, name, type, photo, status, profile, age, height, cup_size, room")
         .in("id", castIds)
+        .eq("is_active", true)
         .order("name");
 
       if (castsError) throw castsError;
@@ -674,6 +675,18 @@ const BookingReservation = () => {
       const actualCastId = selectedCastId === "none" ? (casts[0]?.id || "") : selectedCastId;
       if (!actualCastId) {
         toast({ title: "エラー", description: "割り当て可能なセラピストがいません", variant: "destructive" });
+        setSubmitting(false);
+        return;
+      }
+      const { data: activeCast, error: activeCastError } = await supabase
+        .from("casts")
+        .select("id")
+        .eq("id", actualCastId)
+        .eq("store_id", storeId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (activeCastError || !activeCast) {
+        toast({ title: "受付できません", description: "選択したセラピストは現在予約を受け付けていません。選び直してください。", variant: "destructive" });
         setSubmitting(false);
         return;
       }

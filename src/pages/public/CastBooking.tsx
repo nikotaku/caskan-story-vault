@@ -127,13 +127,15 @@ export default function CastBooking() {
           .from("casts")
           .select("id, name, photo, store_id, stores(custom_domain)")
           .eq("id", castId)
+          .eq("is_active", true)
           .maybeSingle();
         matchedCast = data as CastLookup | null;
       } else if (castKey && isBookingKey(castKey)) {
         // UUID型には前方一致を直接かけられないため、公開キャストの最小項目だけ取得して照合する。
         const { data } = await supabase
           .from("casts")
-          .select("id, name, photo, store_id, stores(custom_domain)");
+          .select("id, name, photo, store_id, stores(custom_domain)")
+          .eq("is_active", true);
         const matches = ((data || []) as CastLookup[]).filter(
           (row) => getBookingKey(row.id) === castKey.toLowerCase(),
         );
@@ -252,6 +254,17 @@ export default function CastBooking() {
 
     setSubmitting(true);
     try {
+      const { data: activeCast, error: activeCastError } = await supabase
+        .from("casts")
+        .select("id")
+        .eq("id", cast.id)
+        .eq("store_id", cast.store_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (activeCastError || !activeCast) {
+        setError("このセラピストは現在予約を受け付けていません");
+        return;
+      }
       const courseName = `${courseType} ${duration}分`;
       const reservationId = crypto.randomUUID();
       const { error: insErr } = await supabase.from("reservations").insert([{

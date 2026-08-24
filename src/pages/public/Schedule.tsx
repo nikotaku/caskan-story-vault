@@ -31,6 +31,8 @@ interface Shift {
     message: string | null;
     title_badge_id?: string | null;
     x_account: string | null;
+    is_active: boolean;
+    is_visible: boolean;
   };
 }
 
@@ -79,7 +81,7 @@ const Schedule = () => {
         supabase
           .from("shifts")
           .select(
-            `*, casts (name, photo, type, status, age, height, cup_size, tags, message, x_account, title_badge_id)`
+            `*, casts (name, photo, type, status, age, height, cup_size, tags, message, x_account, title_badge_id, is_active, is_visible)`
           )
           .eq("shift_date", dateStr)
           .eq("store_id", storeId)
@@ -88,7 +90,7 @@ const Schedule = () => {
       ]);
       if (s.error) throw s.error;
       const grouped = (s.data || []).reduce((acc: Record<string, Shift>, sh: any) => {
-        if (sh.casts?.is_visible !== false) {
+        if (sh.casts?.is_active && sh.casts?.is_visible) {
           if (!acc[sh.cast_id]) acc[sh.cast_id] = sh as Shift;
         }
         return acc;

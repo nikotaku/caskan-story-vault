@@ -62,7 +62,7 @@ export function ImportModal({ open, onClose, type, storeId, onSuccess }: ImportM
   const handleOpen = async (isOpen: boolean) => {
     if (!isOpen) { onClose(); reset(); return; }
     if (type === "reservations") {
-      let query = supabase.from("casts").select("id, name");
+      let query = supabase.from("casts").select("id, name").eq("is_active", true);
       if (storeId) query = query.eq("store_id", storeId);
       const { data } = await query;
       const m = new Map<string, string>();

@@ -44,6 +44,7 @@ export default function TherapistMyPage() {
         .from("casts")
         .select("id, name")
         .eq("store_id", adminStore!.id)
+        .eq("is_active", true)
         .order("name"),
       supabase.rpc("get_cast_access_tokens"),
     ]);

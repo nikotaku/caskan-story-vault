@@ -29,6 +29,7 @@ import { runQueuedEstamaAutomation } from "@/lib/estamaAutomation";
 interface Cast {
   id: string;
   name: string;
+  is_active: boolean;
 }
 
 interface Shift {
@@ -168,7 +169,7 @@ const Shift = () => {
     try {
       const { data, error } = await supabase
         .from('casts')
-        .select('id, name')
+        .select('id, name, is_active')
         .order('name');
 
       if (error) throw error;
@@ -309,7 +310,8 @@ const Shift = () => {
     };
   });
 
-  const filteredCasts = casts.filter(cast => 
+  const activeCasts = casts.filter((cast) => cast.is_active);
+  const filteredCasts = activeCasts.filter(cast =>
     cast.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -630,7 +632,7 @@ const Shift = () => {
                                 <SelectValue placeholder="キャストを選択" />
                               </SelectTrigger>
                               <SelectContent>
-                                {casts.map((cast) => (
+                                {activeCasts.map((cast) => (
                                   <SelectItem key={cast.id} value={cast.id}>
                                     {cast.name}
                                   </SelectItem>
@@ -753,7 +755,7 @@ const Shift = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">すべてのセラピスト</SelectItem>
-                          {casts.map((cast) => (
+                          {activeCasts.map((cast) => (
                             <SelectItem key={cast.id} value={cast.name}>
                               {cast.name}
                             </SelectItem>
@@ -810,7 +812,7 @@ const Shift = () => {
                                 <SelectValue placeholder="キャストを選択" />
                               </SelectTrigger>
                               <SelectContent>
-                                {casts.map((cast) => (
+                                {activeCasts.map((cast) => (
                                   <SelectItem key={cast.id} value={cast.id}>
                                     {cast.name}
                                   </SelectItem>

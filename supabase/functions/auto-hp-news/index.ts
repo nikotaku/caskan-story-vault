@@ -32,7 +32,7 @@ async function buildNewsGrounding(sb: any, storeId: string, ymd: string): Promis
     const [discountsRes, shiftsRes, castsRes, bannersRes] = await Promise.all([
       sb.from("discounts").select("name, discount_type, discount_value").eq("store_id", storeId).eq("is_active", true),
       sb.from("shifts").select("cast_id, shift_date, start_time, end_time").eq("store_id", storeId).eq("shift_date", ymd).order("start_time").limit(20),
-      sb.from("casts").select("id, name, photo").eq("store_id", storeId).eq("is_visible", true),
+      sb.from("casts").select("id, name, photo").eq("store_id", storeId).eq("is_active", true).eq("is_visible", true),
       sb.from("banners").select("image_url").eq("store_id", storeId).eq("is_active", true).order("display_order").limit(1),
     ]);
 

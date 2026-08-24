@@ -91,7 +91,7 @@ export default function Education() {
   const fetchBase = async () => {
     setLoading(true);
     const [castsRes, modulesRes, recordsRes] = await Promise.all([
-      supabase.from("casts").select("id,name,photo").order("name"),
+      supabase.from("casts").select("id,name,photo").eq("is_active", true).order("name"),
       supabase.from("training_modules" as any).select("*").eq("is_active", true).order("display_order"),
       supabase.from("cast_training_records" as any).select("cast_id, module_id, status"),
     ]);

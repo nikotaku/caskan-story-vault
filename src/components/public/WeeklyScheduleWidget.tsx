@@ -22,6 +22,8 @@ interface Shift {
     bust: number | null;
     waist: number | null;
     hip: number | null;
+    is_active: boolean;
+    is_visible: boolean;
   };
 }
 
@@ -46,7 +48,7 @@ export function WeeklyScheduleWidget() {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const { data } = await supabase
       .from("shifts")
-      .select("id,cast_id,start_time,end_time,casts(id,name,photo,age,height,cup_size,bust,waist,hip)")
+      .select("id,cast_id,start_time,end_time,casts(id,name,photo,age,height,cup_size,bust,waist,hip,is_active,is_visible)")
       .eq("shift_date", dateStr)
       .eq("store_id", storeId)
       .order("start_time", { ascending: true });
@@ -55,7 +57,7 @@ export function WeeklyScheduleWidget() {
     const seen = new Set<string>();
     const unique: Shift[] = [];
     for (const sh of (data || []) as any[]) {
-      if (sh.casts?.is_visible === false) continue;
+      if (!sh.casts?.is_active || !sh.casts?.is_visible) continue;
       if (seen.has(sh.cast_id)) continue;
       seen.add(sh.cast_id);
       unique.push(sh as Shift);

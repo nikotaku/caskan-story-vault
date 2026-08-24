@@ -17,6 +17,7 @@ export const ESTAMA_CAST_EDIT_URL = "https://estama.jp/admin/cast_edit/";
 export const ESTAMA_SOUL_URL = "https://estama.jp/admin/tamathera/therapist/";
 const ESTAMA_SOUL_WAITING_URL = `${ESTAMA_SOUL_URL}?status=waiting_initial_setup`;
 const ESTAMA_SOUL_LOGIN_URL = "https://estama.jp/tamathera/login/";
+const ESTAMA_SOUL_DIARY_URL = "https://estama.jp/tamathera/diary/";
 
 type Json = Record<string, unknown>;
 type AdminClient = SupabaseClient;
@@ -113,6 +114,13 @@ export class LoginRequiredError extends Error {
   }
 }
 
+export class SoulLoginRequiredError extends Error {
+  constructor(message = "魂セラピストのID・パスワードを確認してください") {
+    super(message);
+    this.name = "SoulLoginRequiredError";
+  }
+}
+
 export class SoulActivationRequiredError extends Error {
   constructor(message = "魂セラピストの初回ログイン画面がまだ有効化されていません") {
     super(message);
@@ -177,7 +185,7 @@ export async function assertStoreManager(admin: AdminClient, userId: string, sto
   }
 }
 
-async function createBrowserSession(contextId: string, keepAlive = false, metadata: Json = {}) {
+async function createBrowserSession(contextId: string | null, keepAlive = false, metadata: Json = {}) {
   const bb = getBrowserbase();
   const session = await bb.sessions.create({
     projectId: projectId(),
@@ -185,7 +193,7 @@ async function createBrowserSession(contextId: string, keepAlive = false, metada
     timeout: keepAlive ? 21_600 : 300,
     region: "ap-southeast-1",
     browserSettings: {
-      context: { id: contextId, persist: true },
+      ...(contextId ? { context: { id: contextId, persist: true } } : {}),
       allowedDomains: ["estama.jp"],
       viewport: { width: 1440, height: 1000 },
       solveCaptchas: true,
@@ -676,7 +684,7 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
   return { externalId, publicUrl, uploadedPhotos, photoRemoval, soul: soulResult };
 }
 
-async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
+async function configureSoulLogin(page: Page, credentials: SoulCredentials, mode: "setup" | "login" = "setup") {
   const passwords = page.locator('input[type="password"]:visible');
   if (!await passwords.count()) return false;
 
@@ -688,10 +696,20 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
     'input[name*="account" i]:visible:not([type="password"])',
     'input[id*="account" i]:visible:not([type="password"])',
   ].join(",")).first();
-  if (!await loginId.count()) loginId = page.getByLabel(/ログインID|ユーザーID|アカウントID|ID/, { exact: false }).first();
+  if (!await loginId.count()) {
+    loginId = page.getByLabel(
+      mode === "login" ? /メールアドレス|ログインID|ユーザーID|アカウントID|ID/ : /ログインID|ユーザーID|アカウントID|ID/,
+      { exact: false },
+    ).first();
+  }
+  if (!await loginId.count() && mode === "login") loginId = page.locator('input[type="email"]:visible').first();
   if (!await loginId.count()) loginId = page.locator('input[type="text"]:visible').first();
   if (!await loginId.count()) loginId = page.locator('input[type="email"]:visible').first();
-  if (!await loginId.count()) throw new Error("魂セラピストの初回ログイン用メールアドレス入力欄が見つかりません");
+  if (!await loginId.count()) {
+    throw new Error(mode === "login"
+      ? "魂セラピストのID入力欄が見つかりません"
+      : "魂セラピストの初回ログイン用メールアドレス入力欄が見つかりません");
+  }
 
   await loginId.evaluate((element) => element.setAttribute("data-enka-soul-login-id", "true"));
   const loginDescriptor = await loginId.evaluate((element) => {
@@ -708,7 +726,9 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
   });
   const loginUsesEmail = /email|mail|メール/i.test(loginDescriptor);
   if (loginUsesEmail && !credentials.email) {
-    throw new Error("魂セラピストの初回設定に使う登録メールアドレスがありません");
+    throw new Error(mode === "login"
+      ? "魂セラピストのログインIDがありません"
+      : "魂セラピストの初回設定に使う登録メールアドレスがありません");
   }
   await loginId.fill(loginUsesEmail ? credentials.email! : credentials.loginId);
   if (credentials.email) {
@@ -749,7 +769,11 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
   const visibleErrors = await page.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible')
     .allTextContents().catch(() => [] as string[]);
   const errorMessage = visibleErrors.map((value) => value.trim()).filter(Boolean).join(" / ");
-  if (errorMessage) throw new Error(`魂セラピスト: ${errorMessage.slice(0, 300)}`);
+  if (errorMessage) {
+    const message = `魂セラピスト: ${errorMessage.slice(0, 300)}`;
+    if (mode === "login") throw new SoulLoginRequiredError(message);
+    throw new Error(message);
+  }
   if (await page.locator('input[type="password"]:visible').count()) {
     const invalidFields = await page.locator('input:invalid:visible, select:invalid:visible, textarea:invalid:visible')
       .evaluateAll((elements) => elements.slice(0, 6).map((element) => {
@@ -758,9 +782,55 @@ async function configureSoulLogin(page: Page, credentials: SoulCredentials) {
           .filter(Boolean).join(":");
       })).catch(() => [] as string[]);
     const screenText = safeSoulDiagnosticText(await page.locator("body").innerText().catch(() => ""));
+    if (mode === "login") {
+      throw new SoulLoginRequiredError(`魂セラピストにログインできませんでした（入力確認=${invalidFields.join(" / ") || "検出なし"}、画面=${screenText || "表示なし"}）`);
+    }
     throw new Error(`魂セラピストの初回ログイン設定を完了できませんでした（入力確認=${invalidFields.join(" / ") || "検出なし"}、画面=${screenText || "表示なし"}）`);
   }
   return true;
+}
+
+async function loginSoulTherapist(page: Page, credentials: SoulCredentials) {
+  await page.goto(ESTAMA_SOUL_LOGIN_URL, { waitUntil: "domcontentloaded" });
+  if (!await page.locator('input[type="password"]:visible').count()) {
+    throw new LoginRequiredError("魂セラピストのログイン画面を表示できませんでした");
+  }
+  await configureSoulLogin(page, {
+    ...credentials,
+    email: credentials.email || credentials.loginId,
+  }, "login");
+  if (await page.locator('input[type="password"]:visible').count() || /\/tamathera\/login\/?$/i.test(new URL(page.url()).pathname)) {
+    throw new SoulLoginRequiredError();
+  }
+}
+
+async function gotoSoulDiary(page: Page) {
+  const response = await page.goto(ESTAMA_SOUL_DIARY_URL, { waitUntil: "domcontentloaded" });
+  if (await page.locator('input[type="password"]:visible').count()) {
+    throw new SoulLoginRequiredError("魂セラピストへのログインが切れています");
+  }
+  if (response && !response.ok()) throw new Error(`魂セラピストの日記ページを表示できませんでした（HTTP ${response.status()}）`);
+  const current = new URL(page.url());
+  if (current.hostname !== "estama.jp" || !current.pathname.startsWith("/tamathera/diary")) {
+    throw new Error("魂セラピストの日記ページを表示できませんでした");
+  }
+}
+
+async function followEstamaAction(page: Page, action: Locator) {
+  const href = await action.getAttribute("href");
+  if (href) {
+    const target = new URL(href, page.url());
+    const isEstamaUrl = target.protocol === "https:"
+      && (target.hostname === "estama.jp" || target.hostname.endsWith(".estama.jp"));
+    if (!isEstamaUrl) throw new Error("魂セラピストの遷移先URLが不正です");
+    await page.goto(target.toString(), { waitUntil: "domcontentloaded" });
+    return;
+  }
+  await action.evaluate((element) => {
+    if (!(element instanceof HTMLElement)) throw new Error("遷移ボタンが不正です");
+    element.click();
+  });
+  await page.waitForLoadState("domcontentloaded").catch(() => undefined);
 }
 
 async function trySoulDirectLogin(page: Page, credentials: SoulCredentials) {
@@ -1358,7 +1428,7 @@ async function reconcileShifts(admin: AdminClient, page: Page, job: AutomationJo
     admin.from("estama_dummy_shifts").select("*").eq("store_id", job.store_id)
       .gte("shift_date", startDate).lte("shift_date", endDate),
   ]);
-  const byKey = new Map((shifts || []).map((shift) => {
+  const byKey = new Map<string, ShiftRecord>((shifts || []).map((shift) => {
     const typedShift = shift as ShiftRecord;
     return [`${typedShift.cast_id}:${typedShift.shift_date}`, typedShift] as const;
   }));
@@ -1469,16 +1539,10 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
     throw new LoginRequiredError("エステ魂のセラピスト側ログインが切れています");
   }
 
-  const diaryLink = accountPage.locator("a, button").filter({ hasText: /写メ日記|写メブログ|日記/ }).first();
-  if (!/diary|blog|photo/i.test(accountPage.url())) {
-    if (!await diaryLink.count()) throw new Error("エステ魂の写メ日記メニューが見つかりません");
-    await diaryLink.click();
-    await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
-  }
+  await gotoSoulDiary(accountPage);
   const newPost = accountPage.locator("a, button").filter({ hasText: /新規投稿|日記を書く|投稿する|新規作成/ }).first();
   if (await newPost.count()) {
-    await newPost.click();
-    await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+    await followEstamaAction(accountPage, newPost);
   }
 
   await setField(accountPage, 'input[name*="title" i], input[id*="title" i], input[name*="subject" i]', post.title || "写メ日記");
@@ -1503,10 +1567,7 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
 export type PreparedEstamaDiary = {
   jobId: string;
   browserbaseContextId: string;
-  soulStatus?: string | null;
-  soulLoginUrl?: string | null;
   soulCredentials?: SoulCredentials;
-  allowPendingReset?: boolean;
   cast: {
     name: string;
     externalId?: string | null;
@@ -1520,7 +1581,7 @@ export type PreparedEstamaDiary = {
 };
 
 export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
-  const created = await createBrowserSession(input.browserbaseContextId, false, {
+  const created = await createBrowserSession(null, false, {
     action: "portal-diary",
     jobId: input.jobId,
   });
@@ -1528,71 +1589,15 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
   try {
     const connected = await connectSession(created.session.connectUrl);
     browser = connected.browser;
-    const page = connected.page;
-    let soulResult: Json | undefined;
-    let accountPage: Page | null = null;
-    if (input.soulCredentials && input.soulStatus !== "configured") {
-      soulResult = await setupSoulTherapist(page, input.cast.name, input.soulCredentials, input.allowPendingReset === true);
-      if (soulResult.status === "configured"
-        && !/\/admin\//i.test(page.url())
-        && !await page.locator('input[type="password"]:visible').count()) {
-        accountPage = page;
-      }
+    const accountPage = connected.page;
+    if (!input.soulCredentials) {
+      throw new LoginRequiredError("魂セラピストのID・パスワードが未設定です");
     }
-    if (!accountPage && input.soulLoginUrl) {
-      const soulLoginUrl = new URL(input.soulLoginUrl);
-      const isEstamaUrl = soulLoginUrl.protocol === "https:"
-        && (soulLoginUrl.hostname === "estama.jp" || soulLoginUrl.hostname.endsWith(".estama.jp"));
-      if (!isEstamaUrl) throw new Error("保存された魂セラピスト専用ログインURLが不正です");
-      await page.goto(soulLoginUrl.toString(), { waitUntil: "domcontentloaded" });
-      if (await page.locator('input[type="password"]:visible').count()) {
-        if (!input.soulCredentials) {
-          throw new LoginRequiredError("魂セラピストの専用ログインページで再ログインが必要です");
-        }
-        await configureSoulLogin(page, input.soulCredentials);
-      }
-      if (await page.locator('input[type="password"]:visible').count()) {
-        throw new LoginRequiredError("魂セラピストの専用ログインページで再ログインが必要です");
-      }
-      accountPage = page;
-    }
-    if (!accountPage) {
-      await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
-      await ensureAdminLogin(page);
-      const row = await findEstamaCastRow(page, {
-        externalId: input.cast.externalId || undefined,
-        remoteName: input.cast.remoteName || undefined,
-        localName: input.cast.name,
-      });
-      const login = visibleSoulAction(row, /本人の代わりにログイン/);
-      if (!await login.count()) {
-        throw new Error("エステ魂の『本人の代わりにログイン』が見つかりません。魂セラピスト設定を確認してください");
-      }
-      const loginClass = await login.getAttribute("class") || "";
-      if (loginClass.includes("disabled") || !await login.isEnabled() || await isDisabledSoulAction(login)) {
-        throw new SoulActivationRequiredError();
-      }
-
-      const popupPromise = page.context().waitForEvent("page", { timeout: 5_000 }).catch(() => null);
-      await clickSoulAction(login);
-      const popup = await popupPromise;
-      accountPage = popup || page;
-    }
-    await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
-    if (await accountPage.locator('input[type="password"]').count()) {
-      throw new LoginRequiredError("エステ魂のセラピスト側ログインが切れています");
-    }
-
-    const diaryLink = accountPage.locator("a, button").filter({ hasText: /写メ日記|写メブログ|日記/ }).first();
-    if (!/diary|blog|photo/i.test(accountPage.url())) {
-      if (!await diaryLink.count()) throw new Error("エステ魂の写メ日記メニューが見つかりません");
-      await diaryLink.click();
-      await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
-    }
+    await loginSoulTherapist(accountPage, input.soulCredentials);
+    await gotoSoulDiary(accountPage);
     const newPost = accountPage.locator("a, button").filter({ hasText: /新規投稿|日記を書く|投稿する|新規作成/ }).first();
     if (await newPost.count()) {
-      await newPost.click();
-      await accountPage.waitForLoadState("domcontentloaded").catch(() => undefined);
+      await followEstamaAction(accountPage, newPost);
     }
 
     await setField(accountPage, 'input[name*="title" i], input[id*="title" i], input[name*="subject" i]', input.post.title || "写メ日記");
@@ -1612,7 +1617,7 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
       posted: true,
       uploadedPhotos,
       url: accountPage.url(),
-      ...(soulResult ? { soul: soulResult } : {}),
+      soul: { status: "configured", loginUrl: ESTAMA_SOUL_LOGIN_URL },
     };
   } finally {
     if (browser) await disconnect(browser);
@@ -1628,6 +1633,7 @@ async function claimNextJob(admin: AdminClient, storeId?: string, castId?: strin
   if (castId) query = query.eq("cast_id", castId);
   if (jobId) query = query.eq("id", jobId);
   if (jobType) query = query.eq("job_type", jobType);
+  else query = query.neq("job_type", "estama_post_diary");
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -2646,6 +2652,28 @@ export async function processAvailableJobs(
       const job = await claimNextJob(admin, options.storeId, options.castId, options.jobId, options.jobType);
       if (!job) break;
       try {
+        if (job.cast_id && (job.job_type === "estama_register_cast" || job.job_type === "estama_post_diary")) {
+          const { data: activeCast, error: activeCastError } = await admin.from("casts")
+            .select("id")
+            .eq("id", job.cast_id)
+            .eq("store_id", job.store_id)
+            .eq("is_active", true)
+            .maybeSingle();
+          if (activeCastError) throw activeCastError;
+          if (!activeCast) {
+            const skipped = { skipped: true, reason: "cast_archived" };
+            await completeJob(admin, job, skipped);
+            if (job.job_type === "estama_post_diary" && typeof job.payload?.post_id === "string") {
+              await admin.from("cast_posts").update({
+                esutama_status: "skipped",
+                esutama_error: "アーカイブ済みのセラピストには投稿できません",
+              }).eq("id", job.payload.post_id).eq("store_id", job.store_id);
+              await updatePostOverallStatus(admin, job.payload.post_id);
+            }
+            results.push({ id: job.id, status: "completed", result: skipped });
+            continue;
+          }
+        }
         const skippedShift = await skipOutsideShiftWindow(admin, job);
         if (skippedShift) {
           await completeJob(admin, job, skippedShift);

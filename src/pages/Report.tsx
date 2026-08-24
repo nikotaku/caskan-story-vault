@@ -80,7 +80,8 @@ export default function Report() {
 
       const { data: casts, error: castError } = await supabase
         .from('casts')
-        .select('id');
+        .select('id')
+        .eq('is_active', true);
 
       if (castError) throw castError;
 

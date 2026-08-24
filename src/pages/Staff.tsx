@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Camera, Clock, TrendingUp, Sparkles, Loader2, Link as LinkIcon, Copy, Eye, EyeOff, GripVertical, FileUp, X, ChevronDown, ChevronRight, ExternalLink, Bot, AlertTriangle, Archive, ArchiveRestore } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
 import { ImportModal } from "@/components/ImportModal";
 import { EstamaImportModal, type EstamaProfileData } from "@/components/EstamaImportModal";
@@ -154,6 +154,7 @@ interface Cast {
   memo: string | null;
   dispatch_status: string | null;
   repeat_scheduled: boolean | null;
+  is_active: boolean;
   is_visible: boolean;
   estama_listed?: boolean | null;
   esuran_listed?: boolean | null;
@@ -231,6 +232,8 @@ export default function Staff() {
   const [editingCast, setEditingCast] = useState<Cast | null>(null);
   const [mgmtProps, setMgmtProps] = useState<{ key: string; value: string }[]>([]);
   const [categoryTab, setCategoryTab] = useState<CategoryTag>("ノーステータス");
+  const [archiveView, setArchiveView] = useState<"active" | "archived">("active");
+  const [archiveUpdatingId, setArchiveUpdatingId] = useState<string | null>(null);
   const [showProfileDetail, setShowProfileDetail] = useState(true);
   const [showProfileDetailAdd, setShowProfileDetailAdd] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -280,8 +283,6 @@ export default function Staff() {
     instagram_url: "",
     estama_profile_url: "",
     estama_auto_register: true,
-    estama_account_login_id: "",
-    estama_account_password: "",
     therapist_years: 0,
     follow_list: "",
     media_registration: [] as string[],
@@ -336,18 +337,22 @@ export default function Staff() {
 
   // キャストデータを取得
   useEffect(() => {
+    if (storeLoading || !user?.id) return;
+
+    setLoading(true);
     fetchCasts();
     fetchReferralRewards();
 
     // リアルタイム更新を購読
     const channel = supabase
-      .channel('casts-changes')
+      .channel(`casts-changes-${storeId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'casts'
+          table: 'casts',
+          filter: `store_id=eq.${storeId}`,
         },
         () => {
           fetchCasts();
@@ -358,7 +363,7 @@ export default function Staff() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [storeId, storeLoading, user?.id]);
 
   // 称号バッジマスタ（HP写真右上のバッジ）
   const [titleBadges, setTitleBadges] = useState<{ id: string; label: string }[]>([]);
@@ -373,6 +378,7 @@ export default function Staff() {
         supabase
           .from('casts_admin_safe')
           .select('*')
+          .eq('store_id', storeId)
           .order('display_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.rpc('get_cast_access_tokens'),
@@ -384,10 +390,14 @@ export default function Staff() {
       const tokenMap = new Map(
         (tokensResult.data || []).map((row) => [row.cast_id, row.access_token]),
       );
-      setCasts((data || []).map((cast: Cast) => ({
+      const nextCasts = (data || []).map((cast: Cast) => ({
         ...cast,
         access_token: tokenMap.get(cast.id) || null,
-      })) as Cast[]);
+      })) as Cast[];
+      setCasts(nextCasts);
+      setMemoTargetCastId((current) => current && !nextCasts.some((cast) => cast.id === current && cast.is_active)
+        ? ""
+        : current);
     } catch (error) {
       console.error('Error fetching casts:', error);
       toast({
@@ -404,6 +414,7 @@ export default function Staff() {
     const { data } = await supabase
       .from('referral_rewards')
       .select('id, name, amount')
+      .eq('store_id', storeId)
       .eq('is_active', true)
       .order('name');
     setReferralRewards((data || []) as ReferralReward[]);
@@ -484,12 +495,56 @@ export default function Staff() {
     }
   };
 
-  const filteredCasts = casts.filter(cast =>
+  const activeCasts = casts.filter((cast) => cast.is_active);
+  const statusCasts = casts.filter((cast) => cast.is_active === (archiveView === "active"));
+  const filteredCasts = statusCasts.filter(cast =>
     cast.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const categoryFilteredCasts = filteredCasts.filter(cast => getCastCategory(cast) === categoryTab);
-  const missingSbCasts = categoryFilteredCasts.filter(cast => !isSbLinked(cast));
+  const missingSbCasts = archiveView === "active" ? categoryFilteredCasts.filter(cast => !isSbLinked(cast)) : [];
+
+  const changeArchiveView = (view: "active" | "archived") => {
+    setArchiveView(view);
+    setDeleteConfirmId(null);
+    setEditingCast(null);
+    setIsEditDialogOpen(false);
+  };
+
+  const handleArchiveCast = async (cast: Cast) => {
+    if (!isAdmin || archiveUpdatingId) return;
+    const nextActive = !cast.is_active;
+    const confirmation = nextActive
+      ? `${cast.name}を在籍中に戻しますか？\n\n公開設定がオンの場合、公開ページ・予約候補にも再び表示されます。`
+      : `${cast.name}をアーカイブしますか？\n\n新しい予約・シフト・投稿などの選択肢と公開ページには表示されなくなります。過去の予約・売上データは残ります。`;
+    if (!window.confirm(confirmation)) return;
+
+    setArchiveUpdatingId(cast.id);
+    const { data, error } = await supabase
+      .from("casts")
+      .update({ is_active: nextActive })
+      .eq("id", cast.id)
+      .eq("store_id", cast.store_id)
+      .select("id,is_active")
+      .maybeSingle();
+    setArchiveUpdatingId(null);
+
+    if (error || !data || data.is_active !== nextActive) {
+      toast({
+        title: nextActive ? "在籍中に戻せませんでした" : "アーカイブできませんでした",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCasts((current) => current.map((item) => item.id === cast.id ? { ...item, is_active: nextActive } : item));
+    if (!nextActive && memoTargetCastId === cast.id) setMemoTargetCastId("");
+    setDeleteConfirmId(null);
+    setEditingCast(null);
+    setIsEditDialogOpen(false);
+    setArchiveView(nextActive ? "active" : "archived");
+    toast({ title: nextActive ? "在籍中に戻しました" : "アーカイブしました" });
+  };
 
   const handleAddCast = async () => {
     if (!isAdmin) {
@@ -505,23 +560,6 @@ export default function Staff() {
       toast({
         title: "店舗情報を確認中です",
         description: "少し待ってからもう一度登録してください",
-      });
-      return;
-    }
-
-    if (!!formData.estama_account_login_id !== !!formData.estama_account_password) {
-      toast({
-        title: "魂セラピスト初回設定を確認してください",
-        description: "ログイン用メールアドレスとパスワードは両方入力するか、両方空欄にしてください",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (formData.estama_account_login_id && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.estama_account_login_id)) {
-      toast({
-        title: "魂セラピスト初回設定を確認してください",
-        description: "有効なログイン用メールアドレスを入力してください",
-        variant: "destructive",
       });
       return;
     }
@@ -599,18 +637,15 @@ export default function Staff() {
 
       // Realtime通知の有無に関係なく、登録結果を一覧へ確実に反映する。
       await fetchCasts();
+      setArchiveView("active");
       setCategoryTab("ノーステータス");
       toast({ title: "追加しました", description: "新しいセラピストが登録されました" });
       setIsAddDialogOpen(false);
       if (inserted?.id && formData.estama_auto_register) {
         try {
-          const soulCredentials = formData.estama_account_login_id && formData.estama_account_password
-            ? { loginId: formData.estama_account_login_id, password: formData.estama_account_password, email: formData.estama_account_login_id }
-            : undefined;
           const result = await runEstamaCastAutomation({
             storeId: inserted.store_id,
             castId: inserted.id,
-            soulCredentials,
           });
           const completed = (result.results || []).some((item) => item.status === "completed");
           if (completed) toast({ title: "エスたまへ自動登録しました" });
@@ -671,8 +706,6 @@ export default function Staff() {
       blog_url: profile.blog_url || "",
       estama_profile_url: profile.source_url || "",
       estama_auto_register: false,
-      estama_account_login_id: "",
-      estama_account_password: "",
     });
     setShowProfileDetailAdd(true);
     setIsAddDialogOpen(true);
@@ -684,6 +717,7 @@ export default function Staff() {
 
   const handleEditCast = async (cast: Cast) => {
     console.log('handleEditCast called', { cast, isAdmin });
+    setDeleteConfirmId(null);
     
     // 最新のデータを取得してから編集ダイアログを開く
     try {
@@ -900,6 +934,7 @@ export default function Staff() {
       }
 
       setIsEditDialogOpen(false);
+      setDeleteConfirmId(null);
       setEditingCast(null);
     } catch (error: any) {
       console.error('Error updating cast:', error);
@@ -953,6 +988,12 @@ export default function Staff() {
   const handleMemoExisting = async () => {
     if (!memoText.trim()) { toast({ title: "メモを入力してください", variant: "destructive" }); return; }
     if (!memoTargetCastId) { toast({ title: "追加先のセラピストを選んでください", variant: "destructive" }); return; }
+    const targetCast = activeCasts.find((cast) => cast.id === memoTargetCastId && cast.store_id === storeId);
+    if (!targetCast) {
+      setMemoTargetCastId("");
+      toast({ title: "在籍中のセラピストを選び直してください", variant: "destructive" });
+      return;
+    }
     setParsingMemo(true);
     try {
       const parsed = await parseMemoToFields();
@@ -960,6 +1001,8 @@ export default function Staff() {
         .from("casts_admin_safe")
         .select("*")
         .eq("id", memoTargetCastId)
+        .eq("store_id", storeId)
+        .eq("is_active", true)
         .single();
       if (fetchErr) throw fetchErr;
       // 既存が空の項目のみメモの値で補完（既存の情報は上書きしない）
@@ -982,6 +1025,7 @@ export default function Staff() {
       setMgmtProps(Object.entries(cf).filter(([k]) => !['blog_icon','skebiy_icon'].includes(k)).map(([key, value]) => ({ key, value: String(value) })));
       setShowProfileDetail(true);
       setMemoText("");
+      setDeleteConfirmId(null);
       setIsEditDialogOpen(true);
       toast({ title: "既存セラピストに反映しました", description: "空き項目を補完しました。確認して保存してください" });
     } catch (e: any) {
@@ -1574,7 +1618,7 @@ export default function Staff() {
                         <SelectValue placeholder="追加先のセラピストを選択" />
                       </SelectTrigger>
                       <SelectContent>
-                        {[...casts].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((c) => (
+                        {[...activeCasts].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((c) => (
                           <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -1873,30 +1917,9 @@ export default function Staff() {
                           </span>
                         </label>
                         {formData.estama_auto_register && (
-                          <div className="grid grid-cols-1 gap-3 border-t border-blue-100 pt-3 sm:grid-cols-2">
-                            <div>
-                              <Label htmlFor="add-estama-login-id" className="text-xs">魂ログイン用メール（任意）</Label>
-                              <Input
-                                id="add-estama-login-id"
-                                autoComplete="off"
-                                type="email"
-                                placeholder="therapist@example.jp"
-                                value={formData.estama_account_login_id}
-                                onChange={(e) => setFormData({ ...formData, estama_account_login_id: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="add-estama-password" className="text-xs">魂ログイン用パスワード（任意）</Label>
-                              <Input
-                                id="add-estama-password"
-                                type="password"
-                                autoComplete="new-password"
-                                value={formData.estama_account_password}
-                                onChange={(e) => setFormData({ ...formData, estama_account_password: e.target.value })}
-                              />
-                            </div>
-                            <p className="text-[11px] text-muted-foreground sm:col-span-2">魂セラピストはメールアドレスとパスワードで初回設定します。O2設定済みの場合は登録メールと同じパスワードを使います。この画面では保存しません。</p>
-                          </div>
+                          <p className="border-t border-blue-100 pt-3 text-[11px] text-muted-foreground">
+                            プロフィール登録のみ自動で行います。魂セラピストの初回設定は手動で行い、投稿用のID・パスワードはO2連携画面で設定してください。
+                          </p>
                         )}
                       </div>
 
@@ -1924,7 +1947,13 @@ export default function Staff() {
 
             {/* Edit Dialog */}
             {editingCast && (
-              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <Dialog
+                open={isEditDialogOpen}
+                onOpenChange={(open) => {
+                  setIsEditDialogOpen(open);
+                  if (!open) setDeleteConfirmId(null);
+                }}
+              >
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 flex-wrap">
@@ -2020,6 +2049,21 @@ export default function Staff() {
                           onClick={() => handleSyncEstama(editingCast)}
                         >
                           <ExternalLink size={13} />エスたま転記
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={`h-8 text-xs gap-1 ${editingCast.is_active
+                            ? "text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800"
+                            : "text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800"}`}
+                          onClick={() => void handleArchiveCast(editingCast)}
+                          disabled={archiveUpdatingId === editingCast.id}
+                        >
+                          {archiveUpdatingId === editingCast.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : editingCast.is_active ? <Archive size={13} /> : <ArchiveRestore size={13} />}
+                          {editingCast.is_active ? "アーカイブ" : "在籍中に戻す"}
                         </Button>
                         {deleteConfirmId === editingCast.id ? (
                           <>
@@ -2598,10 +2642,27 @@ export default function Staff() {
             )}
 
             <TabsContent value="management" className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
+                <Button
+                  type="button"
+                  variant={archiveView === "active" ? "default" : "outline"}
+                  onClick={() => changeArchiveView("active")}
+                >
+                  在籍中 {activeCasts.length}
+                </Button>
+                <Button
+                  type="button"
+                  variant={archiveView === "archived" ? "secondary" : "outline"}
+                  onClick={() => changeArchiveView("archived")}
+                >
+                  アーカイブ {casts.length - activeCasts.length}
+                </Button>
+              </div>
+
               {/* Category Tabs */}
               <div className="flex gap-0.5 border-b pb-0 overflow-x-auto scrollbar-none">
                 {CATEGORY_TAGS.map((cat) => {
-                  const count = casts.filter(c => getCastCategory(c) === cat).length;
+                  const count = statusCasts.filter(c => getCastCategory(c) === cat).length;
                   const label = CATEGORY_LABELS[cat];
                   return (
                     <button
@@ -2712,7 +2773,7 @@ export default function Staff() {
                 return (
                   <div
                   key={cast.id}
-                  draggable={isAdmin}
+                  draggable={isAdmin && cast.is_active}
                   onDragStart={() => { dragCastId.current = cast.id; }}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDropCast(cast.id)}
@@ -2765,6 +2826,11 @@ export default function Staff() {
                             <EyeOff size={10} className="mr-0.5" />非表示
                           </Badge>
                         )}
+                        {!cast.is_active && (
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-700 border-amber-300">
+                            <Archive size={10} className="mr-0.5" />アーカイブ
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
@@ -2815,8 +2881,8 @@ export default function Staff() {
 
             {categoryFilteredCasts.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                {casts.length === 0
-                  ? "キャストが登録されていません"
+                {statusCasts.length === 0
+                  ? archiveView === "active" ? "在籍中のキャストが登録されていません" : "アーカイブ済みのキャストはいません"
                   : `「${categoryTab}」のキャストはいません`}
               </div>
             )}

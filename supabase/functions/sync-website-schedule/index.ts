@@ -24,10 +24,12 @@ serve(async (req) => {
     // 既存のキャストを取得
     const { data: casts, error: castsError } = await supabase
       .from('casts')
-      .select('id, name');
+      .select('id, name')
+      .eq('is_active', true);
     if (castsError) throw castsError;
 
     const castMap = new Map(casts.map((c: { id: string; name: string }) => [c.name, c.id]));
+    const activeCastIds = casts.map((c: { id: string }) => c.id);
     console.log(`Found ${castMap.size} casts in DB`);
 
     interface ShiftEntry {
@@ -71,11 +73,14 @@ serve(async (req) => {
 
     // 今日以降の既存シフトを削除して入れ替え
     const todayStr = now.toISOString().split('T')[0];
-    const { error: deleteError } = await supabase
-      .from('shifts')
-      .delete()
-      .gte('shift_date', todayStr);
-    if (deleteError) console.error('Delete error:', deleteError);
+    if (activeCastIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('shifts')
+        .delete()
+        .in('cast_id', activeCastIds)
+        .gte('shift_date', todayStr);
+      if (deleteError) console.error('Delete error:', deleteError);
+    }
 
     let inserted = 0;
     if (allShifts.length > 0) {

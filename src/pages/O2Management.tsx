@@ -29,8 +29,6 @@ type O2Row = {
   estama_profile_url: string | null;
   estama_credential_configured: boolean;
   estama_login_id: string | null;
-  soul_login_url: string | null;
-  soul_status: string | null;
   last_o2_status: string | null;
   last_o2_error: string | null;
   last_posted_at: string | null;
@@ -47,7 +45,6 @@ type EditForm = {
   estamaLoginId: string;
   estamaPassword: string;
   estamaProfileUrl: string;
-  soulLoginUrl: string;
 };
 
 const normalizeO2Id = (value: string) => value
@@ -72,19 +69,7 @@ const buildXProfileUrl = (value: string) => {
   return id ? `https://x.com/${id}` : "";
 };
 
-const normalizeSoulLoginUrl = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(trimmed);
-    const isEstamaHost = parsed.hostname === "estama.jp" || parsed.hostname.endsWith(".estama.jp");
-    return parsed.protocol === "https:" && isEstamaHost ? parsed.toString() : null;
-  } catch {
-    return null;
-  }
-};
-
-const isSoulConfigured = (row: O2Row) => row.estama_credential_configured && row.soul_status === "configured" && Boolean(row.soul_login_url);
+const isSoulConfigured = (row: O2Row) => row.estama_credential_configured;
 
 const connectionBadgeClass = {
   o2: "border-rose-200 bg-rose-100 text-rose-700 hover:bg-rose-100",
@@ -108,10 +93,8 @@ export default function O2Management() {
   const [rows, setRows] = useState<O2Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingSoulLoginUrl, setSavingSoulLoginUrl] = useState(false);
-  const [soulLoginUrlEditing, setSoulLoginUrlEditing] = useState(false);
   const [editing, setEditing] = useState<O2Row | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2Email: "", o2LoginId: "", o2Password: "", xLoginId: "", xPassword: "", estamaLoginId: "", estamaPassword: "", estamaProfileUrl: "", soulLoginUrl: "" });
+  const [editForm, setEditForm] = useState<EditForm>({ created: false, linkageRequested: false, o2Email: "", o2LoginId: "", o2Password: "", xLoginId: "", xPassword: "", estamaLoginId: "", estamaPassword: "", estamaProfileUrl: "" });
   const [showO2Password, setShowO2Password] = useState(false);
   const [showXPassword, setShowXPassword] = useState(false);
   const [showEstamaPassword, setShowEstamaPassword] = useState(false);
@@ -126,23 +109,14 @@ export default function O2Management() {
   const load = useCallback(async () => {
     if (!user || storeLoading) return;
     setLoading(true);
-    const [{ data, error }, { data: soulProfiles, error: soulProfilesError }] = await Promise.all([
+    const [{ data, error }, { data: activeCasts, error: activeCastsError }] = await Promise.all([
       rpc("get_sns_connection_overview_v5", { p_store_id: storeId }),
-      supabase
-        .from("external_cast_profiles")
-        .select("cast_id,soul_login_url,soul_status")
-        .eq("store_id", storeId)
-        .eq("provider", "estama"),
+      supabase.from("casts").select("id").eq("store_id", storeId).eq("is_active", true),
     ]);
     if (error) toast.error(error.message);
-    if (soulProfilesError) toast.error(soulProfilesError.message);
-    const soulByCast = new Map((soulProfiles || []).map((profile) => [profile.cast_id, profile]));
-    const overviewRows = (data || []) as Omit<O2Row, "soul_login_url" | "soul_status">[];
-    setRows(overviewRows.map((row) => ({
-      ...row,
-      soul_login_url: soulByCast.get(row.cast_id)?.soul_login_url || null,
-      soul_status: soulByCast.get(row.cast_id)?.soul_status || null,
-    })));
+    if (activeCastsError) toast.error(activeCastsError.message);
+    const activeCastIds = new Set((activeCasts || []).map((cast) => cast.id));
+    setRows(((data || []) as O2Row[]).filter((row) => activeCastIds.has(row.cast_id)));
     setLoading(false);
   }, [storeId, storeLoading, user]);
 
@@ -172,7 +146,6 @@ export default function O2Management() {
     setShowO2Password(false);
     setShowXPassword(false);
     setShowEstamaPassword(false);
-    setSoulLoginUrlEditing(!row.soul_login_url);
     setEditForm({
       created: row.o2_created,
       linkageRequested: row.o2_linkage_requested,
@@ -184,7 +157,6 @@ export default function O2Management() {
       estamaLoginId: row.estama_login_id || "",
       estamaPassword: "",
       estamaProfileUrl: row.estama_profile_url || "",
-      soulLoginUrl: row.soul_login_url || "",
     });
   };
 
@@ -194,10 +166,6 @@ export default function O2Management() {
 
   const save = async () => {
     if (!editing) return;
-    if (soulLoginUrlEditing && editForm.soulLoginUrl.trim() !== (editing.soul_login_url || "")) {
-      toast.error("魂セラピストの専用ログインURLを先に保存してください");
-      return;
-    }
     const o2Email = editForm.o2Email.trim();
     const o2LoginId = normalizeO2Id(editForm.o2LoginId);
     if (o2LoginId && (!o2Email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o2Email))) {
@@ -268,34 +236,6 @@ export default function O2Management() {
     await load();
   };
 
-  const saveSoulLoginUrl = async () => {
-    if (!editing) return;
-    const soulLoginUrl = normalizeSoulLoginUrl(editForm.soulLoginUrl);
-    if (!soulLoginUrl) {
-      toast.error("魂セラピストの専用ログインページURLを入力してください");
-      return;
-    }
-    setSavingSoulLoginUrl(true);
-    const { error } = await supabase.from("external_cast_profiles").upsert({
-      cast_id: editing.cast_id,
-      store_id: storeId,
-      provider: "estama",
-      soul_login_url: soulLoginUrl,
-      soul_status: "configured",
-    }, { onConflict: "cast_id,provider" });
-    setSavingSoulLoginUrl(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    const updatedRow = { ...editing, soul_login_url: soulLoginUrl, soul_status: "configured" };
-    setEditing(updatedRow);
-    setRows((current) => current.map((row) => row.cast_id === editing.cast_id ? updatedRow : row));
-    setEditForm((current) => ({ ...current, soulLoginUrl }));
-    setSoulLoginUrlEditing(false);
-    toast.success("専用ログインURLを保存し、魂セラピストを設定済みにしました");
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader onToggleSidebar={() => setSidebarOpen((value) => !value)} />
@@ -307,7 +247,7 @@ export default function O2Management() {
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={load} disabled={loading}><RefreshCw size={15} className={loading ? "mr-1 animate-spin" : "mr-1"} />更新</Button>
               <Button variant="outline" asChild><a href="https://m-sns.net/cast/login/" target="_blank" rel="noreferrer">O2を開く<ExternalLink size={15} className="ml-1" /></a></Button>
-              <Button asChild><a href="https://estama.jp/admin/tamathera/therapist/" target="_blank" rel="noreferrer">魂セラピストを開く<ExternalLink size={15} className="ml-1" /></a></Button>
+              <Button asChild><a href="https://estama.jp/tamathera/login/" target="_blank" rel="noreferrer">魂セラピストにログイン<ExternalLink size={15} className="ml-1" /></a></Button>
             </div>
           </div>
 
@@ -318,7 +258,7 @@ export default function O2Management() {
           </div>
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            魂セラピストは初回ログインまで手動で完了し、発行されたセラピスト専用ログインページURLを保存してください。URLの保存時点を設定完了として扱い、保存後は「編集」を押すまで変更できません。
+            魂セラピストの初回設定は手動で完了してください。同時投稿では、ここに保存した魂セラピスト専用のID・パスワードで固定ログイン画面から投稿します。
           </div>
 
           <div className="grid gap-3 md:hidden">
@@ -404,19 +344,10 @@ export default function O2Management() {
                 <div className="relative"><Input id="estama-password" className="bg-white pr-10" type={showEstamaPassword ? "text" : "password"} autoComplete="new-password" placeholder={editing?.estama_credential_configured ? "変更する場合のみ入力" : "魂セラピストのパスワード"} value={editForm.estamaPassword} onChange={(event) => setEditForm({ ...editForm, estamaPassword: event.target.value })} /><button type="button" aria-label={showEstamaPassword ? "魂セラピストのパスワードを隠す" : "魂セラピストのパスワードを表示"} className="absolute right-0 top-0 h-full px-3 text-muted-foreground" onClick={() => setShowEstamaPassword((value) => !value)}>{showEstamaPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
                 {editing?.estama_credential_configured && <p className="mt-1 text-xs text-muted-foreground">現在のパスワードは表示されません。空欄なら変更しません。</p>}
               </div>
-              <div className="rounded-lg bg-muted/60 p-3 text-sm"><p className="font-medium">初回ログインは手動で設定</p><p className="mt-1 text-xs text-muted-foreground">初回ログインまで完了したあと、発行されたセラピスト専用URLを下に保存してください。</p></div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2"><Label htmlFor="soul-login-url">専用ログインページURL</Label>{editing?.soul_login_url && !soulLoginUrlEditing && <Badge variant="outline">保存済み・編集ロック中</Badge>}</div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input id="soul-login-url" type="url" autoComplete="off" readOnly={!soulLoginUrlEditing} placeholder="https://estama.jp/..." value={editForm.soulLoginUrl} onChange={(event) => setEditForm({ ...editForm, soulLoginUrl: event.target.value })} className={!soulLoginUrlEditing ? "bg-white/60" : "bg-white"} />
-                  {soulLoginUrlEditing ? (
-                    <Button type="button" onClick={saveSoulLoginUrl} disabled={savingSoulLoginUrl} className="shrink-0">{savingSoulLoginUrl && <Loader2 size={14} className="mr-1 animate-spin" />}URLを保存</Button>
-                  ) : (
-                    <Button type="button" variant="outline" onClick={() => setSoulLoginUrlEditing(true)} className="shrink-0"><Pencil size={14} className="mr-1" />編集</Button>
-                  )}
-                </div>
-                {!soulLoginUrlEditing && editing?.soul_login_url && <a href={editing.soul_login_url} target="_blank" rel="noreferrer" className="inline-flex items-center text-xs text-primary">保存したログインページを開く<ExternalLink size={12} className="ml-1" /></a>}
-                <p className="text-xs text-muted-foreground">保存すると設定完了になり、次回の投稿ではこのURLを優先して使用します。</p>
+              <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                <p className="font-medium">初回設定は手動で行います</p>
+                <p className="mt-1 text-xs text-muted-foreground">初回設定後、同時投稿では毎回ログイン画面からID・パスワードを入力して投稿します。</p>
+                <a href="https://estama.jp/tamathera/login/" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center text-xs text-primary">魂セラピストのログイン画面を開く<ExternalLink size={12} className="ml-1" /></a>
               </div>
               <div><Label htmlFor="estama-profile-url">プロフィールURL</Label><Input id="estama-profile-url" className="bg-white" type="url" placeholder="https://estama.jp/shop/..." value={editForm.estamaProfileUrl} onChange={(event) => setEditForm({ ...editForm, estamaProfileUrl: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">公開側のセラピストカードと詳細ページへ自動反映されます。</p></div>
             </section>

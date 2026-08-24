@@ -12,13 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Save, X, Plus, ExternalLink, Copy, RefreshCw } from "lucide-react";
+import { Archive, ArchiveRestore, Search, Save, X, Plus, ExternalLink, Copy, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { driveImgUrl } from "@/lib/drive";
 
 interface Cast {
   id: string;
   name: string;
+  is_active: boolean;
   photo: string | null;
   age: number | null;
   height: number | null;
@@ -85,8 +86,10 @@ export default function TherapistDatabase() {
   const [castEdit, setCastEdit] = useState<Cast | null>(null);
   const [internal, setInternal] = useState<InternalProfile | null>(null);
   const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [listStatus, setListStatus] = useState<"active" | "archived">("active");
   const [newTag, setNewTag] = useState("");
   const [tokenMap, setTokenMap] = useState<Record<string, string>>({});
+  const [updatingArchive, setUpdatingArchive] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -104,7 +107,7 @@ export default function TherapistDatabase() {
     try {
       const [castsRes, profilesRes, tokensRes] = await Promise.all([
         supabase.from("casts").select(
-          "id,name,photo,age,height,bust,cup_size,waist,hip,blood_type,therapist_years,favorite_techniques,favorite_food,celebrity_lookalike,day_off_activities,hobbies,ideal_type,message,profile,x_account,line_url,litlink_url,o2_url,ranking_cast_id"
+          "id,name,is_active,photo,age,height,bust,cup_size,waist,hip,blood_type,therapist_years,favorite_techniques,favorite_food,celebrity_lookalike,day_off_activities,hobbies,ideal_type,message,profile,x_account,line_url,litlink_url,o2_url,ranking_cast_id"
         ).order("name"),
         supabase.from("therapist_profiles" as any).select("*"),
         supabase.rpc("get_cast_access_tokens").catch(() => ({ data: null })),
@@ -197,6 +200,42 @@ export default function TherapistDatabase() {
     }
   };
 
+  const handleArchiveStatus = async () => {
+    if (!selectedCast || updatingArchive) return;
+    const nextActive = !selectedCast.is_active;
+    if (!nextActive && !window.confirm(
+      `${selectedCast.name}をアーカイブしますか？\n\n新しい予約・シフトなどの選択肢と公開ページには表示されなくなります。過去の予約・売上データは残ります。`
+    )) return;
+
+    setUpdatingArchive(true);
+    const { data, error } = await supabase
+      .from("casts")
+      .update({ is_active: nextActive })
+      .eq("id", selectedCast.id)
+      .select("id,is_active")
+      .maybeSingle();
+    setUpdatingArchive(false);
+
+    if (error || !data || data.is_active !== nextActive) {
+      toast.error(nextActive ? "在籍中に戻せませんでした" : "アーカイブできませんでした");
+      return;
+    }
+
+    setSelectedCast(null);
+    setCastEdit(null);
+    setInternal(null);
+    setListStatus(nextActive ? "active" : "archived");
+    await fetchAll();
+    toast.success(nextActive ? "在籍中に戻しました" : "アーカイブしました");
+  };
+
+  const changeListStatus = (status: "active" | "archived") => {
+    setListStatus(status);
+    setSelectedCast(null);
+    setCastEdit(null);
+    setInternal(null);
+  };
+
   const setCast = (field: keyof Cast, value: any) =>
     setCastEdit(p => p ? { ...p, [field]: value } : p);
 
@@ -214,7 +253,10 @@ export default function TherapistDatabase() {
     Object.values(internalMap).flatMap((p: any) => p.tags || [])
   )).sort();
 
+  const activeCount = casts.filter((cast) => cast.is_active).length;
+  const archivedCount = casts.length - activeCount;
   const filtered = casts.filter((c) => {
+    if (c.is_active !== (listStatus === "active")) return false;
     if (!c.name.includes(searchQuery)) return false;
     if (filterTags.length === 0) return true;
     const tags: string[] = (internalMap[c.id] as any)?.tags || [];
@@ -259,6 +301,25 @@ export default function TherapistDatabase() {
               <div className="flex items-center gap-2 mb-2">
                 <Search size={16} className="text-muted-foreground" />
                 <Input placeholder="名前で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={listStatus === "active" ? "default" : "outline"}
+                  onClick={() => changeListStatus("active")}
+                >
+                  在籍中 {activeCount}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={listStatus === "archived" ? "secondary" : "outline"}
+                  onClick={() => changeListStatus("archived")}
+                >
+                  アーカイブ {archivedCount}
+                </Button>
               </div>
 
               {allTags.length > 0 && (
@@ -314,6 +375,25 @@ export default function TherapistDatabase() {
                         <img src={driveImgUrl(selectedCast.photo, 200)} className="w-12 h-12 rounded object-cover object-top" />
                       )}
                       <span className="flex-1">{selectedCast.name}</span>
+                      <Badge variant={selectedCast.is_active ? "secondary" : "outline"}>
+                        {selectedCast.is_active ? "在籍中" : "アーカイブ"}
+                      </Badge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selectedCast.is_active ? "destructive" : "outline"}
+                        onClick={() => void handleArchiveStatus()}
+                        disabled={updatingArchive}
+                      >
+                        {updatingArchive ? (
+                          <RefreshCw size={13} className="mr-1.5 animate-spin" />
+                        ) : selectedCast.is_active ? (
+                          <Archive size={13} className="mr-1.5" />
+                        ) : (
+                          <ArchiveRestore size={13} className="mr-1.5" />
+                        )}
+                        {selectedCast.is_active ? "アーカイブ" : "在籍中に戻す"}
+                      </Button>
                       <button
                         onClick={handleSyncRanking}
                         disabled={syncingRanking}

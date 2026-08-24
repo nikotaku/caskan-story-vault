@@ -2,6 +2,7 @@ import {
   LoginRequiredError,
   runPreparedEstamaDiary,
   SoulActivationRequiredError,
+  SoulLoginRequiredError,
   type PreparedEstamaDiary,
 } from "../../server/estama-automation.js";
 
@@ -57,9 +58,11 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const activationRequired = error instanceof SoulActivationRequiredError;
-    res.status(error instanceof LoginRequiredError || activationRequired ? 409 : 422).json({
+    const soulLoginRequired = error instanceof SoulLoginRequiredError;
+    res.status(error instanceof LoginRequiredError || activationRequired || soulLoginRequired ? 409 : 422).json({
       error: message,
       loginRequired: error instanceof LoginRequiredError,
+      soulLoginRequired,
       activationRequired,
     });
   }

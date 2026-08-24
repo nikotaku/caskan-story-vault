@@ -41,6 +41,7 @@ interface Cast {
   name: string;
   photo: string | null;
   store_id: string;
+  is_active: boolean;
 }
 
 interface Shift {
@@ -434,7 +435,8 @@ export default function Schedule() {
     : "https://zenryokuesthe.com";
 
   // 旧「全力」のマスタは履歴編集用に保持し、新規予約では艶華のマスタだけを使う。
-  const enkaCasts = useMemo(() => forStore(casts, ENKA_STORE_ID), [casts]);
+  const activeCasts = useMemo(() => casts.filter((cast) => cast.is_active), [casts]);
+  const enkaCasts = useMemo(() => forStore(activeCasts, ENKA_STORE_ID), [activeCasts]);
   const enkaRooms = useMemo(() => forStore(rooms, ENKA_STORE_ID), [rooms]);
   const enkaBackRates = useMemo(() => forStore(backRates, ENKA_STORE_ID), [backRates]);
   const enkaOptionRates = useMemo(() => forStore(optionRates, ENKA_STORE_ID), [optionRates]);
@@ -530,7 +532,7 @@ export default function Schedule() {
   const fetchFormData = async () => {
     if (!adminStore?.id) return;
     const [{ data: c }, { data: r }, { data: b }, { data: o }, { data: n }, { data: d }, { data: p }, { data: t }, { data: cp }, tokenResult] = await Promise.all([
-      supabase.from("casts").select("id, name, photo, store_id").order("name"),
+      supabase.from("casts").select("id, name, photo, store_id, is_active").order("name"),
       supabase.from("rooms").select("id, name, address, sms_text, map_url, caution_text, store_id").eq("is_active", true).order("name"),
       supabase.from("back_rates").select("*").order("display_order"),
       supabase.from("option_rates").select("*").order("display_order"),
@@ -1688,7 +1690,7 @@ export default function Schedule() {
                   <ReservationForm
                     formData={editFormData}
                     setFormData={setEditFormData}
-                    casts={forStore(casts, detailRes.store_id)}
+                    casts={forStore(casts.filter((cast) => cast.is_active || cast.id === detailRes.cast_id), detailRes.store_id)}
                     rooms={forStore(rooms, detailRes.store_id)}
                     backRates={forStore(backRates, detailRes.store_id)}
                     optionRates={forStore(optionRates, detailRes.store_id)}

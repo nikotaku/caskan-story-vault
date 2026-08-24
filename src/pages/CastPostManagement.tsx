@@ -110,7 +110,7 @@ export default function CastPostManagement() {
     if (!user || storeLoading) return;
     setLoading(true);
     const [castsResult, postsResult, credentialsResult] = await Promise.all([
-      supabase.from("casts").select("id,name").eq("store_id", storeId).order("display_order", { ascending: true }),
+      supabase.from("casts").select("id,name").eq("store_id", storeId).eq("is_active", true).order("display_order", { ascending: true }),
       supabase.from("cast_posts").select("*,casts(name)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(100),
       supabase.from("cast_site_credentials").select("cast_id,site").eq("store_id", storeId).in("site", ["o2", "esutama"]),
     ]);
@@ -128,6 +128,17 @@ export default function CastPostManagement() {
   }, [storeId, storeLoading, user]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (loading || !requestedCastId || casts.some((cast) => cast.id === requestedCastId)) return;
+    setShowDialog(false);
+    setForm((current) => ({ ...current, castId: "" }));
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("cast");
+    nextParams.delete("mode");
+    setSearchParams(nextParams, { replace: true });
+    toast.error("アーカイブ済みのセラピストには投稿できません");
+  }, [casts, loading, requestedCastId, searchParams, setSearchParams]);
 
   const clearPostQuery = () => {
     const nextParams = new URLSearchParams(searchParams);
@@ -172,6 +183,10 @@ export default function CastPostManagement() {
     const body = form.body.trim();
     if (!form.castId || !body) {
       toast.error("セラピストと本文は必須です");
+      return;
+    }
+    if (!casts.some((cast) => cast.id === form.castId)) {
+      toast.error("アーカイブ済みのセラピストには投稿できません");
       return;
     }
     if (form.title.length > 120 || body.length > 5000) {

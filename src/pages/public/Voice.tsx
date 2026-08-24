@@ -68,6 +68,7 @@ export default function Voice() {
         .from("casts")
         .select("id, name, photo")
         .eq("store_id", storeId)
+        .eq("is_active", true)
         .eq("is_visible", true),
     ]).then(([r, c]) => {
       setReviews((r.data as Review[]) || []);
