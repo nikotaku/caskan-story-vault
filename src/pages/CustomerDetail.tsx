@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -13,10 +13,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ArrowLeft, Loader2, Save, Heart, History, Phone, User } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Heart, History, Phone, User, Lightbulb, Copy } from "lucide-react";
 import {
   getCustomerRank, PRESSURE_OPTIONS, AREA_OPTIONS, CONVERSATION_OPTIONS,
 } from "@/lib/customerRank";
+import { getCustomerInsights } from "@/lib/customerInsights";
 
 /**
  * 顧客詳細ページ（/database/customers/:id）。
@@ -26,15 +27,27 @@ import {
 
 interface Customer {
   id: string;
+  store_id: string;
   name: string;
   phone: string | null;
   visit_count: number | null;
   total_spent: number | null;
   last_visited: string | null;
+  last_cast_id: string | null;
   tags: string[] | null;
   notes: string | null;
   is_banned: boolean | null;
   ban_reason: string | null;
+}
+
+interface CrmMetric {
+  median_visit_interval_days: number | null;
+  future_booking_date: string | null;
+  cancellation_rate: number | null;
+  favorite_course: string | null;
+  latest_followup_date: string | null;
+  next_action_date: string | null;
+  identity_conflict: boolean | null;
 }
 
 interface Profile {
@@ -86,6 +99,10 @@ export default function CustomerDetail() {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [crmMetric, setCrmMetric] = useState<CrmMetric | null>(null);
+  const [metricsUnavailable, setMetricsUnavailable] = useState(false);
+  const [lastTherapist, setLastTherapist] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -97,9 +114,10 @@ export default function CustomerDetail() {
     if (!id) return;
     setLoading(true);
     setVisitsLoading(true);
-    const [custRes, profRes] = await Promise.all([
-      supabase.from("customers").select("id, name, phone, visit_count, total_spent, last_visited, tags, notes, is_banned, ban_reason").eq("id", id).maybeSingle(),
+    const [custRes, profRes, metricRes] = await Promise.all([
+      supabase.from("customers").select("id, store_id, name, phone, visit_count, total_spent, last_visited, last_cast_id, tags, notes, is_banned, ban_reason").eq("id", id).maybeSingle(),
       supabase.from("customer_profiles").select("preferred_pressure, concern_areas, conversation_level, ng_items, preference_notes").eq("customer_id", id).maybeSingle(),
+      supabase.rpc("get_customer_crm_metrics", { p_customer_ids: [id] }),
     ]);
     if (!custRes.data) {
       toast.error("顧客が見つかりませんでした");
@@ -108,10 +126,28 @@ export default function CustomerDetail() {
       return;
     }
     setCustomer(custRes.data as Customer);
-    setProfile((profRes.data as Profile) ?? EMPTY_PROFILE);
+    const loadedProfile = (profRes.data as Profile) ?? EMPTY_PROFILE;
+    setProfile(loadedProfile);
+    if (metricRes.error) {
+      console.warn("CRM metrics unavailable", metricRes.error);
+      setCrmMetric(null);
+      setMetricsUnavailable(true);
+    } else {
+      const loadedMetric = ((metricRes.data || [])[0] as unknown as CrmMetric) ?? null;
+      setCrmMetric(loadedMetric);
+      setMetricsUnavailable(!loadedMetric);
+    }
+
+    const castId = (custRes.data as Customer).last_cast_id;
+    if (castId) {
+      const { data: cast } = await supabase.from("casts").select("name").eq("id", castId).maybeSingle();
+      setLastTherapist(cast?.name ?? null);
+    } else {
+      setLastTherapist(null);
+    }
     setLoading(false);
 
-    const { data: visitData, error: visitErr } = await supabase.rpc("get_customer_reservations" as any, { p_customer_id: id });
+    const { data: visitData, error: visitErr } = await supabase.rpc("get_customer_reservations", { p_customer_id: id });
     if (visitErr) toast.error("来店履歴の取得に失敗しました");
     setVisits(((visitData || []) as Visit[]));
     setVisitsLoading(false);
@@ -127,13 +163,14 @@ export default function CustomerDetail() {
     const { error } = await supabase.from("customer_profiles").upsert(
       {
         customer_id: id,
+        store_id: customer?.store_id,
         preferred_pressure: profile.preferred_pressure,
         concern_areas: profile.concern_areas,
         conversation_level: profile.conversation_level,
         ng_items: profile.ng_items,
         preference_notes: profile.preference_notes,
         updated_at: new Date().toISOString(),
-      } as any,
+      },
       { onConflict: "customer_id" },
     );
     if (error) {
@@ -153,6 +190,28 @@ export default function CustomerDetail() {
 
   const completedVisits = visits.filter((v) => v.status === "completed");
   const rank = customer ? getCustomerRank(customer) : null;
+  const insight = useMemo(() => customer ? getCustomerInsights({
+    ...customer,
+    last_therapist: lastTherapist,
+    favorite_course: crmMetric?.favorite_course,
+    median_visit_interval_days: crmMetric?.median_visit_interval_days,
+    future_booking_date: crmMetric?.future_booking_date,
+    cancellation_rate: crmMetric?.cancellation_rate,
+    latest_followup_date: crmMetric?.latest_followup_date,
+    next_action_date: crmMetric?.next_action_date,
+    identity_conflict: crmMetric?.identity_conflict ?? false,
+    data_unavailable: metricsUnavailable,
+  }, new Date()) : null, [customer, lastTherapist, crmMetric, metricsUnavailable]);
+
+  useEffect(() => {
+    setMessageDraft(insight?.messageDraft ?? "");
+  }, [insight?.messageDraft]);
+
+  const copyMessageDraft = async () => {
+    if (!messageDraft) return;
+    await navigator.clipboard.writeText(messageDraft);
+    toast.success("文面案をコピーしました");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -200,7 +259,7 @@ export default function CustomerDetail() {
                       )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
                     <div className="rounded-lg bg-muted/40 px-3 py-2.5 text-center">
                       <p className="text-[11px] text-muted-foreground">来店回数</p>
                       <p className="text-lg font-bold">{customer.visit_count ?? 0}<span className="text-xs font-normal">回</span></p>
@@ -208,6 +267,10 @@ export default function CustomerDetail() {
                     <div className="rounded-lg bg-muted/40 px-3 py-2.5 text-center">
                       <p className="text-[11px] text-muted-foreground">累計利用額</p>
                       <p className="text-lg font-bold">¥{(customer.total_spent ?? 0).toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/40 px-3 py-2.5 text-center">
+                      <p className="text-[11px] text-muted-foreground">平均利用額</p>
+                      <p className="text-lg font-bold">{insight?.averageSpend != null ? `¥${insight.averageSpend.toLocaleString()}` : "—"}</p>
                     </div>
                     <div className="rounded-lg bg-muted/40 px-3 py-2.5 text-center">
                       <p className="text-[11px] text-muted-foreground">最終来店</p>
@@ -221,6 +284,57 @@ export default function CustomerDetail() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* CRM提案 */}
+              {insight && (
+                <Card className="border-primary/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+                      <Lightbulb size={17} className="text-amber-500" />フォローアプローチ提案
+                      <span className="text-[11px] font-semibold rounded-full bg-primary/10 text-primary px-2 py-0.5">
+                        {insight.stage}
+                      </span>
+                      <span className="text-[11px] font-semibold rounded-full bg-muted px-2 py-0.5">
+                        優先度：{insight.salesPriority}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <p className="font-semibold">{insight.approachTitle}</p>
+                      <p className="text-sm mt-1">{insight.staffAction}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/35 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">判定根拠</p>
+                      <ul className="text-xs space-y-1 list-disc pl-4">
+                        {insight.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                      </ul>
+                    </div>
+                    {insight.messageDraft && (
+                      <div className="rounded-lg border px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <p className="text-xs font-semibold text-muted-foreground">連絡文面案</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={copyMessageDraft}
+                            disabled={!messageDraft}
+                          >
+                            <Copy size={12} className="mr-1" />コピー
+                          </Button>
+                        </div>
+                        <Textarea
+                          value={messageDraft}
+                          onChange={(event) => setMessageDraft(event.target.value)}
+                          rows={4}
+                          className="text-sm resize-y"
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* 好み（カルテ） */}
               <Card>
@@ -331,7 +445,7 @@ export default function CustomerDetail() {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm break-words">
                                 {v.course_name ?? "コース未設定"}
-                                {v.cast_name && <span className="text-muted-foreground">　担当：{v.cast_name}</span>}
+                                {v.cast_name && <span className="text-muted-foreground"> 担当：{v.cast_name}</span>}
                               </p>
                               <p className="text-xs text-muted-foreground break-words">
                                 {v.nomination_type ? `${v.nomination_type}` : ""}

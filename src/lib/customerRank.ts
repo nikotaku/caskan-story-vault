@@ -32,7 +32,13 @@ export function getCustomerRank(c: CustomerRankInput): CustomerRank {
 
 export function daysSince(dateStr: string | null): number | null {
   if (!dateStr) return null;
-  const d = new Date(dateStr);
+  const dateOnly = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(dateStr);
   if (Number.isNaN(d.getTime())) return null;
-  return Math.floor((Date.now() - d.getTime()) / 86400000);
+  const today = new Date();
+  const todayDay = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const visitDay = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.max(0, Math.round((todayDay - visitDay) / 86400000));
 }

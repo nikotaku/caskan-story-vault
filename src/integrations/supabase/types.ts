@@ -1737,6 +1737,7 @@ export type Database = {
       }
       customer_followups: {
         Row: {
+          completed_at: string | null
           content: string | null
           created_at: string
           created_by: string | null
@@ -1748,6 +1749,7 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          completed_at?: string | null
           content?: string | null
           created_at?: string
           created_by?: string | null
@@ -1759,6 +1761,7 @@ export type Database = {
           store_id?: string
         }
         Update: {
+          completed_at?: string | null
           content?: string | null
           created_at?: string
           created_by?: string | null
@@ -5785,6 +5788,21 @@ export type Database = {
           reservation_date: string
           start_time: string
           status: string
+        }[]
+      }
+      get_customer_crm_metrics: {
+        Args: { p_customer_ids: string[] }
+        Returns: {
+          cancellation_rate: number | null
+          completed_visits_365d: number
+          customer_id: string
+          favorite_course: string | null
+          future_booking_date: string | null
+          identity_conflict: boolean
+          latest_followup_date: string | null
+          median_visit_interval_days: number | null
+          next_action_date: string | null
+          spend_365d: number
         }[]
       }
       get_o2_connection_overview: {
