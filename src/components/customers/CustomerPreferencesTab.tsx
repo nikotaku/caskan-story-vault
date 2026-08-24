@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,43 @@ const EMPTY_PROFILE: ProfileData = {
   preference_notes: null,
 };
 
+async function fetchAllPreferenceCustomers(storeId: string): Promise<CustomerRow[]> {
+  const result: CustomerRow[] = [];
+  for (let from = 0; ; from += 1_000) {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id, name, phone, visit_count, last_visited")
+      .eq("store_id", storeId)
+      .order("last_visited", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    const page = (data || []) as CustomerRow[];
+    result.push(...page);
+    if (page.length < 1_000) break;
+  }
+  return result;
+}
+
+async function fetchAllProfiles(storeId: string): Promise<(ProfileData & { customer_id: string })[]> {
+  const result: (ProfileData & { customer_id: string })[] = [];
+  for (let from = 0; ; from += 1_000) {
+    const { data, error } = await supabase
+      .from("customer_profiles")
+      .select("customer_id, preferred_pressure, concern_areas, conversation_level, ng_items, preference_notes")
+      .eq("store_id", storeId)
+      .order("customer_id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    const page = (data || []) as (ProfileData & { customer_id: string })[];
+    result.push(...page);
+    if (page.length < 1_000) break;
+  }
+  return result;
+}
+
 export function CustomerPreferencesTab() {
+  const { storeId, loading: storeLoading } = useAdminStore();
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [profiles, setProfiles] = useState<Map<string, ProfileData>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -44,22 +81,18 @@ export function CustomerPreferencesTab() {
   const [form, setForm] = useState<ProfileData>(EMPTY_PROFILE);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    if (storeLoading) return;
     setLoading(true);
     try {
-      const [custRes, profRes] = await Promise.all([
-        supabase.from("customers").select("id, name, phone, visit_count, last_visited").order("last_visited", { ascending: false, nullsFirst: false }),
-        supabase.from("customer_profiles").select("customer_id, preferred_pressure, concern_areas, conversation_level, ng_items, preference_notes"),
+      const [customerRows, profileRows] = await Promise.all([
+        fetchAllPreferenceCustomers(storeId),
+        fetchAllProfiles(storeId),
       ]);
-      if (custRes.error) throw custRes.error;
-      setCustomers((custRes.data || []) as CustomerRow[]);
+      setCustomers(customerRows);
       const map = new Map<string, ProfileData>();
-      for (const p of profRes.data || []) {
-        map.set(p.customer_id, p as ProfileData);
+      for (const profile of profileRows) {
+        map.set(profile.customer_id, profile);
       }
       setProfiles(map);
     } catch (e) {
@@ -68,13 +101,19 @@ export function CustomerPreferencesTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [storeId, storeLoading]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const digitQuery = q.replace(/\D/g, "");
     if (!q) return customers;
     return customers.filter(
-      (c) => c.name?.toLowerCase().includes(q) || c.phone?.replace(/\D/g, "").includes(q.replace(/\D/g, "")),
+      (c) => c.name?.toLowerCase().includes(q)
+        || (digitQuery.length > 0 && c.phone?.replace(/\D/g, "").includes(digitQuery)),
     );
   }, [customers, search]);
 
@@ -90,6 +129,7 @@ export function CustomerPreferencesTab() {
       const { error } = await supabase.from("customer_profiles").upsert(
         {
           customer_id: editing.id,
+          store_id: storeId,
           preferred_pressure: form.preferred_pressure,
           concern_areas: form.concern_areas,
           conversation_level: form.conversation_level,
@@ -135,9 +175,9 @@ export function CustomerPreferencesTab() {
 
       <div className="flex-1 overflow-auto rounded-lg border">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+          <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur-sm">
             <tr className="text-left text-xs text-muted-foreground">
-              <th className="px-3 py-2 font-medium">名前</th>
+              <th className="sticky left-0 z-20 bg-muted px-3 py-2 font-medium">名前</th>
               <th className="px-3 py-2 font-medium">電話番号</th>
               <th className="px-3 py-2 font-medium">圧の好み</th>
               <th className="px-3 py-2 font-medium">気になる部位</th>
@@ -150,8 +190,8 @@ export function CustomerPreferencesTab() {
             {filtered.map((c) => {
               const p = profiles.get(c.id);
               return (
-                <tr key={c.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openEdit(c)}>
-                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                <tr key={c.id} className="group cursor-pointer hover:bg-muted/40" onClick={() => openEdit(c)}>
+                  <td className="sticky left-0 z-[5] bg-background px-3 py-2 font-medium whitespace-nowrap group-hover:bg-muted">
                     <span className="flex items-center gap-1.5">
                       {p && <Heart size={11} className="text-rose-400 shrink-0" />}
                       {c.name}

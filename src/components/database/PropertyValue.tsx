@@ -21,7 +21,7 @@ function Tag({ label, color }: SelectOption) {
 
 interface Props {
   property: Property;
-  value: any;
+  value: unknown;
   compact?: boolean;
 }
 
@@ -41,7 +41,15 @@ export function PropertyValue({ property, value, compact }: Props) {
     case "number":
       return (
         <span className="text-sm tabular-nums">
-          {typeof value === "number" ? value.toLocaleString() : value}
+          {property.format === "currency" && typeof value === "number"
+            ? `¥${value.toLocaleString("ja-JP")}`
+            : property.format === "days" && typeof value === "number"
+              ? `${value.toLocaleString("ja-JP")}日`
+              : property.format === "percent" && typeof value === "number"
+                ? `${value.toLocaleString("ja-JP")}%`
+                : typeof value === "number"
+                  ? value.toLocaleString("ja-JP")
+                  : String(value)}
         </span>
       );
 
@@ -52,27 +60,28 @@ export function PropertyValue({ property, value, compact }: Props) {
     case "phone":
       return (
         <a href={`tel:${String(value).replace(/\D/g, "")}`} className="text-sm text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-          {value}
+          {String(value)}
         </a>
       );
 
     case "email":
       return (
         <a href={`mailto:${value}`} className="text-sm text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-          {value}
+          {String(value)}
         </a>
       );
 
     case "url":
       return (
-        <a href={value} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate block max-w-[200px]" onClick={(e) => e.stopPropagation()}>
-          {value}
+        <a href={String(value)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate block max-w-[200px]" onClick={(e) => e.stopPropagation()}>
+          {String(value)}
         </a>
       );
 
     case "select": {
-      const opt = property.options?.find((o) => o.label === value);
-      return opt ? <Tag {...opt} /> : <span className="text-sm">{value}</span>;
+      const stringValue = String(value);
+      const opt = property.options?.find((o) => o.label === stringValue);
+      return opt ? <Tag {...opt} /> : <span className="text-sm">{stringValue}</span>;
     }
 
     case "multi_select": {

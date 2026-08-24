@@ -13,7 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, Plus, Settings2, Search, ChevronUp, ChevronDown, ChevronsUpDown, Trash2 } from "lucide-react";
+import { X, Plus, Settings2, Search, ChevronUp, ChevronDown, ChevronsUpDown, Trash2, ExternalLink } from "lucide-react";
+
+export interface DatabaseSortOption {
+  label: string;
+  field: string;
+  dir: Exclude<SortDir, null>;
+}
 
 interface Props {
   title: string;
@@ -21,9 +27,13 @@ interface Props {
   defaultProperties: Property[];
   records: DatabaseRecord[];
   loading?: boolean;
-  onAddRecord?: (data: Record<string, any>) => Promise<void>;
-  onUpdateRecord?: (id: string, field: string, value: any) => Promise<void>;
+  onAddRecord?: (data: Record<string, unknown>) => Promise<void>;
+  onUpdateRecord?: (id: string, field: string, value: unknown) => Promise<void>;
   onDeleteRecord?: (id: string) => Promise<void>;
+  defaultSort?: Omit<Sort, "dir"> & { dir: Exclude<SortDir, null> };
+  sortOptions?: DatabaseSortOption[];
+  onOpenRecord?: (record: DatabaseRecord) => void;
+  openRecordLabel?: string;
 }
 
 type SortDir = "asc" | "desc" | null;
@@ -34,7 +44,26 @@ function useStoredProperties(storageKey: string, defaultProperties: Property[]) 
   const [properties, setProperties] = useState<Property[]>(() => {
     try {
       const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : defaultProperties;
+      if (!stored) return defaultProperties;
+
+      const parsed = JSON.parse(stored) as Property[];
+      const storedById = new Map(parsed.map((property) => [property.id, property]));
+      const defaultIds = new Set(defaultProperties.map((property) => property.id));
+
+      // Keep personal display settings, while always introducing newly-added
+      // system columns and the latest read-only/format metadata.
+      return [
+        ...defaultProperties.map((property) => {
+          const saved = storedById.get(property.id);
+          if (!saved) return property;
+          return {
+            ...property,
+            width: saved.width ?? property.width,
+            hidden: saved.hidden ?? property.hidden,
+          };
+        }),
+        ...parsed.filter((property) => !defaultIds.has(property.id)),
+      ];
     } catch {
       return defaultProperties;
     }
@@ -57,14 +86,18 @@ export function NotionDatabaseView({
   onAddRecord,
   onUpdateRecord,
   onDeleteRecord,
+  defaultSort,
+  sortOptions = [],
+  onOpenRecord,
+  openRecordLabel = "詳細ページを開く",
 }: Props) {
   const [properties, setProperties] = useStoredProperties(storageKey, defaultProperties);
   const [showPropEditor, setShowPropEditor] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<DatabaseRecord | null>(null);
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<Sort>({ field: "", dir: null });
-  const [newRecord, setNewRecord] = useState<Record<string, any>>({});
+  const [sort, setSort] = useState<Sort>(defaultSort ?? { field: "", dir: null });
+  const [newRecord, setNewRecord] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
 
   const visibleProps = properties.filter((p) => !p.hidden);
@@ -82,15 +115,32 @@ export function NotionDatabaseView({
       );
     }
     if (sort.field && sort.dir) {
+      const property = properties.find((item) => item.id === sort.field);
       result.sort((a, b) => {
-        const av = a[sort.field] ?? "";
-        const bv = b[sort.field] ?? "";
-        const cmp = String(av).localeCompare(String(bv), "ja");
+        const av = a[sort.field];
+        const bv = b[sort.field];
+
+        // Empty values stay at the bottom in both directions.
+        if (av == null || av === "") return bv == null || bv === "" ? 0 : 1;
+        if (bv == null || bv === "") return -1;
+
+        let cmp: number;
+        if (property?.type === "number" || (typeof av === "number" && typeof bv === "number")) {
+          cmp = Number(av) - Number(bv);
+        } else if (property?.type === "date") {
+          cmp = String(av).slice(0, 10).localeCompare(String(bv).slice(0, 10));
+        } else {
+          cmp = String(av).localeCompare(String(bv), "ja", { numeric: true, sensitivity: "base" });
+        }
+
+        if (cmp === 0) cmp = String(a.id).localeCompare(String(b.id));
         return sort.dir === "asc" ? cmp : -cmp;
       });
     }
     return result;
-  }, [records, search, sort, visibleProps]);
+  }, [records, search, sort, visibleProps, properties]);
+
+  const selectedSortValue = sort.dir ? `${sort.field}:${sort.dir}` : "none";
 
   const toggleSort = (field: string) => {
     setSort((prev) => {
@@ -114,21 +164,32 @@ export function NotionDatabaseView({
       await onAddRecord(newRecord);
       setNewRecord({});
       setShowAddForm(false);
+    } catch {
+      // The parent displays the domain-specific error. Keep the form open.
     } finally {
       setSaving(false);
     }
   };
 
-  const handleFieldUpdate = async (field: string, value: any) => {
+  const handleFieldUpdate = async (field: string, value: unknown) => {
     if (!selectedRecord || !onUpdateRecord) return;
+    const previousRecord = selectedRecord;
     setSelectedRecord((prev) => prev ? { ...prev, [field]: value } : null);
-    await onUpdateRecord(selectedRecord.id, field, value);
+    try {
+      await onUpdateRecord(selectedRecord.id, field, value);
+    } catch {
+      setSelectedRecord(previousRecord);
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!onDeleteRecord || !confirm("削除しますか？")) return;
-    await onDeleteRecord(id);
-    if (selectedRecord?.id === id) setSelectedRecord(null);
+    try {
+      await onDeleteRecord(id);
+      if (selectedRecord?.id === id) setSelectedRecord(null);
+    } catch {
+      // The parent displays the error; retain the row and detail panel.
+    }
   };
 
   return (
@@ -139,11 +200,32 @@ export function NotionDatabaseView({
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="検索..."
+            aria-label={`${title}を検索`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8 h-8 text-sm"
           />
         </div>
+        {sortOptions.length > 0 && (
+          <Select
+            value={selectedSortValue}
+            onValueChange={(value) => {
+              const option = sortOptions.find((item) => `${item.field}:${item.dir}` === value);
+              if (option) setSort({ field: option.field, dir: option.dir });
+            }}
+          >
+            <SelectTrigger className="h-8 w-full sm:w-[210px] text-xs" aria-label="並び順">
+              <SelectValue placeholder="並び順" />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={`${option.field}:${option.dir}`} value={`${option.field}:${option.dir}`}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="flex items-center gap-2 ml-auto">
           <span className="text-xs text-muted-foreground">{filtered.length}件</span>
           <Button size="sm" variant="outline" onClick={() => setShowPropEditor(true)}>
@@ -166,10 +248,10 @@ export function NotionDatabaseView({
             <table className="w-full text-sm border-collapse">
               <thead className="sticky top-0 bg-muted/50 z-10">
                 <tr>
-                  {visibleProps.map((p) => (
+                  {visibleProps.map((p, index) => (
                     <th
                       key={p.id}
-                      className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap border-b border-border cursor-pointer hover:bg-muted/80 select-none"
+                      className={`px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap border-b border-border cursor-pointer hover:bg-muted/80 select-none ${index === 0 ? "sticky left-0 z-20 bg-muted" : ""}`}
                       style={{ minWidth: p.width || 120 }}
                       onClick={() => toggleSort(p.id)}
                     >
@@ -193,11 +275,14 @@ export function NotionDatabaseView({
                   filtered.map((record) => (
                     <tr
                       key={record.id}
-                      className={`border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors ${selectedRecord?.id === record.id ? "bg-primary/5" : ""}`}
+                      className={`group border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors ${selectedRecord?.id === record.id ? "bg-primary/5" : ""}`}
                       onClick={() => setSelectedRecord(record)}
                     >
-                      {visibleProps.map((p) => (
-                        <td key={p.id} className="px-3 py-2 max-w-[250px]">
+                      {visibleProps.map((p, index) => (
+                        <td
+                          key={p.id}
+                          className={`px-3 py-2 max-w-[250px] ${index === 0 ? "sticky left-0 z-[5] bg-background group-hover:bg-muted" : ""}`}
+                        >
                           <PropertyValue property={p} value={record[p.id]} compact />
                         </td>
                       ))}
@@ -224,9 +309,23 @@ export function NotionDatabaseView({
           <div className="w-full md:w-[360px] flex-shrink-0 border border-border rounded-lg overflow-hidden flex flex-col bg-background">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <span className="font-semibold text-sm">詳細</span>
-              <Button size="sm" variant="ghost" onClick={() => setSelectedRecord(null)}>
-                <X size={16} />
-              </Button>
+              <div className="flex items-center gap-1">
+                {onOpenRecord && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    title={openRecordLabel}
+                    aria-label={openRecordLabel}
+                    onClick={() => onOpenRecord(selectedRecord)}
+                  >
+                    <ExternalLink size={13} className="mr-1" />カルテ
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setSelectedRecord(null)}>
+                  <X size={16} />
+                </Button>
+              </div>
             </div>
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
               {properties.map((p) => (
@@ -236,13 +335,13 @@ export function NotionDatabaseView({
                     property={p}
                     value={selectedRecord[p.id]}
                     onChange={(v) => handleFieldUpdate(p.id, v)}
-                    disabled={!onUpdateRecord}
+                    disabled={!onUpdateRecord || p.readOnly}
                   />
                 </div>
               ))}
             </div>
             {onDeleteRecord && (
-              <div className="p-4 border-t border-border">
+              <div className="p-4 border-t border-border space-y-2">
                 <Button
                   variant="destructive"
                   size="sm"
@@ -266,7 +365,7 @@ export function NotionDatabaseView({
               <Button size="sm" variant="ghost" onClick={() => setShowAddForm(false)}><X size={16} /></Button>
             </div>
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
-              {properties.map((p) => (
+              {properties.filter((p) => !p.readOnly || p.allowOnCreate).map((p) => (
                 <div key={p.id}>
                   <Label className="text-xs text-muted-foreground mb-1 block">{p.name}</Label>
                   <PropertyInput
@@ -308,8 +407,8 @@ function PropertyInput({
   disabled,
 }: {
   property: Property;
-  value: any;
-  onChange: (v: any) => void;
+  value: unknown;
+  onChange: (v: unknown) => void;
   disabled?: boolean;
 }) {
   const base = "text-sm";
@@ -328,7 +427,7 @@ function PropertyInput({
       return (
         <Input
           type="number"
-          value={value ?? ""}
+          value={typeof value === "number" || typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
           disabled={disabled}
           className={`h-8 ${base}`}
@@ -346,10 +445,14 @@ function PropertyInput({
       );
     case "select":
       return (
-        <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
+        <Select
+          value={typeof value === "string" && value ? value : "__unset__"}
+          onValueChange={(next) => onChange(next === "__unset__" ? null : next)}
+          disabled={disabled}
+        >
           <SelectTrigger className={`h-8 ${base}`}><SelectValue placeholder="選択..." /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">—</SelectItem>
+            <SelectItem value="__unset__">—</SelectItem>
             {(property.options || []).map((o) => (
               <SelectItem key={o.label} value={o.label}>{o.label}</SelectItem>
             ))}
@@ -390,7 +493,7 @@ function PropertyInput({
       if (property.type === "text" && !disabled) {
         return (
           <Textarea
-            value={value ?? ""}
+            value={typeof value === "string" ? value : ""}
             onChange={(e) => onChange(e.target.value)}
             rows={2}
             className={`text-sm resize-none`}
@@ -399,7 +502,7 @@ function PropertyInput({
       }
       return (
         <Input
-          value={value ?? ""}
+          value={typeof value === "string" || typeof value === "number" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           className={`h-8 ${base}`}

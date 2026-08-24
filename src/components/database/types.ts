@@ -21,9 +21,14 @@ export interface Property {
   options?: SelectOption[];
   width?: number;
   hidden?: boolean;
+  /** Calculated/system fields are displayed but cannot be edited. */
+  readOnly?: boolean;
+  /** Read-only after creation, but available in the new-record form. */
+  allowOnCreate?: boolean;
+  format?: "currency" | "days" | "percent";
 }
 
 export interface DatabaseRecord {
   id: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }

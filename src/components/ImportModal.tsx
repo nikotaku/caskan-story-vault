@@ -34,6 +34,7 @@ interface ImportModalProps {
   open: boolean;
   onClose: () => void;
   type: "casts" | "customers" | "reservations";
+  storeId?: string;
   onSuccess?: () => void;
 }
 
@@ -43,9 +44,11 @@ const LABELS = {
   reservations: { title: "予約CSVインポート",        hint: "reservations_all.csv" },
 };
 
-export function ImportModal({ open, onClose, type, onSuccess }: ImportModalProps) {
+type ImportRow = Record<string, unknown>;
+
+export function ImportModal({ open, onClose, type, storeId, onSuccess }: ImportModalProps) {
   const [fileName, setFileName] = useState("");
-  const [parsed, setParsed] = useState<any[]>([]);
+  const [parsed, setParsed] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
@@ -59,9 +62,11 @@ export function ImportModal({ open, onClose, type, onSuccess }: ImportModalProps
   const handleOpen = async (isOpen: boolean) => {
     if (!isOpen) { onClose(); reset(); return; }
     if (type === "reservations") {
-      const { data } = await supabase.from("casts").select("id, name");
+      let query = supabase.from("casts").select("id, name");
+      if (storeId) query = query.eq("store_id", storeId);
+      const { data } = await query;
       const m = new Map<string, string>();
-      (data || []).forEach((c: any) => m.set(c.name, c.id));
+      (data || []).forEach((c) => m.set(c.name, c.id));
       setCastMap(m);
     }
   };
@@ -71,7 +76,7 @@ export function ImportModal({ open, onClose, type, onSuccess }: ImportModalProps
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
-      let rows: any[] = [];
+      let rows: ImportRow[] = [];
       if (type === "casts") rows = parseCastCSV(text);
       else if (type === "customers") rows = parseCustomerCSV(text);
       else rows = parseReservationCSV(text, castMap);
@@ -85,18 +90,25 @@ export function ImportModal({ open, onClose, type, onSuccess }: ImportModalProps
     setErrorMsg("");
     try {
       if (type === "reservations" && overwrite) {
-        const dates = [...new Set(parsed.map((r: any) => r.reservation_date))];
+        const dates = [...new Set(
+          parsed
+            .map((row) => row.reservation_date)
+            .filter((date): date is string => typeof date === "string" && date.length > 0),
+        )];
         for (const date of dates) {
-          const { error } = await supabase.from("reservations").delete().eq("reservation_date", date);
+          let query = supabase.from("reservations").delete().eq("reservation_date", date);
+          if (storeId) query = query.eq("store_id", storeId);
+          const { error } = await query;
           if (error) throw new Error(`削除失敗 (${date}): ${error.message}`);
         }
       }
-      const count = await batchInsert(type, parsed, setProgress);
+      const rows = storeId ? parsed.map((row) => ({ ...row, store_id: storeId })) : parsed;
+      const count = await batchInsert(type, rows, setProgress);
       toast.success(`${count}件をインポートしました`);
       setDone(true);
       onSuccess?.();
-    } catch (e: any) {
-      setErrorMsg(e.message || String(e));
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : String(e));
       toast.error("インポートに失敗しました");
     } finally {
       setImporting(false);
