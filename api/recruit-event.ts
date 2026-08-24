@@ -1,9 +1,4 @@
 import { createHmac } from "node:crypto";
-import {
-  RECRUIT_EVENTS,
-  RECRUIT_EXPERIMENT_ID,
-  RECRUIT_VARIANTS,
-} from "../src/lib/recruitExperimentConfig";
 
 type RequestLike = {
   method?: string;
@@ -23,6 +18,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL
   || process.env.VITE_SUPABASE_URL
   || "https://imrxzkivwrkqbhqfbbes.supabase.co";
 const STORE_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+const EXPERIMENT_ID_PATTERN = /^[a-z0-9_-]{1,80}$/;
+const EVENT_LABEL_PATTERN = /^[a-z0-9_-]{1,40}$/;
 const VISITOR_TOKEN_PATTERN = /^(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$/i;
 
 function header(req: RequestLike, name: string): string {
@@ -81,9 +78,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   const visitorToken = typeof body.visitorToken === "string" ? body.visitorToken : "";
 
   if (!STORE_ID_PATTERN.test(storeId)
-    || experimentId !== RECRUIT_EXPERIMENT_ID
-    || !RECRUIT_VARIANTS.some((candidate) => candidate === variant)
-    || !RECRUIT_EVENTS.some((candidate) => candidate === event)
+    || !EXPERIMENT_ID_PATTERN.test(experimentId)
+    || !EVENT_LABEL_PATTERN.test(variant)
+    || !EVENT_LABEL_PATTERN.test(event)
     || !VISITOR_TOKEN_PATTERN.test(visitorToken)) {
     res.status(400).json({ error: "Invalid event" });
     return;
