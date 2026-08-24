@@ -7,7 +7,7 @@ const ROUTES = [
   ["/pricing", "monthly", "0.7"],
   ["/access", "monthly", "0.7"],
   ["/voice", "weekly", "0.7"],
-  ["/recruit-talk", "monthly", "0.6"],
+  ["/recruit-talk", "daily", "0.7"],
 ];
 
 const escapeXml = (value) => value.replace(/[<>&'\"]/g, (character) => ({

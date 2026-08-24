@@ -219,6 +219,7 @@ const menuItems: MenuItem[] = [
       { href: "/service-manual", label: "接客マニュアル" },
       { href: "/recruitment-criteria", label: "採用基準確認シート" },
       { href: "/recruit-talk", label: "求人LP" },
+      { href: "/marketing/recruit-lp", label: "求人LP A/B分析" },
       { href: "/interview", label: "面談用ページ（画面共有）" },
     ],
   },

@@ -12,7 +12,7 @@ const PAGE_LABELS: Array<{ pattern: RegExp; label: string; description: string }
   { pattern: /^\/(pricing|system)\/?$/, label: "料金・システム", description: "コース料金、オプション、割引などの料金システムをご案内します。" },
   { pattern: /^\/access\/?$/, label: "アクセス", description: "仙台市内のご利用エリアとアクセス情報をご案内します。" },
   { pattern: /^\/voice\/?$/, label: "お客様の声", description: "ご利用いただいたお客様から寄せられた口コミをご紹介します。" },
-  { pattern: /^\/recruit-talk\/?$/, label: "求人情報", description: "仙台・宮城エリアで働くセラピストの求人情報をご案内します。" },
+  { pattern: /^\/recruit-talk\/?$/, label: "セラピスト求人", description: "仙台・宮城で未経験から始められるセラピスト求人です。自由出勤、研修、プライバシー対策、応募前の相談方法をご案内します。" },
   { pattern: /^\/page\/[^/]+\/?$/, label: "お知らせ", description: "店舗からの最新情報をご案内します。" },
 ];
 
