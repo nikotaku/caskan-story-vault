@@ -373,6 +373,7 @@ export default function Staff() {
         supabase
           .from('casts_admin_safe')
           .select('*')
+          .eq('is_active', true)
           .order('display_order', { ascending: true })
           .order('created_at', { ascending: false }),
         supabase.rpc('get_cast_access_tokens'),

@@ -38,6 +38,7 @@ export default function RecruitTalk() {
       .then(({ data }) => setBackRates((data || []) as BackRate[]));
     supabase.from("casts").select("id", { count: "exact", head: true })
       .eq("store_id", storeId)
+      .eq("is_active", true)
       .then(({ count }) => setCastCount(count ?? null));
   }, [storeId, storeName]);
 

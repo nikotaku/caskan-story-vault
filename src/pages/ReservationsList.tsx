@@ -64,7 +64,7 @@ interface Reservation {
   casts: { name: string } | null;
 }
 
-interface Cast { id: string; name: string; store_id: string; }
+interface Cast { id: string; name: string; store_id: string; is_active: boolean; }
 interface Room { id: string; name: string; address: string | null; store_id: string; }
 interface BackRate { id: string; course_type: string; duration: number; customer_price: number; therapist_back: number; store_id: string; }
 interface OptionRate { id: string; option_name: string; customer_price: number; therapist_back: number; store_id: string; }
@@ -177,7 +177,7 @@ export default function ReservationsList() {
   }, [user]);
 
   const fetchCasts = async () => {
-    const { data } = await supabase.from("casts").select("id, name, store_id").order("name");
+    const { data } = await supabase.from("casts").select("id, name, store_id, is_active").order("name");
     setCasts(data || []);
   };
 
@@ -437,7 +437,7 @@ export default function ReservationsList() {
                       <ReservationForm
                         formData={formData}
                         setFormData={setFormData}
-                        casts={forStore(casts, ENKA_STORE_ID)}
+                        casts={forStore(casts.filter((cast) => cast.is_active), ENKA_STORE_ID)}
                         rooms={forStore(rooms, ENKA_STORE_ID)}
                         backRates={forStore(backRates, ENKA_STORE_ID)}
                         optionRates={forStore(optionRates, ENKA_STORE_ID)}
@@ -467,7 +467,7 @@ export default function ReservationsList() {
               <GoogleSheetPanel
                 source="reservations"
                 onImport={async (headers, rows) => {
-                  const { data: castData } = await supabase.from("casts").select("id, name");
+                  const { data: castData } = await supabase.from("casts").select("id, name").eq("is_active", true);
                   const castMap = new Map<string, string>();
                   (castData || []).forEach((c: { id: string; name: string }) => castMap.set(c.name, c.id));
                   const mapped = mapReservationRows(headers, rows, castMap);
@@ -627,7 +627,7 @@ export default function ReservationsList() {
             <ReservationForm
               formData={editFormData}
               setFormData={setEditFormData}
-              casts={forStore(casts, editingReservation.store_id)}
+              casts={forStore(casts.filter((cast) => cast.is_active || cast.id === editingReservation.cast_id), editingReservation.store_id)}
               rooms={forStore(rooms, editingReservation.store_id)}
               backRates={forStore(backRates, editingReservation.store_id)}
               optionRates={forStore(optionRates, editingReservation.store_id)}

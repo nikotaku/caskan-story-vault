@@ -122,7 +122,7 @@ const CastDetail = () => {
   const fetchAll = useCallback(async () => {
     try {
       const [castRes, profileRes] = await Promise.all([
-        supabase.from("casts").select("id,name,age,height,bust_size,body_size,blood_type,therapist_years,type,status,photo,photos,profile,message,favorite_techniques,favorite_food,celebrity_lookalike,day_off_activities,hobbies,ideal_type,room,x_account,instagram_url,line_url,litlink_url,o2_url,estama_profile_url,blog_url,skebiy_url,tags,shop_comment").eq("id", id).eq("store_id", storeId).single(),
+        supabase.from("casts").select("id,name,age,height,bust_size,body_size,blood_type,therapist_years,type,status,photo,photos,profile,message,favorite_techniques,favorite_food,celebrity_lookalike,day_off_activities,hobbies,ideal_type,room,x_account,instagram_url,line_url,litlink_url,o2_url,estama_profile_url,blog_url,skebiy_url,tags,shop_comment").eq("id", id).eq("store_id", storeId).eq("is_active", true).single(),
         supabase.from("therapist_profiles").select("*").eq("cast_id", id).maybeSingle(),
       ]);
       if (castRes.error) throw castRes.error;

@@ -96,10 +96,10 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   const postId = stringValue(payload.post_id);
   const [{ data: connection }, { data: cast }, { data: external }, { data: post }, { data: soulCredential }] = await Promise.all([
     admin.from("automation_connections").select("browserbase_context_id,status").eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
-    admin.from("casts").select("name,o2_login_email").eq("id", job.cast_id).maybeSingle(),
-    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status,soul_status,soul_login_url").eq("cast_id", job.cast_id).eq("provider", "estama").maybeSingle(),
-    admin.from("cast_posts").select("title,body,image_urls").eq("id", postId).eq("cast_id", job.cast_id).maybeSingle(),
-    admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("site", "o2").maybeSingle(),
+    admin.from("casts").select("name").eq("id", job.cast_id).eq("store_id", job.store_id).eq("is_active", true).maybeSingle(),
+    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status").eq("cast_id", job.cast_id).eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
+    admin.from("cast_posts").select("title,body,image_urls").eq("id", postId).eq("cast_id", job.cast_id).eq("store_id", job.store_id).maybeSingle(),
+    admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("store_id", job.store_id).eq("site", "esutama").maybeSingle(),
   ]);
   if (!connection?.browserbase_context_id || connection.status !== "ready") {
     return json(req, { error: "エステ魂ログイン設定が未完了です" }, 409);
@@ -107,25 +107,22 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   if (!cast || !post || !external || external.sync_status !== "synced") {
     return json(req, { error: "先にセラピストをエステ魂へ登録してください" }, 409);
   }
-  const soulStatus = stringValue(external.soul_status);
-  const soulReady = soulStatus === "configured";
-  const needsSoulSetup = !soulReady;
   const hasSoulCredential = Boolean(soulCredential?.login_id && soulCredential?.password);
-  if (needsSoulSetup && !hasSoulCredential) {
-    return json(req, { error: "魂セラピスト本人ログイン情報が未設定です" }, 409);
+  if (!hasSoulCredential) {
+    return json(req, { error: "魂セラピストのID・パスワードが未設定です" }, 409);
   }
   return json(req, {
     work: {
       jobId: job.id,
       browserbaseContextId: connection.browserbase_context_id,
-      soulStatus,
-      soulLoginUrl: stringValue(external.soul_login_url) || undefined,
-      allowPendingReset: payload.reset_soul_pending === true,
+      // Vercel側の切替中も旧workerが初回設定を自動実行しないよう、固定ログイン方式として渡す。
+      soulStatus: "configured",
+      soulLoginUrl: "https://estama.jp/tamathera/login/",
       ...(hasSoulCredential ? {
         soulCredentials: {
           loginId: soulCredential!.login_id,
           password: soulCredential!.password,
-          email: cast.o2_login_email || undefined,
+          email: soulCredential!.login_id,
         },
       } : {}),
       cast: { name: cast.name, externalId: external.external_cast_id, remoteName: external.remote_name },
@@ -256,8 +253,9 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
 
   const message = stringValue(workerPayload.error) || "魂セラピスト投稿に失敗しました";
   const loginRequired = workerPayload.loginRequired === true;
+  const soulLoginRequired = workerPayload.soulLoginRequired === true;
   const activationRequired = workerPayload.activationRequired === true;
-  const waitingForLogin = loginRequired || activationRequired;
+  const waitingForLogin = loginRequired || soulLoginRequired || activationRequired;
   const retry = !waitingForLogin && claimed.attempts < claimed.max_attempts;
   const delayMinutes = Math.min(60, 2 ** Math.max(0, claimed.attempts - 1));
   await Promise.all([
@@ -302,7 +300,7 @@ serve(async (req) => {
       .maybeSingle<PostRecord>();
     if (postError) throw postError;
     const { data: cast } = post
-      ? await admin.from("casts").select("id,access_token").eq("id", post.cast_id).maybeSingle()
+      ? await admin.from("casts").select("id,access_token").eq("id", post.cast_id).eq("is_active", true).maybeSingle()
       : { data: null };
     if (!post || cast?.access_token !== accessToken) return json(req, { error: "ポータルの認証情報が正しくありません" }, 401);
     if (target === "esutama") return dispatchEstamaDiary(req, admin, post);
@@ -566,4 +564,3 @@ async function downloadImage(rawUrl: string, index: number) {
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   return { blob: new Blob([buffer], { type: contentType }), name: `photo-${index + 1}.${extension}` };
 }
-

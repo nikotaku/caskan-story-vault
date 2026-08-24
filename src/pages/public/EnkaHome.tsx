@@ -29,7 +29,7 @@ interface ShiftRow {
   cast_id: string;
   start_time: string;
   end_time: string;
-  casts: { id: string; name: string; photo: string | null; age: number | null } | null;
+  casts: { id: string; name: string; photo: string | null; age: number | null; is_active: boolean; is_visible: boolean } | null;
 }
 
 interface ReservationRow {
@@ -164,7 +164,7 @@ export default function EnkaHome() {
     Promise.all([
       supabase
         .from("shifts")
-        .select("id, cast_id, start_time, end_time, casts (id, name, photo, age)")
+        .select("id, cast_id, start_time, end_time, casts (id, name, photo, age, is_active, is_visible)")
         .eq("shift_date", today)
         .eq("store_id", storeId)
         .order("start_time"),
@@ -174,7 +174,7 @@ export default function EnkaHome() {
         const seen = new Set<string>();
         setTodayShifts(
           ((data ?? []) as unknown as ShiftRow[]).filter((s) => {
-            if (!s.casts || seen.has(s.cast_id)) return false;
+            if (!s.casts?.is_active || !s.casts?.is_visible || seen.has(s.cast_id)) return false;
             seen.add(s.cast_id);
             return true;
           }),
@@ -192,6 +192,7 @@ export default function EnkaHome() {
       .from("casts")
       .select("id, name, age, photo, join_date")
       .eq("store_id", storeId)
+      .eq("is_active", true)
       .eq("is_visible", true)
       .gte("join_date", format(monthAgo, "yyyy-MM-dd"))
       .order("join_date", { ascending: false })

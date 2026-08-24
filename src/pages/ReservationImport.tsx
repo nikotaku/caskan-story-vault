@@ -162,7 +162,7 @@ export default function ReservationImport() {
   }, [user]);
 
   const loadCasts = async () => {
-    const { data } = await supabase.from("casts").select("id, name");
+    const { data } = await supabase.from("casts").select("id, name").eq("is_active", true);
     const map = new Map<string, string>();
     (data || []).forEach((c: any) => map.set(c.name, c.id));
     setCastMap(map);

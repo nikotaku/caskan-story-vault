@@ -81,7 +81,7 @@ export default function Expenses() {
   };
 
   const fetchCasts = async () => {
-    const { data } = await supabase.from("casts").select("id, name").order("name");
+    const { data } = await supabase.from("casts").select("id, name").eq("is_active", true).order("name");
     if (data) setCasts(data);
   };
 

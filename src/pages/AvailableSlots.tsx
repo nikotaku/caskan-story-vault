@@ -71,6 +71,7 @@ export default function AvailableSlots() {
     const { data, error } = await supabase
       .from("casts")
       .select("id, name")
+      .eq("is_active", true)
       .order("name");
     if (!error) setCasts(data || []);
   };

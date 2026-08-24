@@ -43,6 +43,8 @@ interface Shift {
     cup_size: string | null;
     profile: string | null;
     x_account: string | null;
+    is_active: boolean;
+    is_visible: boolean;
   };
 }
 
@@ -98,12 +100,13 @@ const Home = () => {
         .from("casts")
         .select("id, name, age, height, cup_size, photo, profile, join_date, x_account, status")
         .eq("store_id", storeId)
+        .eq("is_active", true)
         .order("join_date", { ascending: false }),
       supabase
         .from("shifts")
         .select(`
           id, cast_id, start_time, end_time, room,
-          casts (id, name, photo, age, height, cup_size, profile, x_account, title_badge_id)
+          casts (id, name, photo, age, height, cup_size, profile, x_account, title_badge_id, is_active, is_visible)
         `)
         .eq("shift_date", today)
         .eq("store_id", storeId)
@@ -120,6 +123,7 @@ const Home = () => {
       // Deduplicate by cast_id
       const seen = new Set<string>();
       const unique = shiftsRes.data.filter((s) => {
+        if (!s.casts?.is_active || !s.casts?.is_visible) return false;
         if (seen.has(s.cast_id)) return false;
         seen.add(s.cast_id);
         return true;

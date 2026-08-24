@@ -36,13 +36,16 @@ export default function CastDiary() {
   useEffect(() => {
     if (!id) return;
     Promise.all([
-      supabase.from("casts").select("name").eq("id", id).eq("store_id", storeId).maybeSingle(),
+      supabase.from("casts").select("name").eq("id", id).eq("store_id", storeId).eq("is_active", true).maybeSingle(),
       supabase.from("cast_diaries" as any).select("*").eq("cast_id", id).order("display_order", { ascending: true }),
     ]).then(([c, d]) => {
-      setCastName((c.data as any)?.name ?? "");
-      setDiaries(((d.data as any[]) ?? []) as Diary[]);
+      const activeCast = c.data as { name: string } | null;
+      setCastName(activeCast?.name ?? "");
+      setDiaries(activeCast ? (((d.data as any[]) ?? []) as Diary[]) : []);
       setLoading(false);
-      document.title = `${(c.data as any)?.name ?? ""} 写メ日記 | ${store?.name ?? ""}`;
+      document.title = activeCast
+        ? `${activeCast.name} 写メ日記 | ${store?.name ?? ""}`
+        : store?.name ?? "";
     });
   }, [id, storeId, store?.name]);
 

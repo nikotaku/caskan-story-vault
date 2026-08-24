@@ -79,6 +79,7 @@ const Casts = () => {
       const { data, error } = await supabase
         .from("casts")
         .select("id,name,age,height,bust,cup_size,waist,hip,type,status,photo,photos,title_badge_id,tags,join_date,profile,x_account,line_url,litlink_url,o2_url,estama_profile_url,instagram_url,blog_url,skebiy_url,custom_fields")
+        .eq("is_active", true)
         .eq("is_visible", true)
         .eq("store_id", storeId)
         .order("name", { ascending: true });

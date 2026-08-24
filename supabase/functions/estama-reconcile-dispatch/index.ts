@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
           .eq("store_id", connection.store_id)
           .eq("provider", "estama")
           .eq("sync_status", "synced"),
-        admin.from("casts").select("id,name,estama_listed").eq("store_id", connection.store_id),
+        admin.from("casts").select("id,name,estama_listed,is_active").eq("store_id", connection.store_id),
       ]);
       if (profileError) throw profileError;
       if (castError) throw castError;
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
         const profile = profileByCast.get(castId);
         if (!cast || !profile) continue;
         const action: "upsert" | "delete" =
-          shift.approval_status === "approved" && shift.status !== "cancelled" ? "upsert" : "delete";
+          cast.is_active === true && shift.approval_status === "approved" && shift.status !== "cancelled" ? "upsert" : "delete";
         const shiftId = String(shift.id);
         const isDummy = shift.is_dummy === true;
         const { data: jobId, error: jobError } = await admin.rpc("enqueue_estama_job", {
@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
       }
 
       const missingProfiles = (casts || []).filter((cast) =>
-        cast.estama_listed === true && !profileByCast.has(cast.id)
+        cast.is_active === true && cast.estama_listed === true && !profileByCast.has(cast.id)
       ).map((cast) => cast.name);
 
       if (!items.length) {
