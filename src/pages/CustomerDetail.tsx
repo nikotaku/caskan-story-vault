@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { ArrowLeft, Loader2, Save, Heart, History, Phone, User, Lightbulb, Copy } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Heart, History, Phone, User, Lightbulb, Copy, ShieldAlert, Trash2 } from "lucide-react";
 import {
   getCustomerRank, PRESSURE_OPTIONS, AREA_OPTIONS, CONVERSATION_OPTIONS,
 } from "@/lib/customerRank";
@@ -21,7 +21,7 @@ import { getCustomerInsights } from "@/lib/customerInsights";
 
 /**
  * 顧客詳細ページ（/database/customers/:id）。
- * 好みの登録・編集と、全来店履歴（電話番号正規化マッチ）を表示する。
+ * 好み・セラピストNGの登録編集と、全来店履歴（電話番号正規化マッチ）を表示する。
  * 日別予約情報の顧客パネルなどからリンクされる。
  */
 
@@ -80,6 +80,19 @@ interface Visit {
   notes: string | null;
 }
 
+interface CastOption {
+  id: string;
+  name: string;
+  is_active: boolean | null;
+}
+
+interface TherapistNg {
+  id: string;
+  cast_id: string;
+  reason: string | null;
+  created_at: string | null;
+}
+
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   completed: { label: "完了", cls: "bg-green-100 text-green-700" },
   confirmed: { label: "確定", cls: "bg-blue-100 text-blue-700" },
@@ -103,6 +116,12 @@ export default function CustomerDetail() {
   const [metricsUnavailable, setMetricsUnavailable] = useState(false);
   const [lastTherapist, setLastTherapist] = useState<string | null>(null);
   const [messageDraft, setMessageDraft] = useState("");
+  const [casts, setCasts] = useState<CastOption[]>([]);
+  const [therapistNgs, setTherapistNgs] = useState<TherapistNg[]>([]);
+  const [ngCastId, setNgCastId] = useState("");
+  const [ngReason, setNgReason] = useState("");
+  const [ngSaving, setNgSaving] = useState(false);
+  const [removingNgId, setRemovingNgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -125,7 +144,8 @@ export default function CustomerDetail() {
       setVisitsLoading(false);
       return;
     }
-    setCustomer(custRes.data as Customer);
+    const loadedCustomer = custRes.data as Customer;
+    setCustomer(loadedCustomer);
     const loadedProfile = (profRes.data as Profile) ?? EMPTY_PROFILE;
     setProfile(loadedProfile);
     if (metricRes.error) {
@@ -138,7 +158,27 @@ export default function CustomerDetail() {
       setMetricsUnavailable(!loadedMetric);
     }
 
-    const castId = (custRes.data as Customer).last_cast_id;
+    const [castsRes, therapistNgsRes] = await Promise.all([
+      supabase
+        .from("casts")
+        .select("id, name, is_active")
+        .eq("store_id", loadedCustomer.store_id)
+        .order("name"),
+      supabase
+        .from("customer_ng_casts")
+        .select("id, cast_id, reason, created_at")
+        .eq("customer_id", id)
+        .eq("store_id", loadedCustomer.store_id)
+        .order("created_at", { ascending: false }),
+    ]);
+    if (castsRes.error || therapistNgsRes.error) {
+      console.error("Therapist NG data unavailable", castsRes.error ?? therapistNgsRes.error);
+      toast.error("セラピストNG情報の取得に失敗しました");
+    }
+    setCasts((castsRes.data ?? []) as CastOption[]);
+    setTherapistNgs((therapistNgsRes.data ?? []) as TherapistNg[]);
+
+    const castId = loadedCustomer.last_cast_id;
     if (castId) {
       const { data: cast } = await supabase.from("casts").select("name").eq("id", castId).maybeSingle();
       setLastTherapist(cast?.name ?? null);
@@ -188,6 +228,70 @@ export default function CustomerDetail() {
     setProfile({ ...profile, concern_areas: next.length > 0 ? next : null });
   };
 
+  const handleAddTherapistNg = async () => {
+    if (!id || !customer) return;
+    if (!ngCastId) {
+      toast.error("セラピストを選択してください");
+      return;
+    }
+    const reason = ngReason.trim();
+    if (!reason) {
+      toast.error("NG理由を入力してください");
+      return;
+    }
+    if (therapistNgs.some((entry) => entry.cast_id === ngCastId)) {
+      toast.error("このセラピストはすでにNG登録されています");
+      return;
+    }
+
+    setNgSaving(true);
+    const { data, error } = await supabase
+      .from("customer_ng_casts")
+      .insert({
+        customer_id: id,
+        cast_id: ngCastId,
+        store_id: customer.store_id,
+        reason,
+      })
+      .select("id, cast_id, reason, created_at")
+      .single();
+
+    if (error) {
+      console.error(error);
+      toast.error(error.code === "23505" ? "このセラピストはすでにNG登録されています" : "NG登録に失敗しました");
+    } else {
+      setTherapistNgs((current) => [data as TherapistNg, ...current]);
+      setNgCastId("");
+      setNgReason("");
+      toast.success("セラピストNGを登録しました");
+    }
+    setNgSaving(false);
+  };
+
+  const handleRemoveTherapistNg = async (entry: TherapistNg) => {
+    if (!id || !customer) return;
+    const castName = casts.find((cast) => cast.id === entry.cast_id)?.name ?? "選択したセラピスト";
+    if (!window.confirm(`${castName}さんのNG登録を解除しますか？`)) return;
+
+    setRemovingNgId(entry.id);
+    const { data, error } = await supabase
+      .from("customer_ng_casts")
+      .delete()
+      .eq("id", entry.id)
+      .eq("customer_id", id)
+      .eq("store_id", customer.store_id)
+      .select("id");
+
+    if (error || !data?.length) {
+      console.error(error);
+      toast.error("NG登録の解除に失敗しました");
+    } else {
+      setTherapistNgs((current) => current.filter((item) => item.id !== entry.id));
+      toast.success("セラピストNGを解除しました");
+    }
+    setRemovingNgId(null);
+  };
+
   const completedVisits = visits.filter((v) => v.status === "completed");
   const rank = customer ? getCustomerRank(customer) : null;
   const insight = useMemo(() => customer ? getCustomerInsights({
@@ -202,6 +306,10 @@ export default function CustomerDetail() {
     identity_conflict: crmMetric?.identity_conflict ?? false,
     data_unavailable: metricsUnavailable,
   }, new Date()) : null, [customer, lastTherapist, crmMetric, metricsUnavailable]);
+  const availableCasts = useMemo(
+    () => casts.filter((cast) => cast.is_active !== false && !therapistNgs.some((entry) => entry.cast_id === cast.id)),
+    [casts, therapistNgs],
+  );
 
   useEffect(() => {
     setMessageDraft(insight?.messageDraft ?? "");
@@ -335,6 +443,105 @@ export default function CustomerDetail() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* セラピストNG */}
+              <Card className="border-red-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ShieldAlert size={17} className="text-red-500" />セラピストNG
+                    {therapistNgs.length > 0 && (
+                      <span className="text-xs font-normal rounded-full bg-red-50 text-red-700 px-2 py-0.5">
+                        {therapistNgs.length}名
+                      </span>
+                    )}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    この顧客を担当させないセラピストを登録します。予約登録時にも警告が表示されます。
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {therapistNgs.length > 0 ? (
+                    <div className="space-y-2">
+                      {therapistNgs.map((entry) => {
+                        const cast = casts.find((item) => item.id === entry.cast_id);
+                        return (
+                          <div key={entry.id} className="rounded-lg border border-red-100 bg-red-50/40 px-3 py-3 flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold">{cast?.name ?? "セラピスト情報なし"}</p>
+                                {cast?.is_active === false && (
+                                  <span className="text-[10px] rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">在籍外</span>
+                                )}
+                              </div>
+                              <p className="text-sm mt-1 whitespace-pre-wrap break-words">理由：{entry.reason || "未記入"}</p>
+                              {entry.created_at && (
+                                <p className="text-[11px] text-muted-foreground mt-1">
+                                  登録日：{format(new Date(entry.created_at), "yyyy/M/d")}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 shrink-0 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                              disabled={removingNgId === entry.id}
+                              onClick={() => handleRemoveTherapistNg(entry)}
+                            >
+                              {removingNgId === entry.id ? (
+                                <Loader2 size={13} className="mr-1 animate-spin" />
+                              ) : (
+                                <Trash2 size={13} className="mr-1" />
+                              )}
+                              解除
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground rounded-lg bg-muted/30 px-3 py-3">登録されているセラピストNGはありません</p>
+                  )}
+
+                  <div className="rounded-lg border px-3 py-3 space-y-3">
+                    <p className="text-sm font-semibold">NGセラピストを追加</p>
+                    <div>
+                      <Label className="text-xs">対象セラピスト</Label>
+                      <Select value={ngCastId} onValueChange={setNgCastId} disabled={availableCasts.length === 0 || ngSaving}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder={availableCasts.length === 0 ? "登録できるセラピストがいません" : "セラピストを選択"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableCasts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">理由 <span className="text-red-600">必須</span></Label>
+                      <Textarea
+                        value={ngReason}
+                        onChange={(event) => setNgReason(event.target.value)}
+                        placeholder="例：セラピストへの嫌がらせ行為があったため"
+                        rows={3}
+                        maxLength={500}
+                        disabled={ngSaving}
+                        className="mt-1"
+                      />
+                      <p className="text-[11px] text-muted-foreground text-right mt-1">{ngReason.length}/500</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleAddTherapistNg}
+                      disabled={ngSaving || !ngCastId || !ngReason.trim()}
+                      className="w-full sm:w-auto"
+                    >
+                      {ngSaving ? <Loader2 size={15} className="mr-1.5 animate-spin" /> : <ShieldAlert size={15} className="mr-1.5" />}
+                      NG登録する
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* 好み（カルテ） */}
               <Card>
