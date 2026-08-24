@@ -4216,6 +4216,155 @@ export type Database = {
           },
         ]
       }
+      recruit_lp_daily_metrics: {
+        Row: {
+          cta_clicks: number
+          date: string
+          experiment_id: string
+          exposures: number
+          store_id: string
+          updated_at: string
+          variant: "safety_first" | "freedom_first"
+        }
+        Insert: {
+          cta_clicks?: number
+          date: string
+          experiment_id: string
+          exposures?: number
+          store_id: string
+          updated_at?: string
+          variant: "safety_first" | "freedom_first"
+        }
+        Update: {
+          cta_clicks?: number
+          date?: string
+          experiment_id?: string
+          exposures?: number
+          store_id?: string
+          updated_at?: string
+          variant?: "safety_first" | "freedom_first"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recruit_lp_daily_metrics_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recruit_lp_event_dedup: {
+        Row: {
+          created_at: string
+          event_type: "exposure" | "cta_click"
+          experiment_id: string
+          first_seen_date: string
+          store_id: string
+          variant: "safety_first" | "freedom_first"
+          visitor_hash: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: "exposure" | "cta_click"
+          experiment_id: string
+          first_seen_date: string
+          store_id: string
+          variant: "safety_first" | "freedom_first"
+          visitor_hash: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: "exposure" | "cta_click"
+          experiment_id?: string
+          first_seen_date?: string
+          store_id?: string
+          variant?: "safety_first" | "freedom_first"
+          visitor_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recruit_lp_event_dedup_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recruit_lp_event_rate_limits: {
+        Row: {
+          date: string
+          experiment_id: string
+          rate_hash: string
+          request_count: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          date: string
+          experiment_id: string
+          rate_hash: string
+          request_count?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          date?: string
+          experiment_id?: string
+          rate_hash?: string
+          request_count?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recruit_lp_event_rate_limits_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recruit_lp_experiments: {
+        Row: {
+          created_at: string
+          ended_on: string | null
+          experiment_id: string
+          name: string
+          started_on: string
+          status: "active" | "paused" | "completed"
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_on?: string | null
+          experiment_id: string
+          name: string
+          started_on: string
+          status?: "active" | "paused" | "completed"
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_on?: string | null
+          experiment_id?: string
+          name?: string
+          started_on?: string
+          status?: "active" | "paused" | "completed"
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recruit_lp_experiments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reservations: {
         Row: {
           cast_id: string | null
@@ -5981,6 +6130,14 @@ export type Database = {
           visit_count: number
         }[]
       }
+      get_therapist_back_rates: {
+        Args: { p_token: string }
+        Returns: {
+          course_type: string
+          duration: number
+          therapist_back: number
+        }[]
+      }
       get_therapist_daily_reservations: {
         Args: { p_date: string; p_token: string }
         Returns: {
@@ -6129,6 +6286,17 @@ export type Database = {
         Returns: undefined
       }
       norm_phone: { Args: { p: string }; Returns: string }
+      record_recruit_lp_event: {
+        Args: {
+          p_event: "exposure" | "cta_click"
+          p_experiment_id: string
+          p_rate_hash: string
+          p_store_id: string
+          p_variant: "safety_first" | "freedom_first"
+          p_visitor_hash: string
+        }
+        Returns: boolean
+      }
       record_page_view: {
         Args: {
           p_is_new_daily_visitor?: boolean

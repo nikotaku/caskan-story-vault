@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy, CheckCircle2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import backRatesImage from "@/assets/back-rates-table.jpg";
 import { format, startOfMonth, endOfMonth, isSameDay, addDays } from "date-fns";
 import { toExtTime } from "@/lib/timeFormat";
 import { getCastBookingUrl, getCustomDomainBaseUrl } from "@/lib/bookingUrl";
@@ -31,6 +30,12 @@ interface Settlement {
   customer_price: number;
   therapist_back: number;
   status: string;
+}
+
+interface TherapistBackRate {
+  course_type: string;
+  duration: number;
+  therapist_back: number;
 }
 
 interface TransportExpense {
@@ -176,7 +181,24 @@ export default function TherapistPortal() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("menu");
   const [showBackRates, setShowBackRates] = useState(false);
+  const [therapistBackRates, setTherapistBackRates] = useState<TherapistBackRate[]>([]);
+  const [therapistBackRatesLoading, setTherapistBackRatesLoading] = useState(false);
   const [guideSite, setGuideSite] = useState<"o2" | "esutama" | null>(null);
+
+  useEffect(() => {
+    if (!showBackRates || !token) return;
+    setTherapistBackRatesLoading(true);
+    supabase.rpc("get_therapist_back_rates", { p_token: token })
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error("バック表を取得できませんでした");
+          setTherapistBackRates([]);
+          return;
+        }
+        setTherapistBackRates(data || []);
+      })
+      .finally(() => setTherapistBackRatesLoading(false));
+  }, [showBackRates, token]);
 
   // Upcoming reservations（事前予約）
   const [upcoming, setUpcoming] = useState<UpcomingReservation[]>([]);
@@ -1549,7 +1571,20 @@ export default function TherapistPortal() {
       <Dialog open={showBackRates} onOpenChange={setShowBackRates}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>バック表</DialogTitle></DialogHeader>
-          <img src={backRatesImage} alt="バック表" className="w-full h-auto mt-2" />
+          {therapistBackRatesLoading ? (
+            <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></div>
+          ) : therapistBackRates.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">表示できるバック情報がありません</p>
+          ) : (
+            <div className="mt-2 overflow-hidden rounded-lg border">
+              {therapistBackRates.map((rate) => (
+                <div key={`${rate.course_type}-${rate.duration}`} className="grid grid-cols-[1fr_auto] gap-4 border-b px-4 py-3 last:border-b-0">
+                  <span className="text-sm">{rate.course_type} {rate.duration}分</span>
+                  <span className="font-bold text-primary">¥{rate.therapist_back.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

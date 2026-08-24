@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useStore } from "@/hooks/useStore";
+import { usePageTracking } from "@/hooks/usePageTracking";
+import {
+  assignRecruitVariant,
+  recordRecruitEvent,
+  RECRUIT_EXPERIMENT_ID,
+  type RecruitVariant,
+} from "@/lib/recruitExperiment";
+import { isRecruitVariant } from "@/lib/recruitExperimentConfig";
 import {
   Sparkles, Banknote, Clock, Shield, Heart, Check, ChevronDown,
-  Home, Train, CalendarDays, UserCheck, MessageCircle, Star,
+  Home, Train, CalendarDays, UserCheck, MessageCircle, Star, ArrowRight,
 } from "lucide-react";
 
 /**
@@ -11,44 +18,71 @@ import {
  * 面談時にビデオ通話で画面共有しながら見せる用途も兼ねる。縦スクロール構成。
  */
 
-interface BackRate {
-  course_type: string;
-  duration: number;
-  customer_price: number;
-  therapist_back: number;
+const HERO_CONTENT: Record<RecruitVariant, {
+  eyebrow: string;
+  title: React.ReactNode;
+  description: React.ReactNode;
+}> = {
+  safety_first: {
+    eyebrow: "仙台・未経験から始めるセラピスト求人",
+    title: <>無理なく、安心して<br />続けられる働き方を。</>,
+    description: <>顔出し不要・ノルマなし・個室待機。<br />不安なことは、始める前にすべて相談できます。</>,
+  },
+  freedom_first: {
+    eyebrow: "仙台・自分のペースで働くセラピスト求人",
+    title: <>働く時間も、始め方も、<br />あなたのペースで。</>,
+    description: <>週1日・短時間・副業・短期も相談OK。<br />予定に合わせて、無理なく始められます。</>,
+  },
+};
+
+const RECRUIT_CTA_LABEL = "LINEでまず相談する";
+const ENKA_STORE_ID = "404499ab-5350-490f-9608-5814faffda6f";
+const ENKA_RECRUIT_LINE_URL = "https://lin.ee/UCwlbv5";
+
+function recruitPreviewVariant(): RecruitVariant | null {
+  const value = new URLSearchParams(window.location.search).get("recruit_preview");
+  return isRecruitVariant(value) ? value : null;
 }
 
-const yen = (v: number) => `¥${v.toLocaleString()}`;
-
 export default function RecruitTalk() {
-  const { store, storeId } = useStore();
+  usePageTracking();
+  const { store, storeId, loading: storeLoading } = useStore();
   const storeName = store?.name ?? "艶華";
   const isDefaultStore = store?.is_default ?? true;
+  const configuredBrand = typeof store?.settings?.brand_en === "string"
+    ? store.settings.brand_en
+    : undefined;
+  const configuredRecruitLine = typeof store?.settings?.recruit_line_url === "string"
+    ? store.settings.recruit_line_url
+    : undefined;
+  const recruitLineUrl = configuredRecruitLine
+    ?? (storeId === ENKA_STORE_ID ? ENKA_RECRUIT_LINE_URL : null);
+  const previewVariant = recruitPreviewVariant();
+  const trackingDisabled = previewVariant !== null
+    || new URLSearchParams(window.location.search).get("recruit_tracking") === "off";
   const brandEn = isDefaultStore
     ? "ZENRYOKU ESTHE"
-    : ((store?.settings as any)?.brand_en as string | undefined) ?? "ENKA";
-  const [backRates, setBackRates] = useState<BackRate[]>([]);
-  const [castCount, setCastCount] = useState<number | null>(null);
+    : configuredBrand ?? "ENKA";
+  const [variant, setVariant] = useState<RecruitVariant | null>(null);
 
   useEffect(() => {
     document.title = `${storeName} 採用案内`;
-    // 店舗の料金・在籍数のみ表示（他店舗のデータを混在させない）
-    supabase.from("back_rates").select("course_type, duration, customer_price, therapist_back")
-      .eq("store_id", storeId)
-      .then(({ data }) => setBackRates((data || []) as BackRate[]));
-    supabase.from("casts").select("id", { count: "exact", head: true })
-      .eq("store_id", storeId)
-      .eq("is_active", true)
-      .then(({ count }) => setCastCount(count ?? null));
-  }, [storeId, storeName]);
+  }, [storeName]);
 
-  // 最高バック（1本あたり）
-  const maxBack = backRates.length ? Math.max(...backRates.map((r) => r.therapist_back)) : 17000;
-  // 代表的な給与例：80分のバック（無ければ最大バック）
-  const mainBack = backRates.find((r) => r.duration === 80)?.therapist_back
-    ?? backRates[0]?.therapist_back ?? 10000;
-  const daily3 = mainBack * 3;
-  const monthly12 = daily3 * 12;
+  useEffect(() => {
+    if (storeLoading) return;
+    setVariant(previewVariant ?? assignRecruitVariant(storeId));
+  }, [previewVariant, storeId, storeLoading]);
+
+  useEffect(() => {
+    if (!variant || storeLoading || trackingDisabled) return;
+    recordRecruitEvent(storeId, variant, "exposure").catch(() => {});
+  }, [storeId, storeLoading, trackingDisabled, variant]);
+
+  const handleRecruitClick = () => {
+    if (!variant || trackingDisabled) return;
+    recordRecruitEvent(storeId, variant, "cta_click").catch(() => {});
+  };
 
   const Section = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
     <section className={`px-6 py-16 ${className}`}>
@@ -63,8 +97,23 @@ export default function RecruitTalk() {
     </div>
   );
 
+  if (storeLoading || !variant) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-rose-400 via-pink-400 to-amber-300 text-sm font-medium text-white">
+        求人情報を読み込んでいます
+      </div>
+    );
+  }
+
+  const hero = HERO_CONTENT[variant];
+
   return (
-    <div className="min-h-screen bg-white text-gray-800">
+    <div
+      className="min-h-screen bg-white text-gray-800"
+      data-recruit-experiment={RECRUIT_EXPERIMENT_ID}
+      data-recruit-variant={variant}
+      data-recruit-preview={previewVariant ? "true" : undefined}
+    >
       {/* ===== HERO ===== */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 overflow-hidden bg-gradient-to-br from-rose-400 via-pink-400 to-amber-300">
         <div className="absolute inset-0 opacity-20 pointer-events-none">
@@ -75,73 +124,75 @@ export default function RecruitTalk() {
         </div>
         <div className="relative text-white">
           <p className="text-sm font-bold tracking-[0.3em] mb-4 opacity-90">{brandEn}</p>
+          <p className="text-xs md:text-sm font-medium mb-4 opacity-90">{hero.eyebrow}</p>
           <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-6">
-            {isDefaultStore ? (
-              <>あなたの“全力”が、<br />ちゃんと評価される場所。</>
-            ) : (
-              <>あなたの“艶”が、<br />いちばん咲き誇る場所。</>
-            )}
+            {hero.title}
           </h1>
           <p className="text-base md:text-lg leading-relaxed opacity-95 mb-10">
-            高還元・完全自由出勤・未経験OK。<br />
-            あなたらしく、無理なく稼げる環境を用意しています。
+            {hero.description}
           </p>
-          <div className="inline-flex flex-col items-center gap-2 animate-bounce">
-            <span className="text-xs opacity-90">下にスクロール</span>
-            <ChevronDown size={24} />
+          <div className="flex flex-col items-center gap-4">
+            {recruitLineUrl && (
+              <a
+                href={recruitLineUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleRecruitClick}
+                className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-white px-7 py-3 font-bold text-rose-500 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <MessageCircle size={20} />
+                {RECRUIT_CTA_LABEL}
+                <ArrowRight size={18} />
+              </a>
+            )}
+            <a href="#recruit-details" className="inline-flex flex-col items-center gap-1 text-xs opacity-90">
+              条件を見る
+              <ChevronDown size={22} className="animate-bounce" />
+            </a>
           </div>
         </div>
       </section>
 
-      {/* ===== 数字 ===== */}
-      <Section className="bg-rose-50">
-        <SectionTitle sub="NUMBERS">数字で見る{storeName}</SectionTitle>
+      {/* ===== 最初に伝える3つの安心 ===== */}
+      <Section className="bg-rose-50" >
+        <div id="recruit-details" className="scroll-mt-6" />
+        <SectionTitle sub="START HERE">安心して始められる3つの理由</SectionTitle>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { value: castCount != null ? `${castCount}名` : "30名+", label: "在籍セラピスト" },
-            { value: `${yen(maxBack)}`, label: "1本最大バック" },
+            { value: "未経験", label: "丁寧にサポート" },
+            { value: "日払い", label: "支払い方法を事前確認" },
             { value: "自由", label: "出勤シフト" },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-2xl p-5 text-center shadow-sm">
-              <p className="text-2xl md:text-3xl font-bold text-rose-500">{s.value}</p>
+              <p className="text-xl md:text-2xl font-bold text-rose-500">{s.value}</p>
               <p className="text-xs text-gray-500 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
       </Section>
 
-      {/* ===== 給与システム ===== */}
+      {/* ===== 報酬・契約条件 ===== */}
       <Section>
-        <SectionTitle sub="SALARY">しっかり稼げる給与システム</SectionTitle>
-        <div className="rounded-3xl border border-rose-100 overflow-hidden mb-8">
-          <div className="bg-rose-500 text-white px-5 py-3 font-bold text-center">コース別バック（1本あたり）</div>
-          <div className="divide-y divide-rose-50">
-            {(backRates.length ? backRates : []).map((r) => (
-              <div key={`${r.course_type}-${r.duration}`} className="flex items-center justify-between px-5 py-3">
-                <span className="text-sm text-gray-600">{r.course_type} {r.duration}分</span>
-                <span className="text-lg font-bold text-rose-500">{yen(r.therapist_back)}</span>
-              </div>
-            ))}
-            {backRates.length === 0 && (
-              <div className="px-5 py-6 text-center text-sm text-gray-400">読み込み中…</div>
-            )}
-          </div>
-        </div>
-
-        {/* 給与例 */}
+        <SectionTitle sub="REWARD">報酬条件は、始める前に確認できます</SectionTitle>
         <div className="bg-gradient-to-br from-rose-50 to-amber-50 rounded-3xl p-6 text-center">
-          <p className="text-sm font-bold text-rose-500 mb-3">＼ たとえば… ／</p>
-          <p className="text-gray-700 leading-relaxed">
-            1日 <span className="font-bold text-rose-500">3本</span> 入れば
+          <Banknote size={36} className="mx-auto mb-4 text-rose-500" />
+          <p className="text-xl font-bold text-gray-800 mb-3">わからないまま契約することはありません</p>
+          <p className="text-sm text-gray-600 leading-7">
+            報酬の仕組み、支払い方法、控除、保証条件を事前にわかりやすくご説明します。<br className="hidden sm:block" />
+            内容を確認してから、働くかどうかを決められます。
           </p>
-          <p className="text-4xl font-bold text-rose-500 my-2">{yen(daily3)}<span className="text-base font-medium text-gray-500">／日</span></p>
-          <p className="text-gray-700 leading-relaxed">
-            週3ペース（月12日）なら
-            <span className="block text-2xl font-bold text-rose-500 mt-1">月 {yen(monthly12)} 以上</span>
-          </p>
-          <p className="text-xs text-gray-400 mt-3">
-            ※ 指名バック・オプションバックは別途上乗せ。<br />限定コース中心ならさらに高収入も可能です。
-          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+          {[
+            { title: "日払いOK", desc: "受け取り方法を事前に確認" },
+            { title: "ノルマなし", desc: "無理な本数目標はありません" },
+            { title: "個別にご案内", desc: "経験や働き方に合わせて説明" },
+          ].map((item) => (
+            <div key={item.title} className="rounded-2xl border border-rose-100 p-4 text-center">
+              <p className="font-bold text-rose-500">{item.title}</p>
+              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
+            </div>
+          ))}
         </div>
       </Section>
 
@@ -150,7 +201,7 @@ export default function RecruitTalk() {
         <SectionTitle sub="WORK STYLE">あなたのペースで働ける</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
           {[
-            { icon: CalendarDays, title: "完全自由出勤", desc: "週1日・1日2時間〜OK。予定に合わせて自由に。" },
+            { icon: CalendarDays, title: "完全自由出勤", desc: "週1日・短時間も相談OK。予定に合わせて自由に。" },
             { icon: Check, title: "ノルマなし", desc: "本数・指名のノルマは一切ありません。" },
             { icon: Banknote, title: "日払いOK", desc: "働いたその日にお給料を受け取れます。" },
             { icon: Home, title: "個室待機", desc: "プライベートが守られた個室で待機。" },
@@ -176,10 +227,10 @@ export default function RecruitTalk() {
         <SectionTitle sub="SUPPORT">未経験でも安心のサポート</SectionTitle>
         <div className="space-y-4">
           {[
-            { icon: UserCheck, title: "未経験スタート9割", desc: "ていねいな講習があるので、未経験の方がほとんど。一から安心して始められます。" },
+            { icon: UserCheck, title: "未経験からでも安心", desc: "ていねいな講習があるので、一から安心して始められます。" },
             { icon: Shield, title: "プライバシー厳守", desc: "顔出し不要。お写真の加工・モザイクも対応。身バレ対策を徹底しています。" },
             { icon: Heart, title: "女性も働きやすい環境", desc: "相談しやすい体制と清潔なルーム。困ったことはいつでもスタッフがサポート。" },
-            { icon: Star, title: "高い集客力", desc: "ホームページ・SNS・口コミサイトで集客に力を入れているので、指名・リピートが付きやすい環境です。" },
+            { icon: Star, title: "集客をサポート", desc: "ホームページ・SNS・求人サイトを活用し、お仕事につながる発信を支えます。" },
           ].map((f) => {
             const Icon = f.icon;
             return (
@@ -249,10 +300,10 @@ export default function RecruitTalk() {
         <SectionTitle sub="FAQ">よくあるご質問</SectionTitle>
         <div className="space-y-3">
           {[
-            { q: "未経験でも大丈夫ですか？", a: "はい。在籍の9割が未経験スタートです。講習で一から練習できるので安心してください。" },
+            { q: "未経験でも大丈夫ですか？", a: "はい。講習で一から練習できるので安心してください。" },
             { q: "身バレが心配です…", a: "顔出しは不要です。お写真の加工やモザイク対応もできるので、プライバシーはしっかり守られます。" },
             { q: "ノルマはありますか？", a: "ノルマは一切ありません。あなたのペースで無理なく働けます。" },
-            { q: "どのくらい稼げますか？", a: `1本あたり最大${yen(maxBack)}のバック。1日3本入れば${yen(daily3)}/日が目安です。` },
+            { q: "報酬条件はいつ確認できますか？", a: "お問い合わせ後、契約前に報酬の仕組み・支払い方法・控除・保証条件をご説明します。内容を確認してから判断できます。" },
             { q: "出稼ぎでも働けますか？", a: "もちろん歓迎です。交通費の支給もあるのでお気軽にご相談ください。" },
           ].map((f) => (
             <div key={f.q} className="bg-white rounded-2xl p-5">
@@ -272,10 +323,20 @@ export default function RecruitTalk() {
             「ちょっと気になる」「話だけ聞きたい」でも大歓迎。<br />
             あなたに合った働き方を一緒に考えます。
           </p>
-          <div className="bg-white/15 backdrop-blur rounded-2xl p-6">
-            <p className="text-sm opacity-90 mb-1">この後、担当スタッフが</p>
-            <p className="text-lg font-bold">条件・お給料の詳細をご案内します</p>
-          </div>
+          {recruitLineUrl && (
+            <a
+              href={recruitLineUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleRecruitClick}
+              className="mx-auto inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-white px-7 py-3 font-bold text-rose-500 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+            >
+              <MessageCircle size={20} />
+              {RECRUIT_CTA_LABEL}
+              <ArrowRight size={18} />
+            </a>
+          )}
+          <p className="mt-5 text-xs opacity-80">応募を決める前の質問だけでも大丈夫です</p>
         </div>
       </section>
 
