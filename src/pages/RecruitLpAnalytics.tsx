@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { supabase } from "@/integrations/supabase/client";
-import { RECRUIT_EXPERIMENT_ID, type RecruitVariant } from "@/lib/recruitExperiment";
+import {
+  RECRUIT_EXPERIMENT_ID,
+  RECRUIT_EXPERIMENT_STARTED_ON,
+  type RecruitVariant,
+} from "@/lib/recruitExperimentConfig";
 
 interface MetricRow {
   date: string;
@@ -64,16 +68,12 @@ export default function RecruitLpAnalytics() {
   const fetchMetrics = useCallback(async () => {
     if (!user || storeLoading) return;
     setLoading(true);
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - 59);
-    const fromDateKey = fromDate.toISOString().slice(0, 10);
-
     const { data, error } = await supabase
       .from("recruit_lp_daily_metrics")
       .select("date,experiment_id,variant,exposures,cta_clicks")
       .eq("store_id", storeId)
       .eq("experiment_id", RECRUIT_EXPERIMENT_ID)
-      .gte("date", fromDateKey)
+      .gte("date", RECRUIT_EXPERIMENT_STARTED_ON)
       .order("date", { ascending: false });
 
     if (error) {

@@ -97,9 +97,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
 
   const forwardedFor = header(req, "x-forwarded-for").split(",")[0].trim();
   const network = forwardedFor || req.socket?.remoteAddress || "unknown";
-  const userAgent = header(req, "user-agent").slice(0, 512);
   const visitorHash = digest(serviceRoleKey, `${storeId}|${experimentId}|${visitorToken}`);
-  const rateHash = digest(serviceRoleKey, `${storeId}|${experimentId}|${network}|${userAgent}`);
+  // Keep the limit network-wide. User-Agent is intentionally excluded so rotating it
+  // cannot create fresh rate-limit buckets.
+  const rateHash = digest(serviceRoleKey, `${storeId}|${experimentId}|${network}`);
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_recruit_lp_event`, {
     method: "POST",
