@@ -113,6 +113,13 @@ export default function CastPostManagement() {
   const { storeId, store, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
 
+  const clearSelectedImages = useCallback(() => {
+    setImages((current) => {
+      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      return [];
+    });
+  }, []);
+
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
   }, [authLoading, navigate, user]);
@@ -151,13 +158,14 @@ export default function CastPostManagement() {
   useEffect(() => {
     if (loading || !requestedCastId || casts.some((cast) => cast.id === requestedCastId)) return;
     setShowDialog(false);
+    clearSelectedImages();
     setForm((current) => ({ ...current, castId: "" }));
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("cast");
     nextParams.delete("mode");
     setSearchParams(nextParams, { replace: true });
     toast.error("アーカイブ済みのセラピストには投稿できません");
-  }, [casts, loading, requestedCastId, searchParams, setSearchParams]);
+  }, [casts, clearSelectedImages, loading, requestedCastId, searchParams, setSearchParams]);
 
   const clearPostQuery = () => {
     const nextParams = new URLSearchParams(searchParams);
@@ -168,10 +176,7 @@ export default function CastPostManagement() {
 
   const openNewPost = () => {
     setTestMode(false);
-    setImages((current) => {
-      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-      return [];
-    });
+    clearSelectedImages();
     setForm({ castId: "", title: "", body: "" });
     clearPostQuery();
     setShowDialog(true);
@@ -180,7 +185,10 @@ export default function CastPostManagement() {
   const changeDialogOpen = (open: boolean) => {
     if (!open && submitting) return;
     setShowDialog(open);
-    if (!open) clearPostQuery();
+    if (!open) {
+      clearSelectedImages();
+      clearPostQuery();
+    }
   };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,6 +227,18 @@ export default function CastPostManagement() {
     });
   };
 
+  const cleanupUploadedPaths = async (paths: string[]) => {
+    if (!paths.length) return true;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { error } = await supabase.storage.from("cast-photos").remove(paths);
+      if (!error) return true;
+      lastError = error;
+    }
+    console.error("Uploaded image cleanup failed", lastError);
+    return false;
+  };
+
   const uploadImages = async () => {
     const paths: string[] = [];
     const urls: string[] = [];
@@ -231,8 +251,10 @@ export default function CastPostManagement() {
         upsert: false,
       });
       if (error) {
-        if (paths.length) await supabase.storage.from("cast-photos").remove(paths);
-        throw new Error("画像をアップロードできませんでした");
+        const cleaned = await cleanupUploadedPaths(paths);
+        throw new Error(cleaned
+          ? "画像をアップロードできませんでした"
+          : "画像をアップロードできず、途中画像の削除にも失敗しました");
       }
       paths.push(path);
       urls.push(supabase.storage.from("cast-photos").getPublicUrl(path).data.publicUrl);
@@ -295,10 +317,7 @@ export default function CastPostManagement() {
       setTestMode(false);
       clearPostQuery();
       setForm({ castId: "", title: "", body: "" });
-      setImages((current) => {
-        current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-        return [];
-      });
+      clearSelectedImages();
       toast.success("O2・魂セラピストへ送信中です");
       await load();
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
@@ -309,10 +328,12 @@ export default function CastPostManagement() {
         toast.success("O2・魂セラピストへの投稿処理が完了しました");
       }
     } catch (error) {
+      let cleanupFailed = false;
       if (!postCreated && uploadedPaths.length) {
-        await supabase.storage.from("cast-photos").remove(uploadedPaths);
+        cleanupFailed = !await cleanupUploadedPaths(uploadedPaths);
       }
-      toast.error(error instanceof Error ? error.message : "投稿に失敗しました");
+      const message = error instanceof Error ? error.message : "投稿に失敗しました";
+      toast.error(cleanupFailed ? `${message}。途中画像の削除にも失敗しました` : message);
     } finally {
       setUploadingImages(false);
       setSubmitting(false);
