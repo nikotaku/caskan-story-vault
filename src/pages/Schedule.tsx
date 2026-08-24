@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { format, addDays, subDays, addMonths, subMonths, parse, addMinutes, startOfMonth, endOfMonth, startOfWeek, eachDayOfInterval } from "date-fns";
 import { toExtTime, toStoredTime } from "@/lib/timeFormat";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2, Share2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, TrendingUp, Calendar as CalendarIcon, X, Pencil, MessageSquare, Heart, Zap, Trash2, Share2, Loader2, RefreshCw } from "lucide-react";
 import paypayGuideUrl from "@/assets/paypay-guide.jpeg";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -75,6 +75,11 @@ interface Reservation {
   room: string | null;
   notes: string | null;
   store_id: string;
+  created_by: string | null;
+  referral_source: string | null;
+  line_notification_status: string;
+  email_notification_status: string;
+  notification_last_error: string | null;
 }
 
 interface StoreRoom {
@@ -202,6 +207,8 @@ function StatusBox({
   onSms,
   onThanksSms,
   onCouponSms,
+  onRetryNotification,
+  retryingNotificationId,
   isAdmin,
 }: {
   status: string;
@@ -212,6 +219,8 @@ function StatusBox({
   onSms: (res: Reservation) => void;
   onThanksSms: (res: Reservation) => void;
   onCouponSms: (res: Reservation) => void;
+  onRetryNotification: (res: Reservation) => void;
+  retryingNotificationId: string | null;
   isAdmin: boolean;
 }) {
   const style = BOARD_STATUS_STYLE[status];
@@ -227,12 +236,64 @@ function StatusBox({
         ) : (
           reservations.map((res) => (
             <div key={res.id} className="bg-gray-50 rounded-md p-2 text-xs border border-gray-100">
-              <div className="font-semibold mb-0.5">{res.customer_name}</div>
+              <div className="font-semibold mb-0.5 flex items-center gap-1.5">
+                <span>{res.customer_name}</span>
+                {res.created_by === null && (
+                  <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-700">
+                    WEB
+                  </span>
+                )}
+              </div>
               <div className="text-muted-foreground space-y-0.5">
                 <div>{toExtTime(res.start_time)}（{res.duration}分）</div>
                 <div>{castNameMap.get(res.cast_id) ?? "未設定"} / {res.course_name}</div>
                 <div>{res.customer_phone}</div>
               </div>
+              {res.created_by === null && (
+                <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+                  <span className={cn(
+                    "rounded-full border px-1.5 py-0.5 text-[9px] font-medium",
+                    res.line_notification_status === "sent" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                    res.line_notification_status === "failed" && "border-rose-200 bg-rose-50 text-rose-700",
+                    res.line_notification_status === "sending" && "border-amber-200 bg-amber-50 text-amber-700",
+                    res.line_notification_status === "not_attempted" && "border-gray-200 bg-white text-gray-500",
+                  )}>
+                    {res.line_notification_status === "sent" && "LINE通知済"}
+                    {res.line_notification_status === "failed" && "LINE通知失敗"}
+                    {res.line_notification_status === "sending" && "LINE通知中"}
+                    {res.line_notification_status === "not_attempted" && "LINE未確認"}
+                  </span>
+                  <span className={cn(
+                    "rounded-full border px-1.5 py-0.5 text-[9px] font-medium",
+                    res.email_notification_status === "sent"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : res.email_notification_status === "failed"
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-gray-200 bg-white text-gray-500",
+                  )}>
+                    {res.email_notification_status === "sent"
+                      ? "メール済"
+                      : res.email_notification_status === "failed"
+                        ? "メール失敗"
+                        : res.email_notification_status === "skipped"
+                          ? "メール未設定"
+                          : "メール未確認"}
+                  </span>
+                  {(res.line_notification_status !== "sent" || res.email_notification_status === "failed") && (
+                    <button
+                      type="button"
+                      onClick={() => onRetryNotification(res)}
+                      disabled={retryingNotificationId === res.id}
+                      className="inline-flex items-center rounded border border-rose-200 bg-white px-1.5 py-0.5 text-[9px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                    >
+                      {retryingNotificationId === res.id
+                        ? <Loader2 size={10} className="mr-1 animate-spin" />
+                        : <RefreshCw size={10} className="mr-1" />}
+                      通知を再送
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="mt-1.5 flex gap-1 flex-wrap">
                 <button
                   onClick={() => onSms(res)}
@@ -293,6 +354,7 @@ export default function Schedule() {
   const [receptionEndGuideFile, setReceptionEndGuideFile] = useState<File | null>(null);
   const [receptionEndGuideError, setReceptionEndGuideError] = useState(false);
   const [sharingReceptionEndCastId, setSharingReceptionEndCastId] = useState<string | null>(null);
+  const [retryingNotificationId, setRetryingNotificationId] = useState<string | null>(null);
 
   // Detail/Edit sheet
   const [detailRes, setDetailRes] = useState<Reservation | null>(null);
@@ -1098,6 +1160,28 @@ export default function Schedule() {
     }
   };
 
+  const handleRetryNotification = async (reservation: Reservation) => {
+    if (retryingNotificationId) return;
+    setRetryingNotificationId(reservation.id);
+    try {
+      const { error } = await supabase.functions.invoke("notify-line-booking", {
+        body: { reservation_id: reservation.id },
+      });
+      if (error) throw error;
+      toast({ title: "予約通知を再送しました" });
+    } catch (error) {
+      console.error("予約通知の再送に失敗しました:", error);
+      toast({
+        title: "予約通知を再送できませんでした",
+        description: "通知先の設定を確認して、もう一度お試しください。",
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingNotificationId(null);
+      fetchData();
+    }
+  };
+
   const handleCancelReservation = async () => {
     if (!detailRes || !confirm("この予約をキャンセルしますか？")) return;
     try {
@@ -1338,6 +1422,14 @@ export default function Schedule() {
               {/* 当日ステータス */}
               <div className="mb-3">
                 <h2 className="font-semibold text-xs text-muted-foreground mb-2">当日ステータス</h2>
+                {reservations.some((reservation) => reservation.created_by === null && (
+                  reservation.line_notification_status !== "sent"
+                  || reservation.email_notification_status === "failed"
+                )) && (
+                  <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                    未送信または送信に失敗したWEB予約があります。予約カードの「通知を再送」から再送できます。
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {BOARD_STATUSES.map((s) => (
                     <StatusBox
@@ -1350,6 +1442,8 @@ export default function Schedule() {
                       onSms={openReservationSms}
                       onThanksSms={openThanksSms}
                       onCouponSms={openCouponSms}
+                      onRetryNotification={handleRetryNotification}
+                      retryingNotificationId={retryingNotificationId}
                       isAdmin={isAdmin}
                     />
                   ))}

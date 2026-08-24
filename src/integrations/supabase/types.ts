@@ -2401,31 +2401,58 @@ export type Database = {
       }
       discounts: {
         Row: {
+          badge_text: string | null
+          code: string | null
           created_at: string
           discount_type: string
           discount_value: number
+          display_order: number
+          eligible_course_type: string | null
+          eligible_duration: number | null
           id: string
           is_active: boolean
+          min_advance_days: number
           name: string
+          public_booking_enabled: boolean
+          stackable: boolean
           store_id: string
+          terms: string[]
         }
         Insert: {
+          badge_text?: string | null
+          code?: string | null
           created_at?: string
           discount_type?: string
           discount_value?: number
+          display_order?: number
+          eligible_course_type?: string | null
+          eligible_duration?: number | null
           id?: string
           is_active?: boolean
+          min_advance_days?: number
           name: string
+          public_booking_enabled?: boolean
+          stackable?: boolean
           store_id?: string
+          terms?: string[]
         }
         Update: {
+          badge_text?: string | null
+          code?: string | null
           created_at?: string
           discount_type?: string
           discount_value?: number
+          display_order?: number
+          eligible_course_type?: string | null
+          eligible_duration?: number | null
           id?: string
           is_active?: boolean
+          min_advance_days?: number
           name?: string
+          public_booking_enabled?: boolean
+          stackable?: boolean
           store_id?: string
+          terms?: string[]
         }
         Relationships: [
           {
@@ -3415,6 +3442,35 @@ export type Database = {
           },
         ]
       }
+      line_notification_destinations: {
+        Row: {
+          destination_key: string
+          line_group_id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          destination_key: string
+          line_group_id: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          destination_key?: string
+          line_group_id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "line_notification_destinations_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_settings: {
         Row: {
           catch_copy: string | null
@@ -4171,9 +4227,16 @@ export type Database = {
           discount: number
           discount_ids: string[] | null
           duration: number
+          email_notification_sent_at: string | null
+          email_notification_status: string
           id: string
+          line_notification_sent_at: string | null
+          line_notification_status: string
           nomination_type: string | null
           notes: string | null
+          notification_attempt_count: number
+          notification_last_attempt_at: string | null
+          notification_last_error: string | null
           options: string[] | null
           payment_details: Json | null
           payment_fee: number
@@ -4201,9 +4264,16 @@ export type Database = {
           discount?: number
           discount_ids?: string[] | null
           duration?: number
+          email_notification_sent_at?: string | null
+          email_notification_status?: string
           id?: string
+          line_notification_sent_at?: string | null
+          line_notification_status?: string
           nomination_type?: string | null
           notes?: string | null
+          notification_attempt_count?: number
+          notification_last_attempt_at?: string | null
+          notification_last_error?: string | null
           options?: string[] | null
           payment_details?: Json | null
           payment_fee?: number
@@ -4231,9 +4301,16 @@ export type Database = {
           discount?: number
           discount_ids?: string[] | null
           duration?: number
+          email_notification_sent_at?: string | null
+          email_notification_status?: string
           id?: string
+          line_notification_sent_at?: string | null
+          line_notification_status?: string
           nomination_type?: string | null
           notes?: string | null
+          notification_attempt_count?: number
+          notification_last_attempt_at?: string | null
+          notification_last_error?: string | null
           options?: string[] | null
           payment_details?: Json | null
           payment_fee?: number

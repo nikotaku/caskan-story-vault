@@ -24,6 +24,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-line-signature",
 };
 
+interface LineEvent {
+  type?: string;
+  replyToken?: string;
+  source?: { groupId?: string; userId?: string };
+  message?: { type?: string; text?: string };
+}
+
 async function verifySignature(body: string, signature: string | null, secret: string): Promise<boolean> {
   if (!signature) return false;
   const key = await crypto.subtle.importKey(
@@ -51,27 +58,61 @@ Deno.serve(async (req: Request) => {
     const secret = Deno.env.get("LINE_CHANNEL_SECRET");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    if (!token) return new Response("ok", { headers: corsHeaders }); // 未設定でも200（LINE検証用）
+    if (!token) return new Response("ok", { headers: corsHeaders });
 
     const raw = await req.text();
-    // 署名検証（LINE_CHANNEL_SECRET が設定されている場合のみ）
     if (secret) {
-      const ok = await verifySignature(raw, req.headers.get("x-line-signature"), secret);
-      if (!ok) return new Response("bad signature", { status: 403, headers: corsHeaders });
+      const signatureValid = await verifySignature(raw, req.headers.get("x-line-signature"), secret);
+      if (!signatureValid) return new Response("bad signature", { status: 403, headers: corsHeaders });
     }
 
-    const body = JSON.parse(raw || "{}");
-    const events: any[] = body.events || [];
+    const body = JSON.parse(raw || "{}") as { events?: LineEvent[] };
+    const events = body.events || [];
     const sb = createClient(SUPABASE_URL, SERVICE_KEY);
+    const notificationAdminUserIds = new Set(
+      (Deno.env.get("LINE_NOTIFICATION_ADMIN_USER_IDS") || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
 
     for (const ev of events) {
       // 問い合わせ記録（グループ・個チャどちらからでも受け付ける）
       if (ev.type === "message" && ev.message?.type === "text") {
         const t: string = (ev.message.text || "").trim();
-        const im = t.match(/^問い?合わ?せ([\s　]+(.*))?$/s);
+
+        // 管理用の共通通知先を、このメッセージが送られたグループに切り替える。
+        if (/^(グループID確認|通知先登録)([\s\u3000]+艶華)?$/.test(t)) {
+          const notificationGroupId: string | undefined = ev.source?.groupId;
+          const actorUserId: string | undefined = ev.source?.userId;
+          if (!notificationGroupId) {
+            if (ev.replyToken) await reply(token, ev.replyToken, "この操作は通知先にしたいLINEグループ内で送ってください。");
+            continue;
+          }
+          if (!secret || !actorUserId || !notificationAdminUserIds.has(actorUserId)) {
+            if (ev.replyToken) await reply(token, ev.replyToken, "この操作を行う権限がありません。管理者へご連絡ください。");
+            continue;
+          }
+          const { error: destinationError } = await sb
+            .from("line_notification_destinations")
+            .upsert({
+              store_id: "404499ab-5350-490f-9608-5814faffda6f",
+              destination_key: "operations",
+              line_group_id: notificationGroupId,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "store_id,destination_key" });
+          if (destinationError) {
+            console.error("Notification destination update failed:", destinationError);
+            if (ev.replyToken) await reply(token, ev.replyToken, "通知先の登録に失敗しました。時間をおいてもう一度送ってください。");
+          } else if (ev.replyToken) {
+            await reply(token, ev.replyToken, "✅ 艶華の共通通知先をこのグループに切り替えました。予約・決済・各種レポートを今後はこちらへ送ります。");
+          }
+          continue;
+        }
+        const im = t.match(/^問い?合わ?せ([\s\u3000]+(.*))?$/s);
         if (im) {
           const rest = (im[2] || "").trim();
-          const parts = rest.split(/[\s　]+/).filter(Boolean);
+          const parts = rest.split(/[\s\u3000]+/).filter(Boolean);
           const storeKey = parts[0] ?? "";
           const chKey = (parts[1] ?? "").toUpperCase() === "LINE" ? "LINE" : parts[1] ?? "";
           const store = STORE_MAP[storeKey];
@@ -125,7 +166,7 @@ Deno.serve(async (req: Request) => {
 
       if (ev.type === "message" && ev.message?.type === "text") {
         const text: string = (ev.message.text || "").trim();
-        const m = text.match(/^連携[\s　]+(.+)$/);
+        const m = text.match(/^連携[\s\u3000]+(.+)$/);
         if (!m) continue;
         const name = m[1].trim();
 
@@ -133,6 +174,7 @@ Deno.serve(async (req: Request) => {
           .from("casts")
           .select("id, name")
           .eq("name", name)
+          .eq("is_active", true)
           .maybeSingle();
 
         if (!cast) {

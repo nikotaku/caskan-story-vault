@@ -253,7 +253,9 @@ export default function CastBooking() {
     setSubmitting(true);
     try {
       const courseName = `${courseType} ${duration}分`;
+      const reservationId = crypto.randomUUID();
       const { error: insErr } = await supabase.from("reservations").insert([{
+        id: reservationId,
         cast_id: cast.id,
         customer_name: name.trim(),
         customer_phone: phone.trim(),
@@ -277,24 +279,12 @@ export default function CastBooking() {
 
       // LINE通知（失敗しても完了表示は継続）
       try {
-        const dateStr = format(new Date(`${date}T00:00:00`), "yyyy年M月d日(E)", { locale: ja });
-        await supabase.functions.invoke("notify-line-booking", {
-          body: {
-            customer_name: name.trim(),
-            customer_phone: phone.trim(),
-            cast_name: cast.name,
-            reservation_date: dateStr,
-            start_time: selectedTime?.label ?? time,
-            course_name: courseName,
-            options: selectedOptions.length > 0 ? selectedOptions.map(getOptionDisplayName) : null,
-            nomination_type: "本指名",
-            price: total,
-            payment_method: "現金",
-            notes: `【${cast.name}専用フォーム】${notes.trim()}`,
-          },
+        const { error: notifyError } = await supabase.functions.invoke("notify-line-booking", {
+          body: { reservation_id: reservationId },
         });
+        if (notifyError) console.error("Booking notification failed:", notifyError.message);
       } catch (notifyErr) {
-        console.error("LINE notify failed:", notifyErr);
+        console.error("Booking notification failed:", notifyErr);
       }
 
       setDone(true);
