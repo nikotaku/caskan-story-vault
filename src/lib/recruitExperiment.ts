@@ -93,11 +93,18 @@ export async function recordRecruitEvent(
   writeLocalStorage(onceKey, "pending");
 
   try {
-    const response = await fetch("/api/recruit-event", {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    if (!supabaseUrl || !publishableKey) throw new Error("Recruit analytics is not configured");
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/recruit-lp-event`, {
       method: "POST",
-      credentials: "same-origin",
       keepalive: true,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        apikey: publishableKey,
+        Authorization: `Bearer ${publishableKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         storeId,
         experimentId: RECRUIT_EXPERIMENT_ID,
