@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/hooks/useStore";
 import { runQueuedEstamaAutomation } from "@/lib/estamaAutomation";
+import { calculateMonthlyRoomOccupancy } from "@/lib/roomOccupancy";
 
 interface Shift {
   id: string;
@@ -25,6 +26,7 @@ interface Shift {
   start_time: string;
   end_time: string;
   room: string | null;
+  status: string;
   approval_status: string;
   approval_comment: string | null;
   estama_registered: boolean;
@@ -73,6 +75,8 @@ const ROOM_PALETTE = [
   { chip: "bg-pink-100 dark:bg-pink-900/30", text: "text-pink-700 dark:text-pink-300", dot: "bg-pink-500" },
   { chip: "bg-teal-100 dark:bg-teal-900/30", text: "text-teal-700 dark:text-teal-300", dot: "bg-teal-500" },
 ];
+
+const numberFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 });
 
 const roomColor = (room: string | null) => {
   if (!room) return null;
@@ -420,6 +424,13 @@ export default function MonthlyShift() {
     .map(name => casts.find(cast => cast.is_estama_dummy && cast.name === name))
     .filter((cast): cast is Cast => Boolean(cast));
 
+  const roomOccupancy = useMemo(
+    () => calculateMonthlyRoomOccupancy(shifts, selectedMonth, ROOMS),
+    [shifts, selectedMonth],
+  );
+  const occupiedHours = roomOccupancy.occupiedMinutes / 60;
+  const capacityHours = roomOccupancy.capacityMinutes / 60;
+
   // カレンダーグリッド用: 月初の週の日曜から始まる6週×7日
   const calendarStart = startOfWeek(startOfMonth(selectedMonth), { weekStartsOn: 0 });
   const calendarDays = Array.from({ length: 42 }, (_, i) => addDays(calendarStart, i));
@@ -495,6 +506,31 @@ export default function MonthlyShift() {
                   <span className="w-2.5 h-2.5 rounded-full bg-primary/30" />
                   ルーム未設定
                 </span>
+              </div>
+            )}
+            {viewMode === "calendar" && (
+              <div className="w-full rounded-md border bg-card px-3 py-2 shadow-sm sm:ml-auto sm:w-auto sm:min-w-[240px]">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium">月間ルーム稼働率</span>
+                  <span className="text-lg font-bold tabular-nums">
+                    {numberFormatter.format(roomOccupancy.percentage)}%
+                  </span>
+                </div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width]"
+                    style={{ width: `${roomOccupancy.percentage}%` }}
+                    role="progressbar"
+                    aria-label="月間ルーム稼働率"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Number(roomOccupancy.percentage.toFixed(1))}
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {numberFormatter.format(occupiedHours)}時間 / {numberFormatter.format(capacityHours)}時間
+                  （11:00〜翌2:00・{ROOMS.length}室・{roomOccupancy.daysInMonth}日）
+                </p>
               </div>
             )}
           </div>
