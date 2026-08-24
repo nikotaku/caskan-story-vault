@@ -1,9 +1,16 @@
-export const RECRUIT_EXPERIMENT_ID = "recruit_hero_v1_20260825";
+import {
+  RECRUIT_EXPERIMENT_ID,
+  RECRUIT_VARIANTS,
+  type RecruitEvent,
+  type RecruitVariant,
+} from "@/lib/recruitExperimentConfig";
 
-export type RecruitVariant = "safety_first" | "freedom_first";
-export type RecruitEvent = "exposure" | "cta_click";
-
-export const RECRUIT_VARIANTS: RecruitVariant[] = ["safety_first", "freedom_first"];
+export {
+  RECRUIT_EXPERIMENT_ID,
+  RECRUIT_VARIANTS,
+  type RecruitEvent,
+  type RecruitVariant,
+} from "@/lib/recruitExperimentConfig";
 
 const VARIANT_STORAGE_PREFIX = "recruit_lp_variant";
 const EVENT_STORAGE_PREFIX = "recruit_lp_event";

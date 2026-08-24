@@ -127,6 +127,10 @@ export default function RecruitLpAnalytics() {
   const publicRecruitUrl = store?.custom_domain
     ? `https://${store.custom_domain}/recruit-talk`
     : "/recruit-talk";
+  const previewUrl = (variant: RecruitVariant) => {
+    const separator = publicRecruitUrl.includes("?") ? "&" : "?";
+    return `${publicRecruitUrl}${separator}recruit_preview=${variant}&recruit_tracking=off`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -150,9 +154,14 @@ export default function RecruitLpAnalytics() {
                 <RefreshCw size={14} className={`mr-1.5 ${loading ? "animate-spin" : ""}`} />
                 更新
               </Button>
+              <Button size="sm" variant="outline" asChild>
+                <a href={previewUrl("safety_first")} target="_blank" rel="noreferrer">
+                  Aを確認<ExternalLink size={13} className="ml-1.5" />
+                </a>
+              </Button>
               <Button size="sm" asChild>
-                <a href={publicRecruitUrl} target="_blank" rel="noreferrer">
-                  LPを確認<ExternalLink size={13} className="ml-1.5" />
+                <a href={previewUrl("freedom_first")} target="_blank" rel="noreferrer">
+                  Bを確認<ExternalLink size={13} className="ml-1.5" />
                 </a>
               </Button>
             </div>
@@ -202,7 +211,7 @@ export default function RecruitLpAnalytics() {
 
           <section className="rounded-xl border bg-card p-4 sm:p-5">
             <h2 className="font-bold">日別の結果</h2>
-            <p className="mt-1 text-xs text-muted-foreground">毎日の偏りを確認できます。曜日差を避けるため、正式判定は複数週の累積で行います。</p>
+            <p className="mt-1 text-xs text-muted-foreground">毎日の偏りを確認できます。初回表示日と初回クリック日が異なる場合があるため、日別率は算出せず、傾向は複数週の累積で確認します。</p>
             {loading ? (
               <div className="py-14 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
             ) : dailyRows.length === 0 ? (
@@ -215,10 +224,10 @@ export default function RecruitLpAnalytics() {
                   <thead>
                     <tr className="border-b bg-muted/60">
                       <th className="px-3 py-2.5 text-left">日付</th>
-                      <th className="px-3 py-2.5 text-right">A 表示</th>
-                      <th className="px-3 py-2.5 text-right">A クリック率</th>
-                      <th className="px-3 py-2.5 text-right">B 表示</th>
-                      <th className="px-3 py-2.5 text-right">B クリック率</th>
+                      <th className="px-3 py-2.5 text-right">A 初回表示</th>
+                      <th className="px-3 py-2.5 text-right">A 初回クリック</th>
+                      <th className="px-3 py-2.5 text-right">B 初回表示</th>
+                      <th className="px-3 py-2.5 text-right">B 初回クリック</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -226,9 +235,9 @@ export default function RecruitLpAnalytics() {
                       <tr key={date} className="border-b last:border-b-0">
                         <td className="px-3 py-2.5 font-medium">{date}</td>
                         <td className="px-3 py-2.5 text-right">{variants.safety_first.exposures}</td>
-                        <td className="px-3 py-2.5 text-right font-bold">{formatRate(clickRate(variants.safety_first))}</td>
+                        <td className="px-3 py-2.5 text-right font-bold">{variants.safety_first.clicks}</td>
                         <td className="px-3 py-2.5 text-right">{variants.freedom_first.exposures}</td>
-                        <td className="px-3 py-2.5 text-right font-bold">{formatRate(clickRate(variants.freedom_first))}</td>
+                        <td className="px-3 py-2.5 text-right font-bold">{variants.freedom_first.clicks}</td>
                       </tr>
                     ))}
                   </tbody>

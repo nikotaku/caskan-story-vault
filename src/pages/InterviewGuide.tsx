@@ -1,25 +1,37 @@
-import { useEffect, Fragment } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import {
-  ArrowLeft, MapPin, Clock, Train, ShieldCheck, Banknote, Wallet, Car,
-  Home, IdCard, Camera, AlertTriangle, Sparkles, Twitter, Check, ChevronDown,
-  KeyRound, Footprints, Archive, Tablet,
+  ArrowLeft, MapPin, Clock, Train, ShieldCheck, Loader2,
+  Home, IdCard, Camera, AlertTriangle, Sparkles, Check, ChevronDown,
+  KeyRound, Footprints, Archive, Tablet, type LucideIcon,
 } from "lucide-react";
 
 /**
  * 面談用（画面共有）ページ。ビデオ通話で候補者に画面共有しながら、
- * 店舗詳細・条件（保証/女子給/交通費/ルーム環境/注意点）を説明する資料。
+ * 店舗詳細・ルーム環境・注意点を説明する社内用資料。
  * 施術マニュアルと店舗詳細をもとに構成。縦スクロール・大きめ文字で見やすく。
  */
 
 export default function InterviewGuide() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
 
-  // 面談時の画面共有用ページのため、ログインなしで閲覧可能にしている
-  useEffect(() => { document.title = "艶華｜面談資料"; }, []);
+  useEffect(() => {
+    document.title = "艶華｜面談資料";
+    if (!authLoading && !user) navigate("/login", { replace: true });
+  }, [authLoading, navigate, user]);
+
+  if (authLoading || !user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-gray-50 text-gray-500">
+        <Loader2 className="h-6 w-6 animate-spin" aria-label="認証を確認中" />
+      </div>
+    );
+  }
 
   const Section = ({ id, icon: Icon, title, sub, children, tone = "rose" }: {
-    id?: string; icon: any; title: string; sub?: string; children: React.ReactNode; tone?: "rose" | "amber" | "gray";
+    id?: string; icon: LucideIcon; title: string; sub?: string; children: React.ReactNode; tone?: "rose" | "amber" | "gray";
   }) => {
     const toneMap: Record<string, string> = {
       rose: "from-rose-500 to-pink-500",
@@ -193,116 +205,14 @@ export default function InterviewGuide() {
         </Card>
       </Section>
 
-      {/* 保証 */}
-      <Section icon={ShieldCheck} title="保証制度" tone="rose">
-        <div className="bg-gradient-to-br from-rose-50 to-amber-50 rounded-2xl p-5 text-center mb-3 border border-rose-100">
-          <p className="text-sm text-gray-500">保証</p>
-          <p className="text-3xl font-bold text-rose-600 my-1">2〜4万円</p>
-          <p className="text-xs text-gray-500">（上限 10万円）</p>
-        </div>
-        <Card>
-          <KV k="リピート時の保証" v="可（査定あり）" />
-          <div className="pt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-2">
-            ※ リピートの際は保証を確約できない旨をお伝えください。
-          </div>
+      {/* 報酬条件は公開・画面共有資料へ載せず、契約前に個別説明する */}
+      <Section icon={ShieldCheck} title="報酬・保証条件" tone="rose">
+        <Card className="py-5">
+          <p className="text-sm leading-relaxed text-gray-700">
+            報酬の仕組み、支払い方法、控除、保証、交通費などの条件は、面談後に個別の資料でご説明します。
+            内容をご確認いただき、契約前に双方で合意します。
+          </p>
         </Card>
-
-        <p className="text-sm font-bold text-gray-700 mt-6 mb-2 flex items-center gap-2">
-          <Twitter size={15} className="text-sky-500" />保証支給条件
-        </p>
-        <Card>
-          <KV k="XまたはO2の更新" v={<>写真付き 1日3件<br />ショート動画 1日1件</>} hl />
-          <KV k="待機" v="12時間待機" />
-        </Card>
-      </Section>
-
-      {/* 女子給（バック表） */}
-      <Section icon={Banknote} title="女子給（バック）" sub="艶華 料金・バック表" tone="amber">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full text-xs tabular-nums">
-            <thead>
-              <tr className="bg-gray-100 text-gray-500">
-                <th className="text-left px-2.5 py-2 font-semibold"> </th>
-                <th className="px-1.5 py-2 font-semibold text-right">お客様</th>
-                <th className="px-1.5 py-2 font-semibold text-right">セラピスト</th>
-                <th className="px-2.5 py-2 font-semibold text-right">店</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { cat: "アロマオイルコース", rows: [
-                  ["80分", "12,000", "6,000", "6,000"],
-                  ["100分", "15,000", "8,000", "7,000"],
-                  ["120分", "18,000", "9,000", "9,000"],
-                ]},
-                { cat: "全力コース（ハンドあり）", rows: [
-                  ["60分", "15,000", "8,000", "7,000"],
-                  ["80分", "19,000", "10,000", "9,000", "hl"],
-                ]},
-                { cat: "オプション", rows: [
-                  ["延長20分", "5,000", "3,000", "2,000"],
-                  ["DR10分", "1,000", "1,000", "—"],
-                  ["衣装MB", "5,000", "5,000", "—"],
-                  ["極液", "2,000", "2,000", "—"],
-                ]},
-                { cat: "指名", rows: [
-                  ["ネット指名", "1,000", "—", "1,000"],
-                  ["本指名/姫予約", "2,000", "2,000", "—"],
-                ]},
-                { cat: "雑費 / 宿泊費 / 交通費", rows: [
-                  ["雑費 1日", "—", "-2,000", "2,000"],
-                  ["宿泊費 1日", "—", "-2,000", "2,000"],
-                  ["交通費 3日〜", "—", "5,000", "-5,000"],
-                  ["交通費 5日〜", "—", "10,000", "-10,000"],
-                ]},
-              ].map((g) => (
-                <Fragment key={g.cat}>
-                  <tr className="bg-amber-100/70">
-                    <td colSpan={4} className="px-2.5 py-1.5 font-bold text-amber-800 text-[11px]">{g.cat}</td>
-                  </tr>
-                  {g.rows.map((r) => {
-                    const hl = r[4] === "hl";
-                    return (
-                      <tr key={g.cat + r[0]} className={`border-b border-gray-50 last:border-0 ${hl ? "bg-rose-50" : ""}`}>
-                        <td className={`px-2.5 py-1.5 ${hl ? "font-bold text-rose-600" : "text-gray-600"}`}>{r[0]}</td>
-                        <td className={`px-1.5 py-1.5 text-right ${hl ? "font-bold text-rose-600" : "text-gray-800"}`}>{r[1]}</td>
-                        <td className={`px-1.5 py-1.5 text-right ${hl ? "font-bold text-rose-600" : "text-gray-800"}`}>{r[2]}</td>
-                        <td className={`px-2.5 py-1.5 text-right ${hl ? "font-bold text-rose-600" : "text-gray-800"}`}>{r[3]}</td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-[11px] text-gray-400 mt-2">※ 金額はすべて円。セラピスト列がバック（お給料）です。</p>
-        <div className="mt-3">
-          <Card className="py-4">
-            <p className="text-xs text-gray-400 mb-1">メニュー例</p>
-            <p className="text-sm text-gray-700">全力コース80分 + MB・極液・DR30 で <span className="font-bold text-rose-600">29,000円</span>（ハンドあり）</p>
-          </Card>
-        </div>
-      </Section>
-
-      {/* 控除 */}
-      <Section icon={Wallet} title="控除" tone="gray">
-        <Card>
-          <KV k="雑費" v={<>1日 上限2,000円<br /><span className="text-xs text-gray-400">（本あたり1,000円）</span></>} />
-          <KV k="宿泊費" v="1日 2,000円" />
-        </Card>
-      </Section>
-
-      {/* 交通費 */}
-      <Section icon={Car} title="交通費支給" tone="rose">
-        <Card>
-          <KV k="3日間勤務" v="上限 5,000円" hl />
-          <KV k="5日間勤務" v="上限 10,000円" hl />
-        </Card>
-        <ul className="mt-3 space-y-1.5 text-xs text-gray-500">
-          <li>・精算は最終日の翌日</li>
-          <li>・交通機関の領収書の提出が必須</li>
-        </ul>
       </Section>
 
       {/* ルーム環境 */}

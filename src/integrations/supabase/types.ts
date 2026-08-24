@@ -4327,6 +4327,44 @@ export type Database = {
           },
         ]
       }
+      recruit_lp_experiments: {
+        Row: {
+          created_at: string
+          ended_on: string | null
+          experiment_id: string
+          name: string
+          started_on: string
+          status: "active" | "paused" | "completed"
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_on?: string | null
+          experiment_id: string
+          name: string
+          started_on: string
+          status?: "active" | "paused" | "completed"
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_on?: string | null
+          experiment_id?: string
+          name?: string
+          started_on?: string
+          status?: "active" | "paused" | "completed"
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recruit_lp_experiments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reservations: {
         Row: {
           cast_id: string | null
@@ -6090,6 +6128,14 @@ export type Database = {
           tags: string[]
           total_spent: number
           visit_count: number
+        }[]
+      }
+      get_therapist_back_rates: {
+        Args: { p_token: string }
+        Returns: {
+          course_type: string
+          duration: number
+          therapist_back: number
         }[]
       }
       get_therapist_daily_reservations: {

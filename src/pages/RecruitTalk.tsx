@@ -4,8 +4,10 @@ import { usePageTracking } from "@/hooks/usePageTracking";
 import {
   assignRecruitVariant,
   recordRecruitEvent,
+  RECRUIT_EXPERIMENT_ID,
   type RecruitVariant,
 } from "@/lib/recruitExperiment";
+import { isRecruitVariant } from "@/lib/recruitExperimentConfig";
 import {
   Sparkles, Banknote, Clock, Shield, Heart, Check, ChevronDown,
   Home, Train, CalendarDays, UserCheck, MessageCircle, Star, ArrowRight,
@@ -37,6 +39,11 @@ const RECRUIT_CTA_LABEL = "LINEでまず相談する";
 const ENKA_STORE_ID = "404499ab-5350-490f-9608-5814faffda6f";
 const ENKA_RECRUIT_LINE_URL = "https://lin.ee/UCwlbv5";
 
+function recruitPreviewVariant(): RecruitVariant | null {
+  const value = new URLSearchParams(window.location.search).get("recruit_preview");
+  return isRecruitVariant(value) ? value : null;
+}
+
 export default function RecruitTalk() {
   usePageTracking();
   const { store, storeId, loading: storeLoading } = useStore();
@@ -50,6 +57,9 @@ export default function RecruitTalk() {
     : undefined;
   const recruitLineUrl = configuredRecruitLine
     ?? (storeId === ENKA_STORE_ID ? ENKA_RECRUIT_LINE_URL : null);
+  const previewVariant = recruitPreviewVariant();
+  const trackingDisabled = previewVariant !== null
+    || new URLSearchParams(window.location.search).get("recruit_tracking") === "off";
   const brandEn = isDefaultStore
     ? "ZENRYOKU ESTHE"
     : configuredBrand ?? "ENKA";
@@ -61,16 +71,16 @@ export default function RecruitTalk() {
 
   useEffect(() => {
     if (storeLoading) return;
-    setVariant(assignRecruitVariant(storeId));
-  }, [storeId, storeLoading]);
+    setVariant(previewVariant ?? assignRecruitVariant(storeId));
+  }, [previewVariant, storeId, storeLoading]);
 
   useEffect(() => {
-    if (!variant || storeLoading) return;
+    if (!variant || storeLoading || trackingDisabled) return;
     recordRecruitEvent(storeId, variant, "exposure").catch(() => {});
-  }, [storeId, storeLoading, variant]);
+  }, [storeId, storeLoading, trackingDisabled, variant]);
 
   const handleRecruitClick = () => {
-    if (!variant) return;
+    if (!variant || trackingDisabled) return;
     recordRecruitEvent(storeId, variant, "cta_click").catch(() => {});
   };
 
@@ -100,8 +110,9 @@ export default function RecruitTalk() {
   return (
     <div
       className="min-h-screen bg-white text-gray-800"
-      data-recruit-experiment="recruit_hero_v1"
+      data-recruit-experiment={RECRUIT_EXPERIMENT_ID}
       data-recruit-variant={variant}
+      data-recruit-preview={previewVariant ? "true" : undefined}
     >
       {/* ===== HERO ===== */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 overflow-hidden bg-gradient-to-br from-rose-400 via-pink-400 to-amber-300">
@@ -173,7 +184,7 @@ export default function RecruitTalk() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
           {[
-            { title: "日払い相談OK", desc: "受け取り方法を事前に確認" },
+            { title: "日払いOK", desc: "受け取り方法を事前に確認" },
             { title: "ノルマなし", desc: "無理な本数目標はありません" },
             { title: "個別にご案内", desc: "経験や働き方に合わせて説明" },
           ].map((item) => (
@@ -190,7 +201,7 @@ export default function RecruitTalk() {
         <SectionTitle sub="WORK STYLE">あなたのペースで働ける</SectionTitle>
         <div className="grid grid-cols-2 gap-4">
           {[
-            { icon: CalendarDays, title: "完全自由出勤", desc: "週1日・1日2時間〜OK。予定に合わせて自由に。" },
+            { icon: CalendarDays, title: "完全自由出勤", desc: "週1日・短時間も相談OK。予定に合わせて自由に。" },
             { icon: Check, title: "ノルマなし", desc: "本数・指名のノルマは一切ありません。" },
             { icon: Banknote, title: "日払いOK", desc: "働いたその日にお給料を受け取れます。" },
             { icon: Home, title: "個室待機", desc: "プライベートが守られた個室で待機。" },
@@ -216,10 +227,10 @@ export default function RecruitTalk() {
         <SectionTitle sub="SUPPORT">未経験でも安心のサポート</SectionTitle>
         <div className="space-y-4">
           {[
-            { icon: UserCheck, title: "未経験スタート9割", desc: "ていねいな講習があるので、未経験の方がほとんど。一から安心して始められます。" },
+            { icon: UserCheck, title: "未経験からでも安心", desc: "ていねいな講習があるので、一から安心して始められます。" },
             { icon: Shield, title: "プライバシー厳守", desc: "顔出し不要。お写真の加工・モザイクも対応。身バレ対策を徹底しています。" },
             { icon: Heart, title: "女性も働きやすい環境", desc: "相談しやすい体制と清潔なルーム。困ったことはいつでもスタッフがサポート。" },
-            { icon: Star, title: "高い集客力", desc: "ホームページ・SNS・口コミサイトで集客に力を入れているので、指名・リピートが付きやすい環境です。" },
+            { icon: Star, title: "集客をサポート", desc: "ホームページ・SNS・求人サイトを活用し、お仕事につながる発信を支えます。" },
           ].map((f) => {
             const Icon = f.icon;
             return (
@@ -289,7 +300,7 @@ export default function RecruitTalk() {
         <SectionTitle sub="FAQ">よくあるご質問</SectionTitle>
         <div className="space-y-3">
           {[
-            { q: "未経験でも大丈夫ですか？", a: "はい。在籍の9割が未経験スタートです。講習で一から練習できるので安心してください。" },
+            { q: "未経験でも大丈夫ですか？", a: "はい。講習で一から練習できるので安心してください。" },
             { q: "身バレが心配です…", a: "顔出しは不要です。お写真の加工やモザイク対応もできるので、プライバシーはしっかり守られます。" },
             { q: "ノルマはありますか？", a: "ノルマは一切ありません。あなたのペースで無理なく働けます。" },
             { q: "報酬条件はいつ確認できますか？", a: "お問い合わせ後、契約前に報酬の仕組み・支払い方法・控除・保証条件をご説明します。内容を確認してから判断できます。" },
