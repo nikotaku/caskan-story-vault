@@ -89,59 +89,79 @@ export const SalesReport = () => {
   const fetchSalesData = async () => {
     try {
       const todayDate = new Date();
-
-      const { data: todayData } = await supabase
-        .from('reservations')
-        .select('price')
-        .eq('store_id', storeId)
-        .eq('store_id', storeId)
-        .eq('store_id', storeId)
-        .eq('store_id', storeId)
-        .gte('reservation_date', format(startOfToday(), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfToday(), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
-
-      const { data: yesterdayData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfYesterday(), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfYesterday(), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
-
-      const { data: thisMonthData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfMonth(todayDate), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfMonth(todayDate), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
-
       const lastMonth = subMonths(todayDate, 1);
-      const { data: lastMonthData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfMonth(lastMonth), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfMonth(lastMonth), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
 
-      const calc = (data: any[] | null) => ({
-        total: data?.reduce((s, i) => s + (i.price || 0), 0) ?? 0,
+      const [todayRes, yesterdayRes, thisMonthRes, lastMonthRes] = await Promise.all([
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfToday(), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfToday(), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfYesterday(), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfYesterday(), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfMonth(todayDate), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfMonth(todayDate), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfMonth(lastMonth), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfMonth(lastMonth), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+      ]);
+
+      const queryError =
+        todayRes.error || yesterdayRes.error || thisMonthRes.error || lastMonthRes.error;
+      if (queryError) throw queryError;
+
+      const calc = (data: { price: number | null }[] | null) => ({
+        total: data?.reduce((sum, item) => sum + (item.price || 0), 0) ?? 0,
         count: data?.length ?? 0,
       });
 
-      const t = calc(todayData);
-      const y = calc(yesterdayData);
-      const m = calc(thisMonthData);
-      const lm = calc(lastMonthData);
+      const todaySummary = calc(todayRes.data);
+      const yesterdaySummary = calc(yesterdayRes.data);
+      const monthSummary = calc(thisMonthRes.data);
+      const lastMonthSummary = calc(lastMonthRes.data);
 
-      setMonthSales(m.total);
+      setMonthSales(monthSummary.total);
       setSalesData([
-        { period: "本日", amount: `${t.total.toLocaleString()}円`, reservations: t.count },
-        { period: "昨日", amount: `${y.total.toLocaleString()}円`, reservations: y.count },
-        { period: "今月", amount: `${m.total.toLocaleString()}円`, reservations: m.count },
-        { period: "昨月", amount: `${lm.total.toLocaleString()}円`, reservations: lm.count },
+        {
+          period: "本日",
+          amount: `${todaySummary.total.toLocaleString()}円`,
+          reservations: todaySummary.count,
+        },
+        {
+          period: "昨日",
+          amount: `${yesterdaySummary.total.toLocaleString()}円`,
+          reservations: yesterdaySummary.count,
+        },
+        {
+          period: "今月",
+          amount: `${monthSummary.total.toLocaleString()}円`,
+          reservations: monthSummary.count,
+        },
+        {
+          period: "昨月",
+          amount: `${lastMonthSummary.total.toLocaleString()}円`,
+          reservations: lastMonthSummary.count,
+        },
       ]);
     } catch (error) {
-      console.error('Error fetching sales data:', error);
+      console.error("Error fetching sales data:", error);
+      toast.error("売上データの読み込みに失敗しました");
     } finally {
       setLoading(false);
     }
