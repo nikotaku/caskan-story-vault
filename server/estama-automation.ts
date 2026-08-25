@@ -4,6 +4,7 @@ import { chromium, type Browser, type Dialog, type Locator, type Page } from "pl
 import { createHash } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
+import { uploadPhotos } from "./estama-photo-upload.js";
 import { clickWithDomFallback } from "./playwright-actions.js";
 
 type QrDecoder = (
@@ -405,58 +406,6 @@ async function ensureAdminLogin(page: Page, requiredSelector?: string) {
   if (/\/login\/?(?:\?|$)/i.test(url) || hasPassword || !hasRequired) throw new LoginRequiredError();
 }
 
-function normalizePhotoUrl(raw: string) {
-  const value = raw.trim();
-  const driveId = value.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|thumbnail\?id=)([\w-]+)/)?.[1]
-    || value.match(/[?&]id=([\w-]+)/)?.[1]
-    || (/^[\w-]{10,}$/.test(value) ? value : null);
-  const normalized = driveId ? `https://drive.google.com/uc?export=download&id=${driveId}` : value;
-  const url = new URL(normalized);
-  if (url.protocol !== "https:") throw new Error("写真URLはHTTPSのみ利用できます");
-  const supabaseHost = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const allowedHosts = new Set([
-    "drive.google.com", "storage.googleapis.com", "img.estama.jp", "cdn2-caskan.com",
-    ...(supabaseHost ? [new URL(supabaseHost).hostname] : []),
-  ]);
-  if (!allowedHosts.has(url.hostname) && !url.hostname.endsWith(".supabase.co")) {
-    throw new Error(`未許可の写真ホストです: ${url.hostname}`);
-  }
-  return url.toString();
-}
-
-async function uploadPhotos(page: Page, urls: string[], maxPhotos = 6, strict = false) {
-  const inputs = page.locator('input[type="file"]');
-  const count = Math.min(await inputs.count(), urls.length, maxPhotos);
-  let uploaded = 0;
-  const errors: string[] = [];
-  if (count < Math.min(urls.length, maxPhotos)) {
-    errors.push(`写真入力欄が${count}枠しか見つかりません`);
-  }
-  for (let index = 0; index < count; index += 1) {
-    try {
-      const response = await fetch(normalizePhotoUrl(urls[index]), { signal: AbortSignal.timeout(20_000) });
-      if (!response.ok) throw new Error(`写真取得HTTP ${response.status}`);
-      const declaredSize = Number(response.headers.get("content-length") || 0);
-      if (declaredSize > 15 * 1024 * 1024) throw new Error("写真が15MBを超えています");
-      const contentType = response.headers.get("content-type") || "image/jpeg";
-      if (!contentType.startsWith("image/")) throw new Error("写真URLが画像を返しませんでした");
-      const buffer = Buffer.from(await response.arrayBuffer());
-      if (buffer.byteLength > 15 * 1024 * 1024) throw new Error("写真が15MBを超えています");
-      await inputs.nth(index).setInputFiles({
-        name: `photo-${index + 1}.${contentType.includes("png") ? "png" : "jpg"}`,
-        mimeType: contentType,
-        buffer,
-      });
-      uploaded += 1;
-    } catch (error) {
-      console.warn("Estama photo upload skipped", index, error);
-      errors.push(`${index + 1}枚目: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  if (strict && errors.length) throw new Error(`エステ魂の写真同期に失敗しました（${errors.join(" / ")}）`);
-  return uploaded;
-}
-
 async function markRemovedPhotoSlots(page: Page, desiredCount: number, previousCount: number) {
   if (desiredCount >= previousCount) return { requested: 0, marked: 0 };
   const requested = previousCount - desiredCount;
@@ -640,7 +589,9 @@ async function registerCast(admin: AdminClient, page: Page, job: AutomationJob, 
     }
   }
   const shouldSyncPhotos = current?.last_photo_hash !== photoHash;
-  const uploadedPhotos = shouldSyncPhotos ? await uploadPhotos(page, data.photos, 6, true) : 0;
+  const uploadedPhotos = shouldSyncPhotos
+    ? await uploadPhotos(page, data.photos, { maxPhotos: 6, strict: true })
+    : 0;
   const previousPhotoCount = Number(current?.last_photo_count || 0);
   const photoRemoval = shouldSyncPhotos
     ? await markRemovedPhotoSlots(page, data.photos.length, previousPhotoCount)
@@ -1551,7 +1502,12 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   const bodyField = accountPage.locator('textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea').first();
   if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
   const imageUrls = Array.isArray(post.image_urls) ? post.image_urls.filter((url): url is string => typeof url === "string") : [];
-  const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, 3);
+  const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
+  const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
+    maxPhotos: 3,
+    strict: true,
+    root: await diaryForm.count() ? diaryForm : undefined,
+  });
   await clickSave(accountPage);
   const visibleError = await accountPage.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible').allTextContents().catch(() => []);
   if (visibleError.some((value) => value.trim())) throw new Error(`エステ魂: ${visibleError.join(" / ").slice(0, 300)}`);
@@ -1608,7 +1564,12 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     const imageUrls = Array.isArray(input.post.imageUrls)
       ? input.post.imageUrls.filter((url): url is string => typeof url === "string")
       : [];
-    const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, 3);
+    const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
+    const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
+      maxPhotos: 3,
+      strict: true,
+      root: await diaryForm.count() ? diaryForm : undefined,
+    });
     await clickSave(accountPage);
     const visibleError = await accountPage.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible').allTextContents().catch(() => []);
     if (visibleError.some((value) => value.trim())) {
