@@ -6,18 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
-import { format, startOfMonth, subMonths } from "date-fns";
-import { ja } from "date-fns/locale";
+import { format } from "date-fns";
 
 interface MonthTarget {
   month_date: string;
-  target_revenue: number | null;
-  target_amount: number | null;
-  actual_revenue: number | null;
+  target_revenue: number;
 }
 
 export default function SalesMonthlySalesTarget() {
@@ -32,6 +30,7 @@ export default function SalesMonthlySalesTarget() {
   const [newTarget, setNewTarget] = useState<number>(0);
 
   const { user, loading: authLoading } = useAuth();
+  const { storeId, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,8 +38,8 @@ export default function SalesMonthlySalesTarget() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (user) fetchAll();
-  }, [user]);
+    if (user && !storeLoading) fetchAll();
+  }, [user, storeId, storeLoading]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -48,36 +47,48 @@ export default function SalesMonthlySalesTarget() {
       const [targetsRes, reportsRes] = await Promise.all([
         supabase
           .from("monthly_sales_targets")
-          .select("month_date,target_revenue,target_amount")
+          .select("month_date,target_revenue")
+          .eq("store_id", storeId)
           .order("month_date", { ascending: false }),
         supabase
           .from("monthly_reports")
           .select("month_date,revenue")
+          .eq("store_id", storeId)
           .order("month_date", { ascending: false })
           .limit(24),
       ]);
-      if (targetsRes.error && targetsRes.error.code !== "PGRST116") throw targetsRes.error;
+      if (targetsRes.error) throw targetsRes.error;
+      if (reportsRes.error) throw reportsRes.error;
       setTargets((targetsRes.data || []) as MonthTarget[]);
       const rmap: Record<string, number> = {};
       (reportsRes.data || []).forEach((r: any) => { rmap[r.month_date] = r.revenue || 0; });
       setReports(rmap);
     } catch (error) {
       console.error("Error fetching targets:", error);
+      toast.error("売上目標の読み込みに失敗しました");
     } finally {
       setLoading(false);
     }
   };
 
-  const getTargetAmount = (t: MonthTarget) =>
-    t.target_amount ?? t.target_revenue ?? 0;
+  const getTargetAmount = (t: MonthTarget) => t.target_revenue ?? 0;
 
   const handleSave = async (monthDate: string) => {
+    if (!Number.isFinite(editValue) || editValue < 0) {
+      toast.error("0円以上の目標金額を入力してください");
+      return;
+    }
     try {
       const { error } = await supabase
         .from("monthly_sales_targets")
         .upsert(
-          { month_date: monthDate, target_revenue: editValue, target_amount: editValue },
-          { onConflict: "month_date" }
+          {
+            store_id: storeId,
+            month_date: monthDate,
+            target_revenue: editValue,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,month_date" }
         );
       if (error) throw error;
       toast.success("保存しました");
@@ -90,14 +101,26 @@ export default function SalesMonthlySalesTarget() {
   };
 
   const handleAdd = async () => {
-    if (!newMonth) return;
+    if (!newMonth) {
+      toast.error("対象月を選択してください");
+      return;
+    }
+    if (!Number.isFinite(newTarget) || newTarget < 0) {
+      toast.error("0円以上の目標金額を入力してください");
+      return;
+    }
     const monthDate = `${newMonth}-01`;
     try {
       const { error } = await supabase
         .from("monthly_sales_targets")
         .upsert(
-          { month_date: monthDate, target_revenue: newTarget, target_amount: newTarget },
-          { onConflict: "month_date" }
+          {
+            store_id: storeId,
+            month_date: monthDate,
+            target_revenue: newTarget,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,month_date" }
         );
       if (error) throw error;
       toast.success("追加しました");
@@ -148,6 +171,8 @@ export default function SalesMonthlySalesTarget() {
                     <Input
                       type="number"
                       min="0"
+                      step="1000"
+                      inputMode="numeric"
                       value={newTarget}
                       onChange={(e) => setNewTarget(Number(e.target.value))}
                     />
@@ -227,6 +252,9 @@ export default function SalesMonthlySalesTarget() {
                               {editingMonth === target.month_date ? (
                                 <Input
                                   type="number"
+                                  min="0"
+                                  step="1000"
+                                  inputMode="numeric"
                                   value={editValue}
                                   onChange={(e) => setEditValue(Number(e.target.value))}
                                   className="w-32"

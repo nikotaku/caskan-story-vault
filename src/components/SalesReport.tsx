@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { format, startOfToday, endOfToday, startOfYesterday, endOfYesterday, startOfMonth, endOfMonth, subMonths } from "date-fns";
 
 interface SalesData {
@@ -28,37 +29,59 @@ export const SalesReport = () => {
   const [target, setTarget] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [targetInput, setTargetInput] = useState("");
+  const [savingTarget, setSavingTarget] = useState(false);
 
+  const { storeId, loading: storeLoading } = useAdminStore();
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth() + 1;
+  const monthDate = format(startOfMonth(today), "yyyy-MM-dd");
 
   useEffect(() => {
-    fetchSalesData();
-    fetchTarget();
-  }, []);
+    if (!storeLoading) {
+      fetchSalesData();
+      fetchTarget();
+    }
+  }, [storeId, storeLoading]);
 
   const fetchTarget = async () => {
     const { data } = await supabase
-      .from("sales_targets")
-      .select("target_amount")
-      .eq("year", year)
-      .eq("month", month)
+      .from("monthly_sales_targets")
+      .select("target_revenue")
+      .eq("store_id", storeId)
+      .eq("month_date", monthDate)
       .maybeSingle();
-    setTarget(data?.target_amount ?? 0);
-    setTargetInput(String(data?.target_amount ?? 0));
+    setTarget(data?.target_revenue ?? 0);
+    setTargetInput(String(data?.target_revenue ?? 0));
   };
 
   const saveTarget = async () => {
-    const amount = parseInt(targetInput, 10) || 0;
+    const amount = Number(targetInput);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error("0円以上の目標金額を入力してください");
+      return;
+    }
+
+    setSavingTarget(true);
     const { error } = await supabase
-      .from("sales_targets")
-      .upsert({ year, month, target_amount: amount }, { onConflict: "year,month" });
+      .from("monthly_sales_targets")
+      .upsert(
+        {
+          store_id: storeId,
+          month_date: monthDate,
+          target_revenue: Math.trunc(amount),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id,month_date" }
+      );
+    setSavingTarget(false);
+
     if (error) {
+      console.error("Error saving sales target:", error);
       toast.error("目標金額の保存に失敗しました");
       return;
     }
-    setTarget(amount);
+    setTarget(Math.trunc(amount));
     setEditOpen(false);
     toast.success("目標金額を保存しました");
   };
@@ -66,55 +89,79 @@ export const SalesReport = () => {
   const fetchSalesData = async () => {
     try {
       const todayDate = new Date();
-
-      const { data: todayData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfToday(), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfToday(), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
-
-      const { data: yesterdayData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfYesterday(), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfYesterday(), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
-
-      const { data: thisMonthData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfMonth(todayDate), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfMonth(todayDate), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
-
       const lastMonth = subMonths(todayDate, 1);
-      const { data: lastMonthData } = await supabase
-        .from('reservations')
-        .select('price')
-        .gte('reservation_date', format(startOfMonth(lastMonth), 'yyyy-MM-dd'))
-        .lte('reservation_date', format(endOfMonth(lastMonth), 'yyyy-MM-dd'))
-        .in('status', ['confirmed', 'completed']);
 
-      const calc = (data: any[] | null) => ({
-        total: data?.reduce((s, i) => s + (i.price || 0), 0) ?? 0,
+      const [todayRes, yesterdayRes, thisMonthRes, lastMonthRes] = await Promise.all([
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfToday(), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfToday(), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfYesterday(), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfYesterday(), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfMonth(todayDate), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfMonth(todayDate), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+        supabase
+          .from("reservations")
+          .select("price")
+          .eq("store_id", storeId)
+          .gte("reservation_date", format(startOfMonth(lastMonth), "yyyy-MM-dd"))
+          .lte("reservation_date", format(endOfMonth(lastMonth), "yyyy-MM-dd"))
+          .in("status", ["confirmed", "completed"]),
+      ]);
+
+      const queryError =
+        todayRes.error || yesterdayRes.error || thisMonthRes.error || lastMonthRes.error;
+      if (queryError) throw queryError;
+
+      const calc = (data: { price: number | null }[] | null) => ({
+        total: data?.reduce((sum, item) => sum + (item.price || 0), 0) ?? 0,
         count: data?.length ?? 0,
       });
 
-      const t = calc(todayData);
-      const y = calc(yesterdayData);
-      const m = calc(thisMonthData);
-      const lm = calc(lastMonthData);
+      const todaySummary = calc(todayRes.data);
+      const yesterdaySummary = calc(yesterdayRes.data);
+      const monthSummary = calc(thisMonthRes.data);
+      const lastMonthSummary = calc(lastMonthRes.data);
 
-      setMonthSales(m.total);
+      setMonthSales(monthSummary.total);
       setSalesData([
-        { period: "本日", amount: `${t.total.toLocaleString()}円`, reservations: t.count },
-        { period: "昨日", amount: `${y.total.toLocaleString()}円`, reservations: y.count },
-        { period: "今月", amount: `${m.total.toLocaleString()}円`, reservations: m.count },
-        { period: "昨月", amount: `${lm.total.toLocaleString()}円`, reservations: lm.count },
+        {
+          period: "本日",
+          amount: `${todaySummary.total.toLocaleString()}円`,
+          reservations: todaySummary.count,
+        },
+        {
+          period: "昨日",
+          amount: `${yesterdaySummary.total.toLocaleString()}円`,
+          reservations: yesterdaySummary.count,
+        },
+        {
+          period: "今月",
+          amount: `${monthSummary.total.toLocaleString()}円`,
+          reservations: monthSummary.count,
+        },
+        {
+          period: "昨月",
+          amount: `${lastMonthSummary.total.toLocaleString()}円`,
+          reservations: lastMonthSummary.count,
+        },
       ]);
     } catch (error) {
-      console.error('Error fetching sales data:', error);
+      console.error("Error fetching sales data:", error);
+      toast.error("売上データの読み込みに失敗しました");
     } finally {
       setLoading(false);
     }
@@ -171,6 +218,9 @@ export const SalesReport = () => {
                   <Label>目標金額（円）</Label>
                   <Input
                     type="number"
+                    min="0"
+                    step="1000"
+                    inputMode="numeric"
                     value={targetInput}
                     onChange={(e) => setTargetInput(e.target.value)}
                     placeholder="例: 3000000"
@@ -178,7 +228,9 @@ export const SalesReport = () => {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setEditOpen(false)}>キャンセル</Button>
-                  <Button onClick={saveTarget}>保存</Button>
+                  <Button onClick={saveTarget} disabled={savingTarget}>
+                    {savingTarget ? "保存中..." : "保存"}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

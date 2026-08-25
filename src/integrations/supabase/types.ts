@@ -3646,6 +3646,38 @@ export type Database = {
           },
         ]
       }
+      daily_sales_targets: {
+        Row: {
+          created_at: string
+          store_id: string
+          target_amount: number
+          target_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          store_id: string
+          target_amount?: number
+          target_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          store_id?: string
+          target_amount?: number
+          target_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_sales_targets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_sales_targets: {
         Row: {
           created_at: string
