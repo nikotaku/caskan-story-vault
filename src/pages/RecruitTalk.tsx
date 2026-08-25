@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import benefitPrivateRoomImage from "@/assets/recruit/enka-benefit-private-room.png";
+import benefitSnsManagementImage from "@/assets/recruit/enka-benefit-sns-management.png";
+import benefitTaxiImage from "@/assets/recruit/enka-benefit-taxi.png";
+import benefitTaxHousingImage from "@/assets/recruit/enka-benefit-tax-housing.png";
 import { useStore } from "@/hooks/useStore";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import {
@@ -38,6 +42,32 @@ const HERO_CONTENT: Record<RecruitVariant, {
 const RECRUIT_CTA_LABEL = "LINEでまず相談する";
 const ENKA_STORE_ID = "404499ab-5350-490f-9608-5814faffda6f";
 const ENKA_RECRUIT_LINE_URL = "https://lin.ee/UCwlbv5";
+const ENKA_BENEFITS = [
+  {
+    image: benefitSnsManagementImage,
+    alt: "SNS投稿・写メ日記・お客様への営業をお店が管理するサポート",
+    title: "SNS投稿・営業をお店が管理",
+    description: "面倒なSNS投稿や写メ日記の更新、お客様への営業連絡はお店がまとめて対応。接客に集中できます。",
+  },
+  {
+    image: benefitTaxiImage,
+    alt: "終電後など遅い時間の帰宅に対応するタクシー送迎",
+    title: "タクシー送迎あり",
+    description: "終電後など遅い時間の帰宅は、タクシー送迎に対応します。対応できる地域や条件は、出勤前にご相談ください。",
+  },
+  {
+    image: benefitTaxHousingImage,
+    alt: "税金面のサポートと不動産会社・アリバイ会社の紹介",
+    title: "税金・住まいもサポート",
+    description: "税金面の相談は必要に応じて専門家をご案内。不動産会社・アリバイ会社の紹介にも対応します。",
+  },
+  {
+    image: benefitPrivateRoomImage,
+    alt: "プライバシーに配慮した1人1ルームの個室待機",
+    title: "1人1ルームで個室待機",
+    description: "待機中は1人1ルームの個室をご用意。他のセラピストと顔を合わせにくく、プライバシーに配慮しています。",
+  },
+] as const;
 
 function recruitPreviewVariant(): RecruitVariant | null {
   const value = new URLSearchParams(window.location.search).get("recruit_preview");
@@ -195,6 +225,35 @@ export default function RecruitTalk() {
           ))}
         </div>
       </Section>
+
+      {/* ===== 艶華の4つのメリット ===== */}
+      {storeId === ENKA_STORE_ID && (
+        <Section className="bg-gradient-to-br from-rose-50 via-pink-50 to-amber-50">
+          <SectionTitle sub="ENKA BENEFITS">艶華で働く4つのメリット</SectionTitle>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {ENKA_BENEFITS.map((benefit) => (
+              <article
+                key={benefit.title}
+                className="overflow-hidden rounded-3xl border border-white/80 bg-white shadow-sm"
+              >
+                <img
+                  src={benefit.image}
+                  alt={benefit.alt}
+                  width={400}
+                  height={400}
+                  loading="lazy"
+                  decoding="async"
+                  className="aspect-square w-full object-cover"
+                />
+                <div className="p-5">
+                  <h3 className="text-lg font-bold text-gray-800">{benefit.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-gray-600">{benefit.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ===== 働きやすさ ===== */}
       <Section className="bg-rose-50">
