@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { ReservationForm } from "@/components/ReservationForm";
+import { ReservationForm, ReservationFormData } from "@/components/ReservationForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -56,6 +56,7 @@ interface Reservation {
   discount_ids: string[] | null;
   payment_method: string | null;
   payment_fee: number | null;
+  payment_details: ReservationFormData["payment_details"];
   reservation_method: string | null;
   notes: string | null;
   room: string | null;
@@ -199,37 +200,37 @@ export default function ReservationsList() {
     if (discountData) setDiscounts(discountData as Discount[]);
   };
 
-  const handleAddReservation = async () => {
+  const handleAddReservation = async (submittedFormData: ReservationFormData) => {
     if (!isAdmin) {
       toast({ title: "権限エラー", description: "管理者のみ予約を追加できます", variant: "destructive" });
       return;
     }
-    if (!formData.cast_id || !formData.customer_name || !formData.customer_phone) {
+    if (!submittedFormData.cast_id || !submittedFormData.customer_name || !submittedFormData.customer_phone) {
       toast({ title: "入力エラー", description: "必須項目を入力してください", variant: "destructive" });
       return;
     }
     try {
-      const storedStart = toStoredTime(formData.start_time);
-      const storedDate = addDays(formData.reservation_date, storedStart.dayOffset);
+      const storedStart = toStoredTime(submittedFormData.start_time);
+      const storedDate = addDays(submittedFormData.reservation_date, storedStart.dayOffset);
       const { error } = await supabase.from("reservations").insert([{
-        cast_id: formData.cast_id,
-        customer_name: formData.customer_name,
-        customer_phone: formData.customer_phone,
-        customer_email: formData.customer_email || null,
+        cast_id: submittedFormData.cast_id,
+        customer_name: submittedFormData.customer_name,
+        customer_phone: submittedFormData.customer_phone,
+        customer_email: submittedFormData.customer_email || null,
         reservation_date: format(storedDate, "yyyy-MM-dd"),
         start_time: storedStart.time,
-        duration: formData.duration,
-        course_type: formData.course_type,
-        course_name: formData.course_name,
-        options: formData.selectedOptions,
-        nomination_type: formData.nomination_type === "none" ? null : formData.nomination_type,
-        price: formData.price,
-        discount: formData.discount,
-        payment_method: formData.payment_details ? null : (formData.payment_method || "cash"),
-        payment_fee: formData.payment_fee || 0,
-        payment_details: formData.payment_details || null,
-        notes: formData.notes || null,
-        room: formData.room || null,
+        duration: submittedFormData.duration,
+        course_type: submittedFormData.course_type,
+        course_name: submittedFormData.course_name,
+        options: submittedFormData.selectedOptions,
+        nomination_type: submittedFormData.nomination_type === "none" ? null : submittedFormData.nomination_type,
+        price: submittedFormData.price,
+        discount: submittedFormData.discount,
+        payment_method: submittedFormData.payment_details ? null : (submittedFormData.payment_method || "cash"),
+        payment_fee: submittedFormData.payment_fee || 0,
+        payment_details: submittedFormData.payment_details,
+        notes: submittedFormData.notes || null,
+        room: submittedFormData.room || null,
         store_id: ENKA_STORE_ID,
         created_by: user!.id,
       }]);
@@ -237,15 +238,15 @@ export default function ReservationsList() {
       postToSheet("reservation", {
         reservation_date: format(storedDate, "yyyy-MM-dd"),
         start_time: storedStart.time,
-        customer_name: formData.customer_name,
-        customer_phone: formData.customer_phone,
-        customer_email: formData.customer_email || "",
-        cast_name: casts.find((c) => c.id === formData.cast_id)?.name || "",
-        course_name: formData.course_name,
-        nomination_type: formData.nomination_type === "none" ? "" : formData.nomination_type,
-        room: formData.room || "",
-        discount: formData.discount,
-        price: formData.price,
+        customer_name: submittedFormData.customer_name,
+        customer_phone: submittedFormData.customer_phone,
+        customer_email: submittedFormData.customer_email || "",
+        cast_name: casts.find((c) => c.id === submittedFormData.cast_id)?.name || "",
+        course_name: submittedFormData.course_name,
+        nomination_type: submittedFormData.nomination_type === "none" ? "" : submittedFormData.nomination_type,
+        room: submittedFormData.room || "",
+        discount: submittedFormData.discount,
+        price: submittedFormData.price,
         created_at: new Date().toISOString(),
       });
       toast({ title: "予約追加", description: "新しい予約が追加されました" });
@@ -292,29 +293,29 @@ export default function ReservationsList() {
       price: res.price,
       payment_method: res.payment_method || "cash",
       payment_fee: res.payment_fee || 0,
-      payment_details: (res as any).payment_details || null,
+      payment_details: res.payment_details || null,
       reservation_method: res.reservation_method || "",
       notes: res.notes || "",
     });
     setIsEditOpen(true);
   };
 
-  const handleUpdateReservation = async () => {
+  const handleUpdateReservation = async (submittedFormData: ReservationFormData) => {
     if (!editingReservation) return;
     try {
-      const storedStart = toStoredTime(editFormData.start_time);
-      const storedDate = addDays(editFormData.reservation_date, storedStart.dayOffset);
+      const storedStart = toStoredTime(submittedFormData.start_time);
+      const storedDate = addDays(submittedFormData.reservation_date, storedStart.dayOffset);
       // Recompute price from master data to avoid stale-state race conditions
-      const backRate = backRates.find((r) => r.course_type === editFormData.course_type && r.duration === editFormData.duration);
+      const backRate = backRates.find((r) => r.course_type === submittedFormData.course_type && r.duration === submittedFormData.duration);
       let subtotal = backRate?.customer_price ?? 0;
-      (editFormData.selectedOptions ?? []).forEach((optName) => {
+      (submittedFormData.selectedOptions ?? []).forEach((optName) => {
         subtotal += optionRates.find((r) => r.option_name === optName)?.customer_price ?? 0;
       });
-      if (editFormData.nomination_type && editFormData.nomination_type !== "none") {
-        subtotal += nominationRates.find((r) => r.nomination_type === editFormData.nomination_type)?.customer_price ?? 0;
+      if (submittedFormData.nomination_type && submittedFormData.nomination_type !== "none") {
+        subtotal += nominationRates.find((r) => r.nomination_type === submittedFormData.nomination_type)?.customer_price ?? 0;
       }
       let discountAmt = 0;
-      for (const discId of (editFormData.discount_ids ?? [])) {
+      for (const discId of (submittedFormData.discount_ids ?? [])) {
         const d = discounts.find((x) => x.id === discId);
         if (d) {
           discountAmt += d.discount_type === "percentage"
@@ -323,30 +324,30 @@ export default function ReservationsList() {
         }
       }
       discountAmt = Math.min(discountAmt, subtotal);
-      const computedPrice = subtotal > 0 ? subtotal - discountAmt : editFormData.price;
-      const computedDiscount = subtotal > 0 ? discountAmt : (editFormData.discount ?? 0);
-      const courseName = `${editFormData.course_type} ${editFormData.duration}分`;
+      const computedPrice = subtotal > 0 ? subtotal - discountAmt : submittedFormData.price;
+      const computedDiscount = subtotal > 0 ? discountAmt : (submittedFormData.discount ?? 0);
+      const courseName = `${submittedFormData.course_type} ${submittedFormData.duration}分`;
 
       const { error } = await supabase.from("reservations").update({
-        cast_id: editFormData.cast_id || null,
-        customer_name: editFormData.customer_name,
-        customer_phone: editFormData.customer_phone,
-        customer_email: editFormData.customer_email || null,
+        cast_id: submittedFormData.cast_id || null,
+        customer_name: submittedFormData.customer_name,
+        customer_phone: submittedFormData.customer_phone,
+        customer_email: submittedFormData.customer_email || null,
         reservation_date: format(storedDate, "yyyy-MM-dd"),
         start_time: storedStart.time,
-        duration: editFormData.duration,
-        course_type: editFormData.course_type,
+        duration: submittedFormData.duration,
+        course_type: submittedFormData.course_type,
         course_name: courseName,
-        options: editFormData.selectedOptions,
-        nomination_type: editFormData.nomination_type === "none" ? null : editFormData.nomination_type,
+        options: submittedFormData.selectedOptions,
+        nomination_type: submittedFormData.nomination_type === "none" ? null : submittedFormData.nomination_type,
         price: computedPrice,
         discount: computedDiscount,
-        discount_ids: editFormData.discount_ids,
-        payment_method: editFormData.payment_details ? null : (editFormData.payment_method || "cash"),
-        payment_fee: editFormData.payment_fee || 0,
-        payment_details: editFormData.payment_details || null,
-        notes: editFormData.notes || null,
-        room: editFormData.room || null,
+        discount_ids: submittedFormData.discount_ids,
+        payment_method: submittedFormData.payment_details ? null : (submittedFormData.payment_method || "cash"),
+        payment_fee: submittedFormData.payment_fee || 0,
+        payment_details: submittedFormData.payment_details,
+        notes: submittedFormData.notes || null,
+        room: submittedFormData.room || null,
       }).eq("id", editingReservation.id);
       if (error) throw error;
       toast({ title: "更新完了", description: "予約情報を更新しました" });
