@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { format, startOfToday, endOfToday, startOfYesterday, endOfYesterday, startOfMonth, endOfMonth, subMonths } from "date-fns";
 
 interface SalesData {
@@ -28,37 +29,59 @@ export const SalesReport = () => {
   const [target, setTarget] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
   const [targetInput, setTargetInput] = useState("");
+  const [savingTarget, setSavingTarget] = useState(false);
 
+  const { storeId, loading: storeLoading } = useAdminStore();
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth() + 1;
+  const monthDate = format(startOfMonth(today), "yyyy-MM-dd");
 
   useEffect(() => {
-    fetchSalesData();
-    fetchTarget();
-  }, []);
+    if (!storeLoading) {
+      fetchSalesData();
+      fetchTarget();
+    }
+  }, [storeId, storeLoading]);
 
   const fetchTarget = async () => {
     const { data } = await supabase
-      .from("sales_targets")
-      .select("target_amount")
-      .eq("year", year)
-      .eq("month", month)
+      .from("monthly_sales_targets")
+      .select("target_revenue")
+      .eq("store_id", storeId)
+      .eq("month_date", monthDate)
       .maybeSingle();
-    setTarget(data?.target_amount ?? 0);
-    setTargetInput(String(data?.target_amount ?? 0));
+    setTarget(data?.target_revenue ?? 0);
+    setTargetInput(String(data?.target_revenue ?? 0));
   };
 
   const saveTarget = async () => {
-    const amount = parseInt(targetInput, 10) || 0;
+    const amount = Number(targetInput);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error("0円以上の目標金額を入力してください");
+      return;
+    }
+
+    setSavingTarget(true);
     const { error } = await supabase
-      .from("sales_targets")
-      .upsert({ year, month, target_amount: amount }, { onConflict: "year,month" });
+      .from("monthly_sales_targets")
+      .upsert(
+        {
+          store_id: storeId,
+          month_date: monthDate,
+          target_revenue: Math.trunc(amount),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id,month_date" }
+      );
+    setSavingTarget(false);
+
     if (error) {
+      console.error("Error saving sales target:", error);
       toast.error("目標金額の保存に失敗しました");
       return;
     }
-    setTarget(amount);
+    setTarget(Math.trunc(amount));
     setEditOpen(false);
     toast.success("目標金額を保存しました");
   };
@@ -70,6 +93,10 @@ export const SalesReport = () => {
       const { data: todayData } = await supabase
         .from('reservations')
         .select('price')
+        .eq('store_id', storeId)
+        .eq('store_id', storeId)
+        .eq('store_id', storeId)
+        .eq('store_id', storeId)
         .gte('reservation_date', format(startOfToday(), 'yyyy-MM-dd'))
         .lte('reservation_date', format(endOfToday(), 'yyyy-MM-dd'))
         .in('status', ['confirmed', 'completed']);
@@ -171,6 +198,9 @@ export const SalesReport = () => {
                   <Label>目標金額（円）</Label>
                   <Input
                     type="number"
+                    min="0"
+                    step="1000"
+                    inputMode="numeric"
                     value={targetInput}
                     onChange={(e) => setTargetInput(e.target.value)}
                     placeholder="例: 3000000"
@@ -178,7 +208,9 @@ export const SalesReport = () => {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setEditOpen(false)}>キャンセル</Button>
-                  <Button onClick={saveTarget}>保存</Button>
+                  <Button onClick={saveTarget} disabled={savingTarget}>
+                    {savingTarget ? "保存中..." : "保存"}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
