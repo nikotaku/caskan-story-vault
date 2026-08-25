@@ -13,7 +13,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { calcPaymentFee, findPaymentSetting, PaymentSetting } from "@/lib/paymentFee";
+import {
+  calcPaymentFee,
+  findPaymentSetting,
+  PaymentDetail,
+  PaymentSetting,
+  snapshotPaymentDetailFees,
+} from "@/lib/paymentFee";
 import { CONVERSATION_OPTIONS } from "@/lib/customerRank";
 
 const PREFERRED_TYPE_OPTIONS = ["20代前半", "30代", "ギャル系", "お姉さん系", "ベテラン", "未経験", "おっとり", "サバサバ"] as const;
@@ -52,7 +58,7 @@ interface DiscountItem {
   discount_value: number;
 }
 
-interface FormData {
+export interface ReservationFormData {
   cast_id: string;
   customer_name: string;
   customer_phone: string;
@@ -71,14 +77,14 @@ interface FormData {
   price: number;
   payment_method: string;
   payment_fee: number;
-  payment_details: { method: string; amount: number }[] | null;
+  payment_details: PaymentDetail[] | null;
   reservation_method: string;
   notes: string;
 }
 
 interface ReservationFormProps {
-  formData: FormData;
-  setFormData: (data: FormData) => void;
+  formData: ReservationFormData;
+  setFormData: (data: ReservationFormData) => void;
   casts: Cast[];
   rooms: { id: string; name: string; address: string | null }[];
   backRates: BackRate[];
@@ -86,7 +92,7 @@ interface ReservationFormProps {
   nominationRates: NominationRate[];
   discounts: DiscountItem[];
   storeId?: string;
-  onSubmit: () => void;
+  onSubmit: (data: ReservationFormData) => void | Promise<void>;
   submitLabel?: string;
 }
 
@@ -152,6 +158,8 @@ export function ReservationForm({
   const [ngReason, setNgReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSetting[]>([]);
+  const [paymentSettingsLoaded, setPaymentSettingsLoaded] = useState(false);
+  const [paymentSettingsLoadFailed, setPaymentSettingsLoadFailed] = useState(false);
   const [prefs, setPrefs] = useState<PreferenceForm>(EMPTY_PREFS);
   const [prefsDirty, setPrefsDirty] = useState(false);
   // 自由割引（マスタ割引に加えて任意金額を引ける）。保存は discount 合計額に含める
@@ -168,12 +176,25 @@ export function ReservationForm({
   };
 
   useEffect(() => {
+    let active = true;
+    setPaymentSettingsLoaded(false);
+    setPaymentSettingsLoadFailed(false);
     let query = supabase
       .from("payment_settings")
       .select("id, payment_method, payment_link, fee_percentage");
     if (storeId) query = query.eq("store_id", storeId);
     query
-      .then(({ data }) => setPaymentSettings((data || []) as PaymentSetting[]));
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setPaymentSettings([]);
+          setPaymentSettingsLoadFailed(true);
+          return;
+        }
+        setPaymentSettings((data || []) as PaymentSetting[]);
+        setPaymentSettingsLoaded(true);
+      });
+    return () => { active = false; };
   }, [storeId]);
 
   const courseTypes = useMemo(() => {
@@ -492,8 +513,21 @@ export function ReservationForm({
   };
 
   const handleSubmit = async () => {
+    if (
+      !paymentSettingsLoaded &&
+      formData.payment_details?.some((detail) => detail.method !== "cash" && detail.amount > 0)
+    ) {
+      return;
+    }
     await savePreferences();
-    onSubmit();
+    await onSubmit({
+      ...formData,
+      price: liveTotals.totalPrice,
+      discount: liveTotals.discountAmount,
+      payment_fee: liveTotals.fee,
+      course_name: liveTotals.courseName,
+      payment_details: snapshotPaymentDetailFees(formData.payment_details, paymentSettings),
+    });
   };
 
   const handleOptionToggle = useCallback((optionName: string) => {
@@ -1289,6 +1323,14 @@ export function ReservationForm({
         )}
       </div>
 
+      {paymentSettingsLoadFailed && formData.payment_details?.some(
+        (detail) => detail.method !== "cash" && detail.amount > 0,
+      ) && (
+        <p className="text-xs text-destructive">
+          決済設定を取得できません。画面を再読み込みしてください。
+        </p>
+      )}
+
       {/* 19. 合計金額＋登録ボタン（下部固定バー） */}
       <div className="sticky bottom-0 z-20 mt-2 flex items-center gap-3 border-t border-border bg-background/95 backdrop-blur py-3 -mb-1">
         <div className="shrink-0">
@@ -1303,7 +1345,15 @@ export function ReservationForm({
             })()}
           </p>
         </div>
-        <Button onClick={handleSubmit} size="lg" className="flex-1 h-12 text-base">
+        <Button
+          onClick={handleSubmit}
+          size="lg"
+          className="flex-1 h-12 text-base"
+          disabled={
+            !paymentSettingsLoaded &&
+            Boolean(formData.payment_details?.some((detail) => detail.method !== "cash" && detail.amount > 0))
+          }
+        >
           {submitLabel}
         </Button>
       </div>

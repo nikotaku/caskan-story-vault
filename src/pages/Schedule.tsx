@@ -23,13 +23,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ReservationForm } from "@/components/ReservationForm";
+import { ReservationForm, ReservationFormData } from "@/components/ReservationForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { findPaymentSetting, PaymentSetting } from "@/lib/paymentFee";
+import {
+  buildSplitCardPaymentSmsLines,
+  findPaymentSetting,
+  getSplitCardPaymentSummary,
+  PaymentDetail,
+  PaymentSetting,
+} from "@/lib/paymentFee";
 import { openSmsApp } from "@/lib/sms";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { PaymentReminderPopup } from "@/components/PaymentReminderPopup";
@@ -71,6 +77,7 @@ interface Reservation {
   options: string[] | null;
   payment_method: string | null;
   payment_fee: number | null;
+  payment_details: PaymentDetail[] | null;
   status: string;
   payment_status: string;
   room: string | null;
@@ -809,31 +816,31 @@ export default function Schedule() {
     setIsAddOpen(true);
   };
 
-  const handleAddReservation = async () => {
+  const handleAddReservation = async (submittedFormData: ReservationFormData) => {
     if (!isAdmin || !user) return;
     try {
-      const storedStart = toStoredTime(formData.start_time);
-      const storedDate = addDays(formData.reservation_date, storedStart.dayOffset);
+      const storedStart = toStoredTime(submittedFormData.start_time);
+      const storedDate = addDays(submittedFormData.reservation_date, storedStart.dayOffset);
       const { error } = await supabase.from("reservations").insert([{
-        cast_id: formData.cast_id,
-        customer_name: formData.customer_name,
-        customer_phone: formData.customer_phone,
-        customer_email: formData.customer_email || null,
+        cast_id: submittedFormData.cast_id,
+        customer_name: submittedFormData.customer_name,
+        customer_phone: submittedFormData.customer_phone,
+        customer_email: submittedFormData.customer_email || null,
         reservation_date: format(storedDate, "yyyy-MM-dd"),
         start_time: storedStart.time,
-        duration: formData.duration,
-        course_type: formData.course_type,
-        course_name: formData.course_name,
-        options: formData.selectedOptions,
-        nomination_type: formData.nomination_type === "none" ? null : formData.nomination_type,
-        price: formData.price,
-        discount: formData.discount || 0,
-        discount_ids: formData.discount_ids ?? [],
-        payment_method: formData.payment_details ? null : (formData.payment_method || "cash"),
-        payment_fee: formData.payment_fee || 0,
-        payment_details: formData.payment_details || null,
-        notes: formData.notes || null,
-        room: formData.room || null,
+        duration: submittedFormData.duration,
+        course_type: submittedFormData.course_type,
+        course_name: submittedFormData.course_name,
+        options: submittedFormData.selectedOptions,
+        nomination_type: submittedFormData.nomination_type === "none" ? null : submittedFormData.nomination_type,
+        price: submittedFormData.price,
+        discount: submittedFormData.discount || 0,
+        discount_ids: submittedFormData.discount_ids ?? [],
+        payment_method: submittedFormData.payment_details ? null : (submittedFormData.payment_method || "cash"),
+        payment_fee: submittedFormData.payment_fee || 0,
+        payment_details: submittedFormData.payment_details,
+        notes: submittedFormData.notes || null,
+        room: submittedFormData.room || null,
         status: "confirmed",
         store_id: ENKA_STORE_ID,
         created_by: user.id,
@@ -853,11 +860,18 @@ export default function Schedule() {
     const nominationLabel = d.nomination_type && d.nomination_type !== "none" ? d.nomination_type : "フリー";
     const fee = d.payment_fee || 0;
     const grandTotal = d.price + fee;
+    const storePaymentSettings = paymentSettings.filter((setting) => setting.store_id === d.store_id);
+    const splitCardPayment = getSplitCardPaymentSummary(
+      d.payment_details,
+      storePaymentSettings,
+      d.payment_fee,
+    );
     const paySetting = findPaymentSetting(
-      paymentSettings.filter((setting) => setting.store_id === d.store_id),
+      storePaymentSettings,
       d.payment_method || "",
     );
     const payLink = fee > 0 && paySetting?.payment_link ? paySetting.payment_link : null;
+    const splitCardPaymentLines = buildSplitCardPaymentSmsLines(splitCardPayment);
     const roomRecord = rooms.find((r) => r.store_id === d.store_id && r.name === d.room);
     const roomSmsText = roomRecord?.sms_text ?? null;
     const roomAddress = roomRecord?.address ?? null;
@@ -918,7 +932,8 @@ export default function Schedule() {
         `担当：${therapistLabel}`,
         `合計：${grandTotal.toLocaleString()}円`,
         d.notes?.trim() ? `ご要望：${d.notes.trim()}` : null,
-        ...(payLink ? ["", `${paySetting?.payment_method ?? "カード"}決済：${payLink}`] : []),
+        ...splitCardPaymentLines,
+        ...(!splitCardPayment && payLink ? ["", `${paySetting?.payment_method ?? "カード"}決済：${payLink}`] : []),
         ...(needsLineCouponNote && storeLineUrl
           ? ["", `クーポン受取LINE：${storeLineUrl}`]
           : []),
@@ -958,7 +973,8 @@ export default function Schedule() {
       discountAmount > 0 ? `割引：-${discountAmount.toLocaleString()}円` : null,
       `決済手数料：${fee.toLocaleString()}円`,
       `総額：${grandTotal.toLocaleString()}円`,
-      ...(payLink ? [``, `▼${paySetting?.payment_method ?? "カード"}決済はこちら`, payLink] : []),
+      ...splitCardPaymentLines,
+      ...(!splitCardPayment && payLink ? [``, `▼${paySetting?.payment_method ?? "カード"}決済はこちら`, payLink] : []),
       ...(needsLineCouponNote
         ? [``, `クーポン受け取り用に下記のLINEを追加お願いいたします。`, ...(storeLineUrl ? [storeLineUrl] : [])]
         : []),
@@ -981,6 +997,28 @@ export default function Schedule() {
   // コピーしつつ端末のSMS送信画面を開く（宛先＝予約の電話番号、本文プリセット）
   // 同時にセラピストのグループLINEへも予約内容を自動共有（送り忘れ防止）
   const openReservationSms = (d: Reservation) => {
+    const splitCardPayment = getSplitCardPaymentSummary(
+      d.payment_details,
+      paymentSettings.filter((setting) => setting.store_id === d.store_id),
+      d.payment_fee,
+    );
+    if (splitCardPayment?.chargeAmount == null && splitCardPayment) {
+      toast({
+        title: "カード決済金額を確定できません",
+        description: "カードとPayPayを併用した旧予約です。予約を編集して保存し直してください。",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (splitCardPayment && !splitCardPayment.paymentLink) {
+      toast({
+        title: "カード決済リンクが未設定です",
+        description: "料金管理でカードの決済リンクを登録してから再度お試しください。",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const body = buildReservationSms(d);
     navigator.clipboard.writeText(body).catch(() => {});
     toast({ title: "SMS送信画面を開きます", description: "本文はコピー済みです" });
@@ -1089,58 +1127,57 @@ export default function Schedule() {
       price: res.price,
       payment_method: res.payment_method ?? "cash",
       payment_fee: res.payment_fee ?? 0,
-      payment_details: (res as any).payment_details ?? null,
+      payment_details: res.payment_details ?? null,
       reservation_method: "",
       notes: res.notes ?? "",
     });
     setEditMode(true);
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (submittedFormData: ReservationFormData) => {
     if (!detailRes) return;
     try {
-      const storedStart = toStoredTime(editFormData.start_time);
-      const storedDate = addDays(editFormData.reservation_date, storedStart.dayOffset);
+      const storedStart = toStoredTime(submittedFormData.start_time);
+      const storedDate = addDays(submittedFormData.reservation_date, storedStart.dayOffset);
       // Recompute price from master data to avoid stale-state race conditions
-      const dur = Number(editFormData.duration);
-      const backRate = backRates.find((r) => r.course_type === editFormData.course_type && r.duration === dur);
+      const dur = Number(submittedFormData.duration);
+      const backRate = backRates.find((r) => r.course_type === submittedFormData.course_type && r.duration === dur);
       let subtotal = backRate?.customer_price ?? 0;
-      (editFormData.selectedOptions ?? []).forEach((optName) => {
+      (submittedFormData.selectedOptions ?? []).forEach((optName) => {
         subtotal += optionRates.find((r) => r.option_name === optName)?.customer_price ?? 0;
       });
-      if (editFormData.nomination_type && editFormData.nomination_type !== "none") {
-        subtotal += nominationRates.find((r) => r.nomination_type === editFormData.nomination_type)?.customer_price ?? 0;
+      if (submittedFormData.nomination_type && submittedFormData.nomination_type !== "none") {
+        subtotal += nominationRates.find((r) => r.nomination_type === submittedFormData.nomination_type)?.customer_price ?? 0;
       }
       // 割引はフォーム側（ReservationForm）がマスタ割引＋自由割引を合算して
       // editFormData.discount に同期済み。ここで discount_ids だけから再計算すると
       // 自由割引（クーポン等の任意金額）が消えてしまうため、フォームの合計値を採用する。
-      const formDiscount = Math.max(0, Number(editFormData.discount ?? 0));
+      const formDiscount = Math.max(0, Number(submittedFormData.discount ?? 0));
       const discountAmt = subtotal > 0 ? Math.min(formDiscount, subtotal) : formDiscount;
-      const computedPrice = subtotal > 0 ? subtotal - discountAmt : Number(editFormData.price);
+      const computedPrice = subtotal > 0 ? subtotal - discountAmt : Number(submittedFormData.price);
       const computedDiscount = discountAmt;
-      const courseName = `${editFormData.course_type} ${dur}分`;
-
+      const courseName = `${submittedFormData.course_type} ${dur}分`;
       const { error } = await supabase.from("reservations").update({
-        cast_id: editFormData.cast_id,
-        customer_name: editFormData.customer_name,
-        customer_phone: editFormData.customer_phone,
-        customer_email: editFormData.customer_email || null,
+        cast_id: submittedFormData.cast_id,
+        customer_name: submittedFormData.customer_name,
+        customer_phone: submittedFormData.customer_phone,
+        customer_email: submittedFormData.customer_email || null,
         reservation_date: format(storedDate, "yyyy-MM-dd"),
         start_time: storedStart.time,
         duration: dur,
-        course_type: editFormData.course_type,
+        course_type: submittedFormData.course_type,
         course_name: courseName,
-        options: editFormData.selectedOptions,
-        nomination_type: editFormData.nomination_type === "none" ? null : editFormData.nomination_type,
+        options: submittedFormData.selectedOptions,
+        nomination_type: submittedFormData.nomination_type === "none" ? null : submittedFormData.nomination_type,
         price: computedPrice,
         discount: computedDiscount,
-        discount_ids: editFormData.discount_ids ?? [],
-        payment_method: editFormData.payment_details ? null : (editFormData.payment_method || "cash"),
-        payment_fee: editFormData.payment_fee || 0,
-        payment_details: editFormData.payment_details || null,
-        room: editFormData.room || null,
+        discount_ids: submittedFormData.discount_ids ?? [],
+        payment_method: submittedFormData.payment_details ? null : (submittedFormData.payment_method || "cash"),
+        payment_fee: submittedFormData.payment_fee || 0,
+        payment_details: submittedFormData.payment_details,
+        room: submittedFormData.room || null,
         status: editStatus,
-        notes: editFormData.notes || null,
+        notes: submittedFormData.notes || null,
       }).eq("id", detailRes.id);
       if (error) throw error;
       toast({ title: "更新しました" });
