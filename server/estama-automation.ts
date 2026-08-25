@@ -4,6 +4,7 @@ import { chromium, type Browser, type Dialog, type Locator, type Page } from "pl
 import { createHash } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
+import { clickWithDomFallback } from "./playwright-actions.js";
 
 type QrDecoder = (
   data: Uint8ClampedArray,
@@ -490,7 +491,7 @@ async function clickSave(page: Page) {
   if (!await submit.count()) throw new Error("エステ魂の保存ボタンが見つかりません");
   await Promise.all([
     page.waitForLoadState("domcontentloaded").catch(() => undefined),
-    submit.click(),
+    clickWithDomFallback(submit),
   ]);
   const confirm = page.locator('button, input[type="submit"], a').filter({
     hasText: /確定|はい|登録する|保存する|投稿する/,
