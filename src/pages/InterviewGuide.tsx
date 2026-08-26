@@ -1,35 +1,24 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 import wPricingImage from "@/assets/interview/enka-w-pricing.webp";
 import {
-  ArrowLeft, MapPin, Clock, Train, ShieldCheck, Loader2,
+  ArrowLeft, MapPin, Clock, Train, ShieldCheck,
   Home, IdCard, Camera, AlertTriangle, Sparkles, Check, ChevronDown,
-  KeyRound, Footprints, Archive, Tablet, type LucideIcon,
+  Footprints, Tablet, type LucideIcon,
 } from "lucide-react";
 
 /**
  * 面談用（画面共有）ページ。ビデオ通話で候補者に画面共有しながら、
- * 店舗詳細・ルーム環境・注意点を説明する社内用資料。
+ * 店舗詳細・ルーム環境・注意点を説明する面談資料。
  * 施術マニュアルと店舗詳細をもとに構成。縦スクロール・大きめ文字で見やすく。
  */
 
 export default function InterviewGuide() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     document.title = "艶華｜面談資料";
-    if (!authLoading && !user) navigate("/login", { replace: true });
-  }, [authLoading, navigate, user]);
-
-  if (authLoading || !user) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-gray-50 text-gray-500">
-        <Loader2 className="h-6 w-6 animate-spin" aria-label="認証を確認中" />
-      </div>
-    );
-  }
+  }, []);
 
   const Section = ({ id, icon: Icon, title, sub, children, tone = "rose", wide = false }: {
     id?: string; icon: LucideIcon; title: string; sub?: string; children: React.ReactNode;
@@ -73,10 +62,10 @@ export default function InterviewGuide() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
       <button
-        onClick={() => navigate("/staff")}
+        onClick={() => navigate("/")}
         className="fixed top-3 left-3 z-50 flex items-center gap-1 text-xs bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow text-gray-500 hover:text-gray-800 print:hidden"
       >
-        <ArrowLeft size={13} /> 管理画面へ
+        <ArrowLeft size={13} /> 店舗サイトへ
       </button>
 
       {/* HERO */}
@@ -137,65 +126,9 @@ export default function InterviewGuide() {
             <p className="text-sm font-bold mt-0.5">北四番丁駅<br /><span className="text-xs font-medium text-gray-500">徒歩3分</span></p>
           </Card>
         </div>
-      </Section>
-
-      {/* 各ルームの住所と鍵（施術マニュアルより） */}
-      <Section icon={MapPin} title="各ルームの住所・アクセス・鍵" sub="施術マニュアルより" tone="amber">
-        <div className="space-y-4">
-          {[
-            {
-              name: "サンルーム",
-              zip: "〒980-0803",
-              address: "仙台市 青葉区 国分町 3-6-13 アルモニー勾当台 203",
-              access: [
-                "地下鉄南北線／勾当台公園駅前 徒歩3分",
-                "仙台駅西口タクシー乗り場から車で7分",
-              ],
-              keyNote: "建物正面入り口のキーボックスに鍵があります",
-            },
-            {
-              name: "ラズルーム",
-              zip: "〒980-0821",
-              address: "宮城県仙台市青葉区春日町 11-12 ラジュール仙台（L'AZURE SENDAI）",
-              access: [
-                "地下鉄南北線／北四番丁駅 徒歩8分",
-                "地下鉄東西線／大町西公園駅 徒歩13分",
-                "地下鉄南北線／広瀬通駅 徒歩19分",
-              ],
-              keyNote: "建物脇のキーボックスに鍵があります",
-            },
-            {
-              name: "インルーム",
-              zip: "〒980-0802",
-              address: "宮城県仙台市青葉区二日町 11-15 In-Towner二日町 201号",
-              access: [
-                "地下鉄南北線／北四番丁駅 徒歩3分",
-                "JR線／仙台駅 徒歩25分",
-              ],
-              keyNote: "建物脇の配管に付いたキーボックスに鍵があります",
-            },
-          ].map((room) => (
-            <Card key={room.name} className="py-4">
-              <p className="text-base font-bold text-gray-800 mb-2 flex items-center gap-2">
-                <Home size={16} className="text-amber-500" />{room.name}
-              </p>
-              <p className="text-xs text-gray-400">{room.zip}</p>
-              <p className="text-sm font-medium text-gray-800 mb-2">{room.address}</p>
-              <ul className="space-y-1 text-xs text-gray-500 mb-3">
-                {room.access.map((a) => (
-                  <li key={a} className="flex items-center gap-1.5">
-                    <Train size={12} className="text-rose-400 shrink-0" />{a}
-                  </li>
-                ))}
-              </ul>
-              <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 text-xs text-amber-800">
-                <p className="font-bold flex items-center gap-1.5 mb-1"><KeyRound size={13} />鍵の案内</p>
-                <p>{room.keyNote}</p>
-                <p className="mt-1">キーボックスは <span className="font-bold">【1209】</span> で解除 ／ 閉める時は <span className="font-bold">【0000】</span> に戻す</p>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <p className="mt-3 text-center text-xs text-gray-400">
+          詳しい住所・入室方法は勤務確定後に個別にご案内します。
+        </p>
       </Section>
 
       {/* 勤務・待機 */}
@@ -256,23 +189,6 @@ export default function InterviewGuide() {
             </ul>
             <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-2">
               ❷の白サンダルは、施術後などオイルがついている時専用で使います。
-            </p>
-          </Card>
-
-          <Card className="py-4">
-            <p className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <Archive size={16} className="text-rose-500" />レジスターBOX
-            </p>
-            <ul className="space-y-1.5 text-sm text-gray-700">
-              {["釣り銭・預かり金 保管袋", "店落ち投函用封筒", "ボールペン・マッキー"].map((x, i) => (
-                <li key={x} className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                  {x}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-2">
-              釣り銭はセラピストご用意です。千円札×10枚ほどお持ちください。
             </p>
           </Card>
 
