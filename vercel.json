@@ -23,6 +23,17 @@
       "permanent": true
     }
   ],
+  "headers": [
+    {
+      "source": "/interview",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
