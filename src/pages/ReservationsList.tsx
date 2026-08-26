@@ -352,6 +352,7 @@ export default function ReservationsList() {
       if (error) throw error;
       toast({ title: "更新完了", description: "予約情報を更新しました" });
       setIsEditOpen(false);
+      setEditingReservation(null);
       fetchReservations();
     } catch (error) {
       console.error("Error updating reservation:", error);
@@ -619,28 +620,36 @@ export default function ReservationsList() {
           </Tabs>
         </div>
       </main>
-      <Sheet open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>予約情報を編集</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6">
-            <ReservationForm
-              formData={editFormData}
-              setFormData={setEditFormData}
-              casts={forStore(casts.filter((cast) => cast.is_active || cast.id === editingReservation.cast_id), editingReservation.store_id)}
-              rooms={forStore(rooms, editingReservation.store_id)}
-              backRates={forStore(backRates, editingReservation.store_id)}
-              optionRates={forStore(optionRates, editingReservation.store_id)}
-              nominationRates={forStore(nominationRates, editingReservation.store_id)}
-              discounts={forStore(discounts, editingReservation.store_id)}
-              storeId={editingReservation.store_id}
-              onSubmit={handleUpdateReservation}
-              submitLabel="更新する"
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
+      {editingReservation && (
+        <Sheet
+          open={isEditOpen}
+          onOpenChange={(open) => {
+            setIsEditOpen(open);
+            if (!open) setEditingReservation(null);
+          }}
+        >
+          <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>予約情報を編集</SheetTitle>
+            </SheetHeader>
+            <div className="mt-6">
+              <ReservationForm
+                formData={editFormData}
+                setFormData={setEditFormData}
+                casts={forStore(casts.filter((cast) => cast.is_active || cast.id === editingReservation.cast_id), editingReservation.store_id)}
+                rooms={forStore(rooms, editingReservation.store_id)}
+                backRates={forStore(backRates, editingReservation.store_id)}
+                optionRates={forStore(optionRates, editingReservation.store_id)}
+                nominationRates={forStore(nominationRates, editingReservation.store_id)}
+                discounts={forStore(discounts, editingReservation.store_id)}
+                storeId={editingReservation.store_id}
+                onSubmit={handleUpdateReservation}
+                submitLabel="更新する"
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
       <ImportModal
         open={isImportOpen}
         onClose={() => setIsImportOpen(false)}
