@@ -122,6 +122,7 @@ export function mapReservationRows(headers: string[], dataRows: string[][], cast
         payment_method: parsePay(getColAny(r, headers, ["決済方法", "決済", "支払", "支払方法"])),
         referral_source: route || null,
         status: parseStatus(getColAny(r, headers, ["ステータス", "状態", "予約状況"])),
+        booking_origin: "csv_import",
         notes: noteParts.join(" / ") || null,
       };
     })

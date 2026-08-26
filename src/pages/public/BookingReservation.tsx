@@ -738,6 +738,8 @@ const BookingReservation = () => {
           referral_source: referralOther.trim() || referralSource || null,
           status: "confirmed",
           payment_status: "unpaid",
+          booking_origin: "web_form",
+          web_booking_status: "unhandled",
           created_by: null,
           store_id: storeId,
         }]);

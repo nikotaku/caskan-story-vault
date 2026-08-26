@@ -59,6 +59,7 @@ const menuItems: MenuItem[] = [
       { href: "/schedule-dashboard", label: "ダッシュボード" },
       { href: "/admin-schedule", label: "日別予約情報" },
       { href: "/schedule/monthly-shift", label: "月別シフト" },
+      { href: "/schedule/web-bookings", label: "WEB予約受付" },
       { href: "/schedule/reservations-list", label: "予約一覧" },
       { href: "/schedule/available-slots", label: "空き枠" },
     ],
