@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import wPricingImage from "@/assets/interview/enka-w-pricing.webp";
 import {
   ArrowLeft, MapPin, Clock, Train, ShieldCheck, Loader2,
   Home, IdCard, Camera, AlertTriangle, Sparkles, Check, ChevronDown,
@@ -30,8 +31,9 @@ export default function InterviewGuide() {
     );
   }
 
-  const Section = ({ id, icon: Icon, title, sub, children, tone = "rose" }: {
-    id?: string; icon: LucideIcon; title: string; sub?: string; children: React.ReactNode; tone?: "rose" | "amber" | "gray";
+  const Section = ({ id, icon: Icon, title, sub, children, tone = "rose", wide = false }: {
+    id?: string; icon: LucideIcon; title: string; sub?: string; children: React.ReactNode;
+    tone?: "rose" | "amber" | "gray"; wide?: boolean;
   }) => {
     const toneMap: Record<string, string> = {
       rose: "from-rose-500 to-pink-500",
@@ -40,7 +42,7 @@ export default function InterviewGuide() {
     };
     return (
       <section id={id} className="px-5 py-10 border-b border-gray-100">
-        <div className="max-w-xl mx-auto">
+        <div className={`${wide ? "max-w-[965px]" : "max-w-xl"} mx-auto`}>
           <div className="flex items-center gap-3 mb-5">
             <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${toneMap[tone]} flex items-center justify-center shrink-0 shadow-sm`}>
               <Icon size={22} className="text-white" />
@@ -205,14 +207,26 @@ export default function InterviewGuide() {
         </Card>
       </Section>
 
-      {/* 報酬条件は公開・画面共有資料へ載せず、契約前に個別説明する */}
-      <Section icon={ShieldCheck} title="報酬・保証条件" tone="rose">
-        <Card className="py-5">
-          <p className="text-sm leading-relaxed text-gray-700">
-            報酬の仕組み、支払い方法、控除、保証、交通費などの条件は、面談後に個別の資料でご説明します。
-            内容をご確認いただき、契約前に双方で合意します。
-          </p>
-        </Card>
+      {/* 料金・報酬システム */}
+      <Section icon={ShieldCheck} title="料金・報酬システム" sub="通常コース・Wセラピスト" tone="rose" wide>
+        <a
+          href={wPricingImage}
+          target="_blank"
+          rel="noreferrer"
+          className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+          aria-label="料金・報酬システムの画像を拡大表示"
+        >
+          <img
+            src={wPricingImage}
+            alt="艶華の通常コースとWセラピストの料金・報酬システム"
+            width={965}
+            height={1630}
+            loading="lazy"
+            decoding="async"
+            className="h-auto w-full object-contain"
+          />
+        </a>
+        <p className="mt-2 text-center text-xs text-gray-400">画像をタップすると原寸で開きます</p>
       </Section>
 
       {/* ルーム環境 */}
