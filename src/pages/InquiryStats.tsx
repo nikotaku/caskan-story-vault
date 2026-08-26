@@ -113,7 +113,7 @@ export default function InquiryStats() {
           .from("reservations")
           .select("created_at")
           .eq("store_id", storeId)
-          .is("created_by", null)
+          .in("booking_origin", ["web_form", "cast_form"])
           .gte("created_at", fromIso),
         supabase
           .from("external_daily_reports")

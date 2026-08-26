@@ -505,6 +505,7 @@ const Shift = () => {
           notes: reservationFormData.notes || null,
           status: "confirmed",
           payment_status: "unpaid",
+          booking_origin: "staff",
           created_by: user!.id,
         }]);
 

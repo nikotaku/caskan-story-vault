@@ -4399,6 +4399,7 @@ export type Database = {
       }
       reservations: {
         Row: {
+          booking_origin: string
           cast_id: string | null
           course_name: string
           course_type: string | null
@@ -4434,8 +4435,12 @@ export type Database = {
           status: string
           store_id: string
           updated_at: string
+          web_booking_status: string | null
+          web_booking_status_updated_at: string | null
+          web_booking_status_updated_by: string | null
         }
         Insert: {
+          booking_origin?: string
           cast_id?: string | null
           course_name?: string
           course_type?: string | null
@@ -4471,8 +4476,12 @@ export type Database = {
           status?: string
           store_id?: string
           updated_at?: string
+          web_booking_status?: string | null
+          web_booking_status_updated_at?: string | null
+          web_booking_status_updated_by?: string | null
         }
         Update: {
+          booking_origin?: string
           cast_id?: string | null
           course_name?: string
           course_type?: string | null
@@ -4508,6 +4517,9 @@ export type Database = {
           status?: string
           store_id?: string
           updated_at?: string
+          web_booking_status?: string | null
+          web_booking_status_updated_at?: string | null
+          web_booking_status_updated_by?: string | null
         }
         Relationships: [
           {
@@ -6528,6 +6540,19 @@ export type Database = {
       update_therapist_customer_notes: {
         Args: { p_customer_id: string; p_notes: string; p_token: string }
         Returns: undefined
+      }
+      update_web_booking_status: {
+        Args: {
+          p_reservation_id: string
+          p_status: string
+          p_store_id: string
+        }
+        Returns: {
+          id: string
+          web_booking_status: string
+          web_booking_status_updated_at: string
+          web_booking_status_updated_by: string
+        }[]
       }
       verify_kintore_cron_secret: {
         Args: { candidate: string }

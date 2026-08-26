@@ -21,6 +21,7 @@ interface ReservationRecord {
   id: string;
   store_id: string;
   cast_id: string | null;
+  booking_origin: string;
   created_by: string | null;
   customer_name: string;
   customer_phone: string;
@@ -206,7 +207,7 @@ Deno.serve(async (req: Request) => {
     const { data: reservationData, error: reservationError } = await sb
       .from("reservations")
       .select([
-        "id", "store_id", "cast_id", "created_by", "customer_name", "customer_phone",
+        "id", "store_id", "cast_id", "booking_origin", "created_by", "customer_name", "customer_phone",
         "reservation_date", "start_time", "duration", "course_name",
         "nomination_type", "options", "price", "discount", "discount_ids",
         "payment_fee", "payment_method", "notes", "referral_source",
@@ -223,7 +224,7 @@ Deno.serve(async (req: Request) => {
     if (!reservationData) return jsonResponse({ error: "Reservation not found" }, 404);
 
     const reservation = reservationData as ReservationRecord;
-    if (reservation.created_by !== null) {
+    if (reservation.created_by !== null || !["web_form", "cast_form"].includes(reservation.booking_origin)) {
       return jsonResponse({ error: "Reservation not found" }, 404);
     }
 

@@ -232,6 +232,7 @@ export default function ReservationsList() {
         notes: submittedFormData.notes || null,
         room: submittedFormData.room || null,
         store_id: ENKA_STORE_ID,
+        booking_origin: "staff",
         created_by: user!.id,
       }]);
       if (error) throw error;

@@ -60,6 +60,7 @@ import Board from "./pages/Board";
 import Knowledge from "./pages/Knowledge";
 import MonthlyShift from "./pages/MonthlyShift";
 import ReservationsList from "./pages/ReservationsList";
+import WebBookings from "./pages/WebBookings";
 import AvailableSlots from "./pages/AvailableSlots";
 import ArticleCreation from "./pages/ArticleCreation";
 import BusinessFlow from "./pages/BusinessFlow";
@@ -190,6 +191,7 @@ const App = () => {
           <Route path="/schedule-dashboard" element={<ScheduleDashboard />} />
           <Route path="/admin-schedule" element={<SchedulePage />} />
           <Route path="/schedule/monthly-shift" element={<MonthlyShift />} />
+          <Route path="/schedule/web-bookings" element={<WebBookings />} />
           <Route path="/schedule/reservations-list" element={<ReservationsList />} />
           <Route path="/schedule/available-slots" element={<AvailableSlots />} />
           <Route path="/staff" element={<Staff />} />

@@ -270,6 +270,7 @@ export default function ReservationImport() {
           price: r.price,
           payment_method: r.payment_method,
           status: r.status,
+          booking_origin: "csv_import",
           notes: r.route ? `経路: ${r.route}` : null,
         }));
         const { error } = await supabase.from("reservations").insert(batch);

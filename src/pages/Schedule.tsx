@@ -84,6 +84,7 @@ interface Reservation {
   notes: string | null;
   store_id: string;
   created_by: string | null;
+  booking_origin: string;
   referral_source: string | null;
   line_notification_status: string;
   email_notification_status: string;
@@ -155,6 +156,9 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "完了",
   cancelled: "キャンセル",
 };
+
+const isWebBooking = (reservation: Pick<Reservation, "booking_origin">) =>
+  reservation.booking_origin === "web_form" || reservation.booking_origin === "cast_form";
 
 const TIMELINE_LEGEND = [
   { status: "pending", label: "確定前WEB予約" },
@@ -246,7 +250,7 @@ function StatusBox({
             <div key={res.id} className="bg-gray-50 rounded-md p-2 text-xs border border-gray-100">
               <div className="font-semibold mb-0.5 flex items-center gap-1.5">
                 <span>{res.customer_name}</span>
-                {res.created_by === null && (
+                {isWebBooking(res) && (
                   <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-700">
                     WEB
                   </span>
@@ -257,7 +261,7 @@ function StatusBox({
                 <div>{castNameMap.get(res.cast_id) ?? "未設定"} / {res.course_name}</div>
                 <div>{res.customer_phone}</div>
               </div>
-              {res.created_by === null && (
+              {isWebBooking(res) && (
                 <div className="mt-1.5 flex items-center gap-1 flex-wrap">
                   <span className={cn(
                     "rounded-full border px-1.5 py-0.5 text-[9px] font-medium",
@@ -843,6 +847,7 @@ export default function Schedule() {
         room: submittedFormData.room || null,
         status: "confirmed",
         store_id: ENKA_STORE_ID,
+        booking_origin: "staff",
         created_by: user.id,
       }]);
       if (error) throw error;
@@ -1461,7 +1466,7 @@ export default function Schedule() {
               {/* 当日ステータス */}
               <div className="mb-3">
                 <h2 className="font-semibold text-xs text-muted-foreground mb-2">当日ステータス</h2>
-                {reservations.some((reservation) => reservation.created_by === null && (
+                {reservations.some((reservation) => isWebBooking(reservation) && (
                   reservation.line_notification_status !== "sent"
                   || reservation.email_notification_status === "failed"
                 )) && (

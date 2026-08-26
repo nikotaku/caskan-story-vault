@@ -285,6 +285,8 @@ export default function CastBooking() {
         referral_source: `${cast.name}専用フォーム`,
         status: "confirmed",
         payment_status: "unpaid",
+        booking_origin: "cast_form",
+        web_booking_status: "unhandled",
         created_by: null,
         store_id: storeId,
       }]);
