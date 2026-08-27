@@ -47,11 +47,19 @@ const resultItems = (result: EstamaAvailabilityRefreshResult) => result.castName
 }));
 
 function buildSuccessSummary(result: EstamaAvailabilityRefreshResult, finishedAt: string) {
+  if (result.deferred) {
+    return [
+      "⚠️ エスたま ご案内状況の更新を延期",
+      `実行: ${formatJst(finishedAt)}`,
+      "別のエスたま同期が実行中だったため、同時操作を避けました。",
+      "次回の毎時実行で自動再試行します。",
+    ].join("\n");
+  }
   if (!result.updated) {
     return [
       "✅ エスたま ご案内状況を確認",
       `実行: ${formatJst(finishedAt)}`,
-      "現在勤務中のセラピストがいないため、表示の更新はありません。",
+      result.confirmation,
       "次回は1時間後に自動確認します。",
     ].join("\n");
   }
@@ -60,17 +68,22 @@ function buildSuccessSummary(result: EstamaAvailabilityRefreshResult, finishedAt
     "✅ エスたま ご案内状況を自動更新",
     `実行: ${formatJst(finishedAt)}`,
     "表示: ◎今すぐご案内可",
-    `対象: ${result.activeCount}名${result.castNames.length ? `（${result.castNames.join("、")}）` : ""}`,
+    `今すぐ案内: ${result.availableNowCount}名${result.castNames.length ? `（${result.castNames.join("、")}）` : ""}`,
+    ...(result.manualPreservedCount > 0
+      ? [`手動設定を維持: ${result.manualPreservedCount}名`]
+      : []),
     result.validUntil ? `表示期限: ${result.validUntil}` : result.confirmation,
     "次回は1時間後に自動更新します。",
   ].join("\n");
 }
 
-const buildFailureSummary = (error: string, finishedAt: string) => [
+const buildFailureSummary = (error: string, finishedAt: string, loginRequired: boolean) => [
   "⚠️ エスたま ご案内状況の自動更新に失敗",
   `実行: ${formatJst(finishedAt)}`,
   `原因: ${error.replace(/\s+/g, " ").slice(0, 500)}`,
-  "次回は1時間後に自動再試行します。",
+  loginRequired
+    ? "エスたま連携画面から再ログインしてください。再ログイン後に自動更新を再開します。"
+    : "次回は1時間後に自動再試行します。",
 ].join("\n");
 
 async function saveSuccess(
@@ -79,30 +92,38 @@ async function saveSuccess(
   startedAt: string,
   finishedAt: string,
   result: EstamaAvailabilityRefreshResult,
+  reportId?: string,
 ) {
   const items = resultItems(result);
   const baseConfiguration = connection.configuration && !Array.isArray(connection.configuration)
     ? connection.configuration
     : {};
+  const previousAvailability = baseConfiguration.availability_refresh
+    && typeof baseConfiguration.availability_refresh === "object"
+    && !Array.isArray(baseConfiguration.availability_refresh)
+    ? baseConfiguration.availability_refresh as Record<string, unknown>
+    : {};
   const { error: connectionError } = await admin.from("automation_connections").update({
     configuration: {
       ...baseConfiguration,
       availability_refresh: {
-        status: result.updated ? "success" : "skipped",
+        ...previousAvailability,
+        status: result.deferred ? "deferred" : result.updated ? "success" : "skipped",
         last_run_at: finishedAt,
         active_count: result.activeCount,
+        available_now_count: result.availableNowCount,
         cast_names: result.castNames,
         valid_until: result.validUntil,
         updated: result.updated,
+        ...(result.updated ? { last_success_at: finishedAt } : {}),
       },
     },
   }).eq("id", connection.id);
-  if (connectionError) throw connectionError;
 
-  const { error: reportError } = await admin.from("estama_sync_reports").insert({
+  const reportPayload = {
     store_id: connection.store_id,
     shop_id: connection.shop_id,
-    status: "success",
+    status: result.deferred ? "warning" : "success",
     started_at: startedAt,
     finished_at: finishedAt,
     total_count: items.length,
@@ -113,8 +134,16 @@ async function saveSuccess(
     evidence: [],
     missing_profiles: [],
     fatal_error: null,
-  });
-  if (reportError) throw reportError;
+  };
+  const { error: reportError } = reportId
+    ? await admin.from("estama_sync_reports").update(reportPayload).eq("id", reportId)
+    : await admin.from("estama_sync_reports").insert(reportPayload);
+  if (connectionError || reportError) {
+    throw new Error([
+      connectionError ? `接続状態の保存: ${connectionError.message}` : "",
+      reportError ? `実行履歴の保存: ${reportError.message}` : "",
+    ].filter(Boolean).join(" / "));
+  }
 }
 
 async function saveFailure(
@@ -124,11 +153,12 @@ async function saveFailure(
   finishedAt: string,
   errorMessage: string,
   loginRequired: boolean,
+  reportId?: string,
 ) {
   const baseConfiguration = connection.configuration && !Array.isArray(connection.configuration)
     ? connection.configuration
     : {};
-  await admin.from("automation_connections").update({
+  const { error: connectionError } = await admin.from("automation_connections").update({
     ...(loginRequired ? { status: "login_in_progress", last_error: errorMessage } : {}),
     configuration: {
       ...baseConfiguration,
@@ -140,7 +170,7 @@ async function saveFailure(
     },
   }).eq("id", connection.id);
 
-  await admin.from("estama_sync_reports").insert({
+  const reportPayload = {
     store_id: connection.store_id,
     shop_id: connection.shop_id,
     status: "error",
@@ -149,12 +179,21 @@ async function saveFailure(
     total_count: 0,
     success_count: 0,
     cast_names: [],
-    summary: buildFailureSummary(errorMessage, finishedAt),
+    summary: buildFailureSummary(errorMessage, finishedAt, loginRequired),
     results: [],
     evidence: [],
     missing_profiles: [],
     fatal_error: errorMessage.slice(0, 1_000),
-  });
+  };
+  const { error: reportError } = reportId
+    ? await admin.from("estama_sync_reports").update(reportPayload).eq("id", reportId)
+    : await admin.from("estama_sync_reports").insert(reportPayload);
+  if (connectionError || reportError) {
+    throw new Error([
+      connectionError ? `接続状態の保存: ${connectionError.message}` : "",
+      reportError ? `実行履歴の保存: ${reportError.message}` : "",
+    ].filter(Boolean).join(" / "));
+  }
 }
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
@@ -198,6 +237,22 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     return;
   }
 
+  const { data: dispatchReports, error: dispatchReportError } = await admin
+    .from("estama_sync_reports")
+    .select("id,store_id")
+    .eq("status", "warning")
+    .contains("results", {
+      kind: "availability_refresh",
+      dispatch_token_hash: tokenHash,
+    });
+  if (dispatchReportError) {
+    res.status(500).json({ ok: false, error: dispatchReportError.message });
+    return;
+  }
+  const reportByStore = new Map(
+    (dispatchReports || []).map((report) => [report.store_id as string, report.id as string]),
+  );
+
   const { data, error } = await admin
     .from("automation_connections")
     .select("id,store_id,status,browserbase_context_id,setup_session_id,shop_id,configuration")
@@ -206,17 +261,29 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     .not("browserbase_context_id", "is", null)
     .limit(10);
   if (error) {
+    await Promise.all([...reportByStore.values()].map((reportId) => admin
+      .from("estama_sync_reports")
+      .update({
+        status: "error",
+        finished_at: new Date().toISOString(),
+        summary: buildFailureSummary(error.message, new Date().toISOString(), false),
+        fatal_error: error.message.slice(0, 1_000),
+      })
+      .eq("id", reportId)));
     res.status(500).json({ ok: false, error: error.message });
     return;
   }
 
   const results: Array<Record<string, unknown>> = [];
+  const handledStoreIds = new Set<string>();
   for (const connection of (data || []) as ConnectionRow[]) {
+    handledStoreIds.add(connection.store_id);
     const startedAt = new Date().toISOString();
+    const reportId = reportByStore.get(connection.store_id);
     try {
-      const result = await refreshEstamaAvailability(connection, new Date());
+      const result = await refreshEstamaAvailability(admin, connection, new Date());
       const finishedAt = new Date().toISOString();
-      await saveSuccess(admin, connection, startedAt, finishedAt, result);
+      await saveSuccess(admin, connection, startedAt, finishedAt, result, reportId);
       results.push({
         storeId: connection.store_id,
         ok: true,
@@ -227,23 +294,48 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     } catch (caught) {
       const finishedAt = new Date().toISOString();
       const errorMessage = caught instanceof Error ? caught.message : String(caught);
-      await saveFailure(
-        admin,
-        connection,
-        startedAt,
-        finishedAt,
-        errorMessage,
-        caught instanceof LoginRequiredError,
-      );
-      results.push({ storeId: connection.store_id, ok: false, error: errorMessage });
+      let historyError = "";
+      try {
+        await saveFailure(
+          admin,
+          connection,
+          startedAt,
+          finishedAt,
+          errorMessage,
+          caught instanceof LoginRequiredError,
+          reportId,
+        );
+      } catch (saveError) {
+        historyError = saveError instanceof Error ? saveError.message : String(saveError);
+      }
+      results.push({
+        storeId: connection.store_id,
+        ok: false,
+        error: errorMessage,
+        ...(historyError ? { historyError } : {}),
+      });
     }
   }
 
-  const failed = results.filter((result) => result.ok !== true).length;
+  const staleDispatches = [...reportByStore.entries()]
+    .filter(([storeId]) => !handledStoreIds.has(storeId));
+  for (const [, reportId] of staleDispatches) {
+    const finishedAt = new Date().toISOString();
+    const message = "エスたま接続が再ログイン待ち、または自動更新対象外になりました";
+    await admin.from("estama_sync_reports").update({
+      status: "error",
+      finished_at: finishedAt,
+      summary: buildFailureSummary(message, finishedAt, true),
+      fatal_error: message,
+    }).eq("id", reportId);
+  }
+
+  const failed = results.filter((result) => result.ok !== true).length + staleDispatches.length;
+  const checked = results.length + staleDispatches.length;
   res.status(failed ? 207 : 200).json({
     ok: failed === 0,
-    checked: results.length,
-    succeeded: results.length - failed,
+    checked,
+    succeeded: checked - failed,
     failed,
     results,
   });
