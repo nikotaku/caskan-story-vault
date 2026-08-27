@@ -47,6 +47,9 @@ interface WebBooking {
   customer_name: string;
   customer_phone: string;
   duration: number;
+  email_notification_status: string;
+  line_notification_status: string;
+  notification_last_error: string | null;
   price: number;
   reservation_date: string;
   start_time: string;
@@ -54,6 +57,19 @@ interface WebBooking {
   web_booking_status: WebBookingStatus | null;
   web_booking_status_updated_at: string | null;
   web_booking_status_updated_by: string | null;
+}
+
+function notificationLabel(booking: WebBooking): { label: string; className: string } {
+  if (booking.line_notification_status === "sent") {
+    return { label: "LINE通知済", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  }
+  if (booking.email_notification_status === "sent") {
+    return { label: "メール退避済", className: "border-blue-200 bg-blue-50 text-blue-700" };
+  }
+  if (booking.line_notification_status === "sending" || booking.email_notification_status === "sending") {
+    return { label: "通知中", className: "border-amber-200 bg-amber-50 text-amber-700" };
+  }
+  return { label: "通知失敗", className: "border-rose-200 bg-rose-50 text-rose-700" };
 }
 
 const WEB_BOOKING_STATUSES: Record<
@@ -203,6 +219,7 @@ export default function WebBookings() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [updatingIds, setUpdatingIds] = useState<string[]>([]);
+  const [retryingNotificationIds, setRetryingNotificationIds] = useState<string[]>([]);
   const { user, loading: authLoading, isAdmin } = useAuth();
   const { storeId, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
@@ -224,7 +241,7 @@ export default function WebBookings() {
         const { data, error } = await supabase
           .from("reservations")
           .select(
-            "id, booking_origin, cast_id, casts(name), course_name, created_at, customer_name, customer_phone, duration, price, reservation_date, start_time, status, web_booking_status, web_booking_status_updated_at, web_booking_status_updated_by",
+            "id, booking_origin, cast_id, casts(name), course_name, created_at, customer_name, customer_phone, duration, email_notification_status, line_notification_status, notification_last_error, price, reservation_date, start_time, status, web_booking_status, web_booking_status_updated_at, web_booking_status_updated_by",
           )
           .in("booking_origin", ["web_form", "cast_form"])
           .eq("store_id", storeId)
@@ -350,6 +367,24 @@ export default function WebBookings() {
     { value: "all", label: "すべて", count: counts.all },
   ];
 
+  const handleRetryNotification = async (booking: WebBooking) => {
+    if (retryingNotificationIds.includes(booking.id)) return;
+    setRetryingNotificationIds((current) => [...current, booking.id]);
+    try {
+      const { error } = await supabase.functions.invoke("notify-line-booking", {
+        body: { reservation_id: booking.id },
+      });
+      if (error) throw error;
+      toast.success("予約通知を再送しました");
+      await fetchBookings({ background: true });
+    } catch (error) {
+      console.error("Failed to retry WEB booking notification", error);
+      toast.error("予約通知を再送できませんでした。自動再送を継続します");
+    } finally {
+      setRetryingNotificationIds((current) => current.filter((id) => id !== booking.id));
+    }
+  };
+
   const pageContent = (() => {
     if (authLoading || storeLoading || !user) {
       return (
@@ -447,6 +482,19 @@ export default function WebBookings() {
           </Alert>
         ) : null}
 
+        {bookings.some((booking) => (
+          booking.line_notification_status !== "sent"
+          && booking.email_notification_status !== "sent"
+        )) ? (
+          <Alert variant="destructive" className="mb-5">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>通知できていないWEB予約があります</AlertTitle>
+            <AlertDescription>
+              LINE失敗時はメールへ切り替え、最大4回まで自動再送します。各予約から手動再送もできます。
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {loading ? (
           <Card>
             <CardContent className="grid min-h-64 place-items-center">
@@ -476,7 +524,7 @@ export default function WebBookings() {
           <>
             <Card className="hidden overflow-hidden lg:block">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1260px] text-sm">
+                <table className="w-full min-w-[1380px] text-sm">
                   <caption className="sr-only">WEB予約フォームから受け付けた予約一覧</caption>
                   <thead>
                     <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
@@ -489,6 +537,7 @@ export default function WebBookings() {
                       <th className="whitespace-nowrap px-4 py-3 text-right font-medium">料金</th>
                       <th className="whitespace-nowrap px-4 py-3 font-medium">予約状況</th>
                       <th className="whitespace-nowrap px-4 py-3 font-medium">受付元</th>
+                      <th className="whitespace-nowrap px-4 py-3 font-medium">通知</th>
                       <th className="whitespace-nowrap px-4 py-3 font-medium">対応状況</th>
                     </tr>
                   </thead>
@@ -528,6 +577,27 @@ export default function WebBookings() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
                           {ORIGIN_LABELS[booking.booking_origin] ?? booking.booking_origin}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={notificationLabel(booking).className}>
+                              {notificationLabel(booking).label}
+                            </Badge>
+                            {booking.line_notification_status !== "sent" && booking.email_notification_status !== "sent" ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={retryingNotificationIds.includes(booking.id)}
+                                onClick={() => void handleRetryNotification(booking)}
+                              >
+                                {retryingNotificationIds.includes(booking.id)
+                                  ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                  : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+                                再送
+                              </Button>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <OperationalStatusSelect
@@ -592,6 +662,27 @@ export default function WebBookings() {
 
                       <span className="text-muted-foreground">受付元</span>
                       <span>{ORIGIN_LABELS[booking.booking_origin] ?? booking.booking_origin}</span>
+
+                      <span className="text-muted-foreground">通知</span>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className={notificationLabel(booking).className}>
+                          {notificationLabel(booking).label}
+                        </Badge>
+                        {booking.line_notification_status !== "sent" && booking.email_notification_status !== "sent" ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={retryingNotificationIds.includes(booking.id)}
+                            onClick={() => void handleRetryNotification(booking)}
+                          >
+                            {retryingNotificationIds.includes(booking.id)
+                              ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+                            再送
+                          </Button>
+                        ) : null}
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
