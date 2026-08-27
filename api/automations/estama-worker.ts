@@ -74,7 +74,7 @@ async function reportResult(token: string, result: EstamaShiftBatchResult) {
 }
 
 async function notifyEvidence(token: string, report: EstamaShiftEvidenceReport) {
-  if (!token || token.length < 48) throw new Error("LINE通知用トークンがありません");
+  if (!token || token.length < 48) throw new Error("同期履歴保存用トークンがありません");
   const response = await fetch(`${SUPABASE_URL}/functions/v1/notify-estama-shift-sync`, {
     method: "POST",
     headers: {
@@ -87,7 +87,7 @@ async function notifyEvidence(token: string, report: EstamaShiftEvidenceReport) 
   });
   const body = await response.text();
   if (!response.ok) {
-    throw new Error(`公開確認のLINE通知に失敗しました (${response.status}): ${body.slice(0, 500)}`);
+    throw new Error(`公開確認結果の保存に失敗しました (${response.status}): ${body.slice(0, 500)}`);
   }
   return body ? JSON.parse(body) : { success: true };
 }

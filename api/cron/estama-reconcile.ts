@@ -69,7 +69,7 @@ const dueLabel = (dueDate: string | null) => {
   return `${dueDate < jstDate() ? "期限超過" : "期限"} ${Number(month)}/${Number(day)}`;
 };
 
-function buildLineMessage(report: SyncReport, taskData: TaskReportData) {
+function buildDashboardMessage(report: SyncReport, taskData: TaskReportData) {
   const lines = [
     `${report.ok ? "✅" : "⚠️"} エスたま シフト同期結果`,
     `実行: ${formatJst(report.finishedAt)}（毎日23:00）`,
@@ -151,24 +151,40 @@ async function loadTaskReportData(admin: ReturnType<typeof getAdminClient>): Pro
 
 const emptyTaskReport = (error = ""): TaskReportData => ({ tasks: [], stores: [], total: 0, error });
 
-async function sendLineReport(report: SyncReport, taskData: TaskReportData) {
+async function saveDashboardReport(report: SyncReport, taskData: TaskReportData) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
+  const storeIds = [...new Set(taskData.stores.map((store) => store.id).filter(Boolean))];
+  if (!storeIds.length) throw new Error("同期履歴の保存先店舗がありません");
 
-  const response = await fetch(`${supabaseUrl()}/functions/v1/notify-estama-shift-sync`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ message: buildLineMessage(report, taskData) }),
-  });
-  const body = await response.text();
-  if (!response.ok) {
-    throw new Error(`LINE report failed (${response.status}): ${body.slice(0, 500)}`);
+  const saved = [];
+  for (const storeId of storeIds) {
+    const response = await fetch(`${supabaseUrl()}/functions/v1/notify-estama-shift-sync`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: buildDashboardMessage(report, taskData),
+        report: {
+          storeId,
+          startedAt: report.startedAt,
+          finishedAt: report.finishedAt,
+          results: [],
+          evidence: [],
+          fatalError: report.ok ? undefined : report.errors.join(" / ") || "同期処理に要確認項目があります",
+        },
+      }),
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(`同期履歴の保存に失敗しました (${response.status}): ${body.slice(0, 500)}`);
+    }
+    saved.push(body ? JSON.parse(body) : { success: true });
   }
-  return body ? JSON.parse(body) : { success: true };
+  return saved;
 }
 
 async function countShiftJobs(
@@ -240,8 +256,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       errors,
     };
     const taskData = await loadTaskReportData(admin);
-    const notification = await sendLineReport(report, taskData);
-    res.status(200).json({ ok: true, report, notification });
+    const dashboardReports = await saveDashboardReport(report, taskData);
+    res.status(200).json({ ok: true, report, dashboardReports });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     let notificationError: string | null = null;
@@ -252,7 +268,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       } catch (taskError) {
         taskData = emptyTaskReport(taskError instanceof Error ? taskError.message : String(taskError));
       }
-      await sendLineReport({
+      await saveDashboardReport({
         ok: false,
         startedAt,
         finishedAt: new Date().toISOString(),

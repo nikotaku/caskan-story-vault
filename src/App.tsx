@@ -147,6 +147,7 @@ import ReviewsAdmin from "./pages/ReviewsAdmin";
 import Campaigns from "./pages/public/Campaigns";
 import DispatchRegistration from "./pages/public/DispatchRegistration";
 import DispatchRegistrationAdmin from "./pages/DispatchRegistrationAdmin";
+import EstamaSyncHistory from "./pages/EstamaSyncHistory";
 import { PublicSeo } from "@/components/public/PublicSeo";
 
 const queryClient = new QueryClient();
@@ -192,6 +193,7 @@ const App = () => {
           <Route path="/admin-schedule" element={<SchedulePage />} />
           <Route path="/schedule/monthly-shift" element={<MonthlyShift />} />
           <Route path="/schedule/web-bookings" element={<WebBookings />} />
+          <Route path="/schedule/estama-sync-history" element={<EstamaSyncHistory />} />
           <Route path="/schedule/reservations-list" element={<ReservationsList />} />
           <Route path="/schedule/available-slots" element={<AvailableSlots />} />
           <Route path="/staff" element={<Staff />} />
