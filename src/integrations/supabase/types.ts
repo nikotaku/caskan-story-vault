@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 50038)
-Total output lines: 6754
-
 export type Json =
   | string
   | number
@@ -2684,7 +2681,1428 @@ export type Database = {
           created_at?: string
           customer_name: string
           customer_phone?: string | null
-          e…10038 tokens truncated…        updated_at?: string
+          email_sent?: boolean
+          form_slug: string
+          id?: string
+          notes?: string | null
+          options?: string[] | null
+          requested_date?: string | null
+          requested_time?: string | null
+          total_price?: number | null
+        }
+        Update: {
+          course?: string | null
+          created_at?: string
+          customer_name?: string
+          customer_phone?: string | null
+          email_sent?: boolean
+          form_slug?: string
+          id?: string
+          notes?: string | null
+          options?: string[] | null
+          requested_date?: string | null
+          requested_time?: string | null
+          total_price?: number | null
+        }
+        Relationships: []
+      }
+      external_cast_profiles: {
+        Row: {
+          admin_edit_url: string | null
+          cast_id: string
+          created_at: string
+          external_cast_id: string | null
+          id: string
+          last_error: string | null
+          last_photo_count: number
+          last_photo_hash: string | null
+          last_profile_hash: string | null
+          last_profile_sync_at: string | null
+          last_shift_sync_at: string | null
+          provider: string
+          public_profile_url: string | null
+          remote_name: string | null
+          soul_account_email: string | null
+          soul_login_url: string | null
+          soul_status: string
+          store_id: string
+          sync_status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_edit_url?: string | null
+          cast_id: string
+          created_at?: string
+          external_cast_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_photo_count?: number
+          last_photo_hash?: string | null
+          last_profile_hash?: string | null
+          last_profile_sync_at?: string | null
+          last_shift_sync_at?: string | null
+          provider?: string
+          public_profile_url?: string | null
+          remote_name?: string | null
+          soul_account_email?: string | null
+          soul_login_url?: string | null
+          soul_status?: string
+          store_id: string
+          sync_status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_edit_url?: string | null
+          cast_id?: string
+          created_at?: string
+          external_cast_id?: string | null
+          id?: string
+          last_error?: string | null
+          last_photo_count?: number
+          last_photo_hash?: string | null
+          last_profile_hash?: string | null
+          last_profile_sync_at?: string | null
+          last_shift_sync_at?: string | null
+          provider?: string
+          public_profile_url?: string | null
+          remote_name?: string | null
+          soul_account_email?: string | null
+          soul_login_url?: string | null
+          soul_status?: string
+          store_id?: string
+          sync_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_cast_profiles_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_cast_profiles_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts_admin_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_cast_profiles_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estama_dummy_shifts: {
+        Row: {
+          cast_id: string
+          created_at: string
+          created_by: string | null
+          end_time: string
+          estama_registered: boolean
+          id: string
+          shift_date: string
+          start_time: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          cast_id: string
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          estama_registered?: boolean
+          id?: string
+          shift_date: string
+          start_time: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          cast_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          estama_registered?: boolean
+          id?: string
+          shift_date?: string
+          start_time?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estama_dummy_shifts_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estama_dummy_shifts_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts_admin_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estama_dummy_shifts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_daily_reports: {
+        Row: {
+          created_at: string
+          external_store_id: string
+          id: string
+          imported_at: string
+          inquiry_count: number
+          page_views: number
+          provider: string
+          report_date: string
+          source_message_id: string | null
+          source_subject: string | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_store_id: string
+          id?: string
+          imported_at?: string
+          inquiry_count?: number
+          page_views?: number
+          provider: string
+          report_date: string
+          source_message_id?: string | null
+          source_subject?: string | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_store_id?: string
+          id?: string
+          imported_at?: string
+          inquiry_count?: number
+          page_views?: number
+          provider?: string
+          report_date?: string
+          source_message_id?: string | null
+          source_subject?: string | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_daily_reports_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facility_contracts: {
+        Row: {
+          address: string | null
+          amount: number
+          auto_lock: boolean | null
+          contract_holder: string | null
+          contract_status: string | null
+          contract_terms: string | null
+          contract_type: string
+          created_at: string
+          end_date: string | null
+          floor_plan: string | null
+          id: string
+          internet_connection: string | null
+          key_count: number | null
+          login_id: string | null
+          login_password: string | null
+          mailbox_code: string | null
+          management_company: string | null
+          management_url: string | null
+          name: string
+          nominal_holder: string | null
+          notes: string | null
+          payment_method: string | null
+          renewal_fee: number | null
+          resident_manager: boolean | null
+          start_date: string | null
+          store_id: string
+          tags: string[]
+        }
+        Insert: {
+          address?: string | null
+          amount?: number
+          auto_lock?: boolean | null
+          contract_holder?: string | null
+          contract_status?: string | null
+          contract_terms?: string | null
+          contract_type: string
+          created_at?: string
+          end_date?: string | null
+          floor_plan?: string | null
+          id?: string
+          internet_connection?: string | null
+          key_count?: number | null
+          login_id?: string | null
+          login_password?: string | null
+          mailbox_code?: string | null
+          management_company?: string | null
+          management_url?: string | null
+          name: string
+          nominal_holder?: string | null
+          notes?: string | null
+          payment_method?: string | null
+          renewal_fee?: number | null
+          resident_manager?: boolean | null
+          start_date?: string | null
+          store_id?: string
+          tags?: string[]
+        }
+        Update: {
+          address?: string | null
+          amount?: number
+          auto_lock?: boolean | null
+          contract_holder?: string | null
+          contract_status?: string | null
+          contract_terms?: string | null
+          contract_type?: string
+          created_at?: string
+          end_date?: string | null
+          floor_plan?: string | null
+          id?: string
+          internet_connection?: string | null
+          key_count?: number | null
+          login_id?: string | null
+          login_password?: string | null
+          mailbox_code?: string | null
+          management_company?: string | null
+          management_url?: string | null
+          name?: string
+          nominal_holder?: string | null
+          notes?: string | null
+          payment_method?: string | null
+          renewal_fee?: number | null
+          resident_manager?: boolean | null
+          start_date?: string | null
+          store_id?: string
+          tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facility_contracts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facility_equipment: {
+        Row: {
+          created_at: string
+          custom_fields: Json
+          id: string
+          item_type: string
+          manual_images: string[]
+          name: string
+          notes: string | null
+          quantity: number
+          store_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_fields?: Json
+          id?: string
+          item_type?: string
+          manual_images?: string[]
+          name: string
+          notes?: string | null
+          quantity?: number
+          store_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_fields?: Json
+          id?: string
+          item_type?: string
+          manual_images?: string[]
+          name?: string
+          notes?: string | null
+          quantity?: number
+          store_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facility_equipment_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      houjin_companies: {
+        Row: {
+          address: string | null
+          assignee: string | null
+          attributes: Json
+          capital: string | null
+          corporate_number: string | null
+          created_at: string
+          email: string | null
+          established_on: string | null
+          homepage: string | null
+          id: string
+          name: string
+          notion_created_time: string | null
+          notion_id: string | null
+          notion_url: string | null
+          phone: string | null
+          representative: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          assignee?: string | null
+          attributes?: Json
+          capital?: string | null
+          corporate_number?: string | null
+          created_at?: string
+          email?: string | null
+          established_on?: string | null
+          homepage?: string | null
+          id?: string
+          name: string
+          notion_created_time?: string | null
+          notion_id?: string | null
+          notion_url?: string | null
+          phone?: string | null
+          representative?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          assignee?: string | null
+          attributes?: Json
+          capital?: string | null
+          corporate_number?: string | null
+          created_at?: string
+          email?: string | null
+          established_on?: string | null
+          homepage?: string | null
+          id?: string
+          name?: string
+          notion_created_time?: string | null
+          notion_id?: string | null
+          notion_url?: string | null
+          phone?: string | null
+          representative?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hp_analytics_daily: {
+        Row: {
+          date: string
+          page_views: number
+          store_id: string
+          unique_visitors: number
+          updated_at: string
+          visits: number
+        }
+        Insert: {
+          date: string
+          page_views?: number
+          store_id?: string
+          unique_visitors?: number
+          updated_at?: string
+          visits?: number
+        }
+        Update: {
+          date?: string
+          page_views?: number
+          store_id?: string
+          unique_visitors?: number
+          updated_at?: string
+          visits?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hp_analytics_daily_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hp_analytics_hourly: {
+        Row: {
+          date: string
+          hour: number
+          store_id: string
+          visits: number
+        }
+        Insert: {
+          date: string
+          hour: number
+          store_id?: string
+          visits?: number
+        }
+        Update: {
+          date?: string
+          hour?: number
+          store_id?: string
+          visits?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hp_analytics_hourly_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hp_analytics_pages: {
+        Row: {
+          date: string
+          page_path: string
+          store_id: string
+          views: number
+        }
+        Insert: {
+          date: string
+          page_path: string
+          store_id?: string
+          views?: number
+        }
+        Update: {
+          date?: string
+          page_path?: string
+          store_id?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hp_analytics_pages_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hp_analytics_traffic: {
+        Row: {
+          campaign: string
+          content: string
+          date: string
+          landing_path: string
+          medium: string
+          source: string
+          store_id: string
+          visits: number
+        }
+        Insert: {
+          campaign?: string
+          content?: string
+          date: string
+          landing_path?: string
+          medium?: string
+          source: string
+          store_id?: string
+          visits?: number
+        }
+        Update: {
+          campaign?: string
+          content?: string
+          date?: string
+          landing_path?: string
+          medium?: string
+          source?: string
+          store_id?: string
+          visits?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hp_analytics_traffic_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hp_articles: {
+        Row: {
+          category: string | null
+          content: string | null
+          created_at: string
+          id: string
+          image_urls: string[]
+          is_published: boolean
+          slug: string | null
+          store_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          image_urls?: string[]
+          is_published?: boolean
+          slug?: string | null
+          store_id?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          image_urls?: string[]
+          is_published?: boolean
+          slug?: string | null
+          store_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hp_articles_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inquiries: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          inquired_at: string
+          memo: string | null
+          source: string
+          store_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          id?: string
+          inquired_at?: string
+          memo?: string | null
+          source?: string
+          store_id?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          inquired_at?: string
+          memo?: string | null
+          source?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inquiries_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kintore_advice_deliveries: {
+        Row: {
+          advice_date: string | null
+          content: string | null
+          created_at: string
+          error_message: string | null
+          generation_source: string | null
+          id: number
+          is_test: boolean
+          sent_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          advice_date?: string | null
+          content?: string | null
+          created_at?: string
+          error_message?: string | null
+          generation_source?: string | null
+          id?: number
+          is_test?: boolean
+          sent_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          advice_date?: string | null
+          content?: string | null
+          created_at?: string
+          error_message?: string | null
+          generation_source?: string | null
+          id?: number
+          is_test?: boolean
+          sent_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      kintore_profiles: {
+        Row: {
+          created_at: string
+          goals: string[]
+          notification_enabled: boolean
+          notification_time: string
+          timezone: string
+          updated_at: string
+          user_id: string
+          weaknesses: string
+        }
+        Insert: {
+          created_at?: string
+          goals?: string[]
+          notification_enabled?: boolean
+          notification_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          weaknesses?: string
+        }
+        Update: {
+          created_at?: string
+          goals?: string[]
+          notification_enabled?: boolean
+          notification_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          weaknesses?: string
+        }
+        Relationships: []
+      }
+      kintore_snapshots: {
+        Row: {
+          state: Json
+          state_version: number
+          synced_at: string
+          user_id: string
+        }
+        Insert: {
+          state?: Json
+          state_version?: number
+          synced_at?: string
+          user_id: string
+        }
+        Update: {
+          state?: Json
+          state_version?: number
+          synced_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      knowledge_articles: {
+        Row: {
+          category: string | null
+          content: string | null
+          created_at: string
+          id: string
+          is_pinned: boolean
+          store_id: string
+          tags: string[] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          is_pinned?: boolean
+          store_id?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          content?: string | null
+          created_at?: string
+          id?: string
+          is_pinned?: boolean
+          store_id?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_articles_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_documents: {
+        Row: {
+          content: string
+          slug: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          slug: string
+          store_id?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          slug?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      line_notification_destinations: {
+        Row: {
+          destination_key: string
+          line_group_id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          destination_key: string
+          line_group_id: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          destination_key?: string
+          line_group_id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "line_notification_destinations_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_settings: {
+        Row: {
+          catch_copy: string | null
+          created_at: string
+          description: string | null
+          id: string
+          login_id: string | null
+          login_password: string | null
+          main_color: string | null
+          media_name: string
+          memo: string | null
+          plan: string | null
+          shop_name: string | null
+          sort_order: number
+          store_id: string
+          sub_color: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          catch_copy?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          login_id?: string | null
+          login_password?: string | null
+          main_color?: string | null
+          media_name: string
+          memo?: string | null
+          plan?: string | null
+          shop_name?: string | null
+          sort_order?: number
+          store_id?: string
+          sub_color?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          catch_copy?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          login_id?: string | null
+          login_password?: string | null
+          main_color?: string | null
+          media_name?: string
+          memo?: string | null
+          plan?: string | null
+          shop_name?: string | null
+          sort_order?: number
+          store_id?: string
+          sub_color?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_settings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_closings: {
+        Row: {
+          breakdown: Json
+          card_sales: number
+          cash_on_hand: number
+          cash_remaining: number
+          cash_sales: number
+          closed_at: string
+          expenses_total: number
+          id: string
+          month_date: string
+          net_profit: number
+          paypay_sales: number
+          store_id: string
+          therapist_paid: number
+          total_sales: number
+        }
+        Insert: {
+          breakdown?: Json
+          card_sales?: number
+          cash_on_hand?: number
+          cash_remaining?: number
+          cash_sales?: number
+          closed_at?: string
+          expenses_total?: number
+          id?: string
+          month_date: string
+          net_profit?: number
+          paypay_sales?: number
+          store_id?: string
+          therapist_paid?: number
+          total_sales?: number
+        }
+        Update: {
+          breakdown?: Json
+          card_sales?: number
+          cash_on_hand?: number
+          cash_remaining?: number
+          cash_sales?: number
+          closed_at?: string
+          expenses_total?: number
+          id?: string
+          month_date?: string
+          net_profit?: number
+          paypay_sales?: number
+          store_id?: string
+          therapist_paid?: number
+          total_sales?: number
+        }
+        Relationships: []
+      }
+      monthly_reports: {
+        Row: {
+          created_at: string
+          customer_count: number | null
+          discount: number | null
+          gross_profit: number | null
+          month_date: string
+          new_customers: number | null
+          repeat_customers: number | null
+          revenue: number | null
+          session_count: number | null
+          store_id: string
+          therapist_pay: number | null
+          transportation_fee: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_count?: number | null
+          discount?: number | null
+          gross_profit?: number | null
+          month_date: string
+          new_customers?: number | null
+          repeat_customers?: number | null
+          revenue?: number | null
+          session_count?: number | null
+          store_id?: string
+          therapist_pay?: number | null
+          transportation_fee?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_count?: number | null
+          discount?: number | null
+          gross_profit?: number | null
+          month_date?: string
+          new_customers?: number | null
+          repeat_customers?: number | null
+          revenue?: number | null
+          session_count?: number | null
+          store_id?: string
+          therapist_pay?: number | null
+          transportation_fee?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_reports_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_sales_targets: {
+        Row: {
+          created_at: string
+          store_id: string
+          target_amount: number
+          target_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          store_id: string
+          target_amount?: number
+          target_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          store_id?: string
+          target_amount?: number
+          target_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_sales_targets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_sales_targets: {
+        Row: {
+          created_at: string
+          month_date: string
+          store_id: string
+          target_revenue: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          month_date: string
+          store_id?: string
+          target_revenue?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          month_date?: string
+          store_id?: string
+          target_revenue?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_sales_targets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nomination_rates: {
+        Row: {
+          created_at: string
+          customer_price: number
+          id: string
+          nomination_type: string
+          shop_back: number | null
+          store_id: string
+          therapist_back: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_price: number
+          id?: string
+          nomination_type: string
+          shop_back?: number | null
+          store_id?: string
+          therapist_back?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_price?: number
+          id?: string
+          nomination_type?: string
+          shop_back?: number | null
+          store_id?: string
+          therapist_back?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nomination_rates_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      option_rates: {
+        Row: {
+          created_at: string
+          customer_price: number
+          display_order: number
+          extension_minutes: number | null
+          id: string
+          is_visible: boolean
+          option_name: string
+          shop_back: number | null
+          store_id: string
+          therapist_back: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_price: number
+          display_order?: number
+          extension_minutes?: number | null
+          id?: string
+          is_visible?: boolean
+          option_name: string
+          shop_back?: number | null
+          store_id?: string
+          therapist_back?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_price?: number
+          display_order?: number
+          extension_minutes?: number | null
+          id?: string
+          is_visible?: boolean
+          option_name?: string
+          shop_back?: number | null
+          store_id?: string
+          therapist_back?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "option_rates_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      password_entries: {
+        Row: {
+          category: string
+          created_at: string
+          email: string | null
+          id: string
+          login_id: string | null
+          login_password: string | null
+          name: string
+          notes: string | null
+          store_id: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          login_id?: string | null
+          login_password?: string | null
+          name: string
+          notes?: string | null
+          store_id?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          login_id?: string | null
+          login_password?: string | null
+          name?: string
+          notes?: string | null
+          store_id?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "password_entries_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_reminders: {
+        Row: {
+          active: boolean
+          amount: number
+          created_at: string
+          day_of_month: number
+          id: string
+          memo: string | null
+          store_id: string
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          amount?: number
+          created_at?: string
+          day_of_month: number
+          id?: string
+          memo?: string | null
+          store_id?: string
+          title: string
+        }
+        Update: {
+          active?: boolean
+          amount?: number
+          created_at?: string
+          day_of_month?: number
+          id?: string
+          memo?: string | null
+          store_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reminders_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_settings: {
+        Row: {
+          created_at: string
+          fee_percentage: number
+          id: string
+          is_active: boolean
+          payment_link: string | null
+          payment_method: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fee_percentage?: number
+          id?: string
+          is_active?: boolean
+          payment_link?: string | null
+          payment_method: string
+          store_id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fee_percentage?: number
+          id?: string
+          is_active?: boolean
+          payment_link?: string | null
+          payment_method?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_settings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_plan_channels: {
+        Row: {
+          channel_key: string
+          channel_label: string
+          created_at: string
+          id: string
+          is_enabled: boolean
+          placement_count: number
+          plan_id: string
+          size_spec: string | null
+          sort_order: number
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          channel_key: string
+          channel_label: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          placement_count?: number
+          plan_id: string
+          size_spec?: string | null
+          sort_order?: number
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          channel_key?: string
+          channel_label?: string
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          placement_count?: number
+          plan_id?: string
+          size_spec?: string | null
+          sort_order?: number
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_plan_channels_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_plan_channels_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_plan_tasks: {
+        Row: {
+          channel_key: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          group_label: string
+          id: string
+          is_completed: boolean
+          label: string
+          plan_id: string
+          scheduled_on: string | null
+          sort_order: number
+          store_id: string
+          task_key: string
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          channel_key?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          group_label: string
+          id?: string
+          is_completed?: boolean
+          label: string
+          plan_id: string
+          scheduled_on?: string | null
+          sort_order?: number
+          store_id: string
+          task_key: string
+          task_type: string
+          updated_at?: string
+        }
+        Update: {
+          channel_key?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          group_label?: string
+          id?: string
+          is_completed?: boolean
+          label?: string
+          plan_id?: string
+          scheduled_on?: string | null
+          sort_order?: number
+          store_id?: string
+          task_key?: string
+          task_type?: string
+          updated_at?: string
         }
         Relationships: [
           {
