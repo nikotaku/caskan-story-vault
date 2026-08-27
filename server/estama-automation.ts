@@ -4,14 +4,25 @@ import { chromium, type Browser, type Dialog, type Locator, type Page } from "pl
 import { createHash, randomUUID } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
-import { uploadPhotos } from "./estama-photo-upload.js";
+import { assertFormPhotoCount, assertUploadedPhotoCount, uploadPhotos } from "./estama-photo-upload.js";
 import {
   isEstamaAvailabilitySelect,
   isEstamaShiftActive,
   jstBusinessMinutes,
   parseEstamaShiftRange,
 } from "./estama-availability.js";
-import { clickWithDomFallback } from "./playwright-actions.js";
+import {
+  assertPublishedPhotoCount,
+  findPublicDiaryPhotoCount,
+  matchingPublicDiarySignatures,
+  publicDiaryListUrl,
+  type PublicDiaryCandidate,
+} from "./estama-public-diary.js";
+import {
+  clickWithDomFallback,
+  clickWithScopedConfirmation,
+  isConfirmedEstamaSubmission,
+} from "./playwright-actions.js";
 
 type QrDecoder = (
   data: Uint8ClampedArray,
@@ -133,6 +144,17 @@ export class SoulActivationRequiredError extends Error {
   constructor(message = "魂セラピストの初回ログイン画面がまだ有効化されていません") {
     super(message);
     this.name = "SoulActivationRequiredError";
+  }
+}
+
+export const ESTAMA_REVIEW_REQUIRED_PREFIX = "【要確認・再送停止】";
+
+export class EstamaSubmissionUncertainError extends Error {
+  constructor(message = "魂セラピストへの送信後の状態を確認できません") {
+    super(message.startsWith(ESTAMA_REVIEW_REQUIRED_PREFIX)
+      ? message
+      : `${ESTAMA_REVIEW_REQUIRED_PREFIX}${message}`);
+    this.name = "EstamaSubmissionUncertainError";
   }
 }
 
@@ -439,20 +461,257 @@ async function markRemovedPhotoSlots(page: Page, desiredCount: number, previousC
   return { requested, marked };
 }
 
-async function clickSave(page: Page) {
-  const submit = page.locator('button, input[type="submit"], a').filter({
+async function clickSave(page: Page, options: { diary?: boolean; root?: Locator } = {}) {
+  const submitRoot = options.root || page;
+  const submit = submitRoot.locator('button, input[type="submit"], a').filter({
     hasText: /保存する|登録する|更新する|投稿する|保存|登録|更新|投稿/,
   }).last();
   if (!await submit.count()) throw new Error("エステ魂の保存ボタンが見つかりません");
-  await Promise.all([
-    page.waitForLoadState("domcontentloaded").catch(() => undefined),
-    clickWithDomFallback(submit),
-  ]);
-  const confirm = page.locator('button, input[type="submit"], a').filter({
-    hasText: /確定|はい|登録する|保存する|投稿する/,
-  }).last();
-  if (await confirm.count()) await confirm.click().catch(() => undefined);
-  await page.waitForTimeout(800);
+  if (!options.diary) {
+    await Promise.all([
+      page.waitForLoadState("domcontentloaded").catch(() => undefined),
+      clickWithDomFallback(submit),
+    ]);
+    const confirm = page.locator('button, input[type="submit"], a').filter({
+      hasText: /確定|はい|登録する|保存する|投稿する/,
+    }).last();
+    if (await confirm.count()) await confirm.click().catch(() => undefined);
+    await page.waitForTimeout(800);
+    return undefined;
+  }
+  try {
+    return await clickWithScopedConfirmation(page, submit);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new EstamaSubmissionUncertainError(`魂セラピストへの送信操作後の状態を確認できません（${detail.slice(0, 240)}）`);
+  }
+}
+
+const ESTAMA_NEGATIVE_MESSAGE = /エラー|失敗|できません|できなかった|入力してください|選択してください|必須|不正|正しく|問題が発生|投稿されません|登録されません/i;
+const ESTAMA_SUCCESS_MESSAGE = /投稿(?:が|を)?(?:完了|しました|されました|成功)|(?:登録|保存|公開)(?:が|を)?(?:完了|しました|されました|成功)|正常に(?:投稿|登録|保存)/i;
+const ESTAMA_CONFIRMATION_MESSAGE = /投稿内容の確認|内容を確認|以下の内容|この内容で(?:投稿|登録|保存)/;
+
+async function visibleEstamaErrors(page: Page) {
+  try {
+    const [explicitErrors, alerts] = await Promise.all([
+      page.locator('.error:visible, .alert-danger:visible, .alert-error:visible, [class*="error-message"]:visible')
+        .allTextContents(),
+      page.locator('[role="alert"]:visible').allTextContents(),
+    ]);
+    return [
+      ...explicitErrors.map((value) => value.trim()).filter(Boolean),
+      ...alerts.map((value) => value.trim()).filter((value) => ESTAMA_NEGATIVE_MESSAGE.test(value)),
+    ];
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new EstamaSubmissionUncertainError(`魂セラピストへの送信後の画面を確認できません（${detail.slice(0, 240)}）`);
+  }
+}
+
+async function assertNoVisibleEstamaError(page: Page) {
+  const visibleError = await visibleEstamaErrors(page);
+  if (visibleError.some((value) => value.trim())) {
+    throw new EstamaSubmissionUncertainError(`魂セラピストへの送信後にエラー表示を検出しました（${visibleError.join(" / ").slice(0, 300)}）`);
+  }
+}
+
+async function visibleEstamaSuccessMessages(page: Page) {
+  try {
+    const texts = await page.locator([
+      '.alert-success:visible',
+      '.message-success:visible',
+      '.notice-success:visible',
+      '[class*="success-message"]:visible',
+      '[role="status"]:visible',
+    ].join(",")).allTextContents();
+    return texts.map((value) => value.replace(/\s+/g, " ").trim())
+      .filter((value) => ESTAMA_SUCCESS_MESSAGE.test(value));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new EstamaSubmissionUncertainError(`魂セラピストの送信画面を確認できません（${detail.slice(0, 240)}）`);
+  }
+}
+
+async function verifyEstamaDiarySubmission(
+  page: Page,
+  bodyField: Locator,
+  diaryForm: Locator,
+  submittedBody: string,
+  initialUrl: string,
+  baselineSuccessMessages: string[],
+) {
+  const timeoutAt = Date.now() + 30_000;
+  let lastState = "投稿画面のまま";
+  let confirmedChecks = 0;
+  while (Date.now() < timeoutAt) {
+    await assertNoVisibleEstamaError(page);
+    try {
+      const successTexts = await visibleEstamaSuccessMessages(page);
+      const successVisible = successTexts.some((value) => !baselineSuccessMessages.includes(value));
+      const confirmationVisible = await page.locator([
+        '[role="dialog"]:visible',
+        'dialog[open]',
+        '[aria-modal="true"]:visible',
+        '.modal:visible',
+        'form:visible',
+        'main:visible',
+        '[role="main"]:visible',
+      ].join(",")).filter({ hasText: ESTAMA_CONFIRMATION_MESSAGE }).count() > 0;
+      const formVisible = await diaryForm.count() > 0 && await diaryForm.isVisible().catch(() => false);
+      const currentBody = await bodyField.count() > 0
+        ? await bodyField.inputValue().catch(() => null)
+        : null;
+      const currentUrl = page.url();
+      lastState = `URL=${currentUrl.slice(0, 180)} / フォーム=${formVisible ? "表示" : "消失"} / 本文=${currentBody === submittedBody ? "未変更" : currentBody === null ? "消失" : "変更"}`;
+      const confirmed = isConfirmedEstamaSubmission({
+        initialUrl,
+        currentUrl,
+        submittedBody,
+        currentBody,
+        formVisible,
+        successVisible,
+        confirmationVisible,
+      });
+      confirmedChecks = confirmed ? confirmedChecks + 1 : 0;
+      if (confirmedChecks >= 3) {
+        return;
+      }
+    } catch (error) {
+      if (error instanceof EstamaSubmissionUncertainError) throw error;
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new EstamaSubmissionUncertainError(`魂セラピストへの送信後の完了状態を確認できません（${detail.slice(0, 240)}）`);
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new EstamaSubmissionUncertainError(`魂セラピストへの送信完了を確認できません（${lastState}）`);
+}
+
+type PublishedDiaryInput = {
+  publicProfileUrl?: string | null;
+  shopId?: string | null;
+  externalId?: string | null;
+  title: string;
+  body: string;
+  expectedPhotos: number;
+};
+
+type PublishedDiaryBaseline = {
+  listUrl: string;
+  signatures: string[];
+};
+
+async function readPublicDiaryCandidates(
+  page: Page,
+  listUrl: string,
+  input: PublishedDiaryInput,
+) {
+  const target = new URL(listUrl);
+  target.searchParams.set("enka_verify", String(Date.now()));
+  await page.goto(target.toString(), { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle", { timeout: 3_000 }).catch(() => undefined);
+  const pageText = await page.locator("body").innerText().catch(() => "");
+  if (!/THERAPIST DIARY|セラピスト写メ日記|写メ日記/i.test(pageText)) {
+    throw new Error("エステ魂の公開写メ日記一覧を読み込めませんでした");
+  }
+  return page.evaluate(({ expectedTitle, expectedBody, expectedCastId }) => {
+    const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/g, " ").trim();
+    const title = normalize(expectedTitle);
+    const bodyKey = normalize(expectedBody).slice(0, 48);
+    const values: PublicDiaryCandidate[] = [];
+    const headings = Array.from(document.querySelectorAll("h3"))
+      .filter((heading) => normalize(heading.textContent || "") === title);
+    for (const heading of headings) {
+      let current: Element | null = heading;
+      for (let depth = 0; depth < 8 && current?.parentElement; depth += 1) {
+        current = current.parentElement;
+        const text = current.textContent || "";
+        if (bodyKey && !normalize(text).includes(bodyKey)) continue;
+        const castHrefs = Array.from(current.querySelectorAll('a[href*="/cast/"]'))
+          .map((link) => (link as HTMLAnchorElement).href);
+        const ids = [...new Set(castHrefs.flatMap((href) =>
+          new URL(href, location.href).pathname.match(/\/cast\/(\d+)\//i)?.[1] || []
+        ))];
+        const headingCount = current.querySelectorAll("h3").length;
+        if (headingCount !== 1 || ids.length !== 1 || (expectedCastId && ids[0] !== expectedCastId)) continue;
+        const photos = Array.from(current.querySelectorAll("img")).map((image) => ({
+          alt: image.alt || "",
+          src: image.currentSrc
+            || image.src
+            || image.getAttribute("data-src")
+            || image.getAttribute("data-original")
+            || "",
+        }));
+        const publishedAt = normalize(text).match(/\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/)?.[0] || "";
+        values.push({
+          title: heading.textContent || "",
+          text,
+          castHrefs,
+          photos,
+          headingCount,
+          publishedAt,
+        });
+        break;
+      }
+    }
+    return values;
+  }, {
+    expectedTitle: input.title,
+    expectedBody: input.body,
+    expectedCastId: input.externalId || "",
+  });
+}
+
+async function capturePublishedDiaryBaseline(page: Page, input: PublishedDiaryInput): Promise<PublishedDiaryBaseline> {
+  const listUrl = publicDiaryListUrl(input.publicProfileUrl, input.shopId);
+  const verifierPage = await page.context().newPage();
+  try {
+    const candidates = await readPublicDiaryCandidates(verifierPage, listUrl, input);
+    return {
+      listUrl,
+      signatures: matchingPublicDiarySignatures(candidates, {
+        title: input.title,
+        body: input.body,
+        externalId: input.externalId,
+      }),
+    };
+  } finally {
+    await verifierPage.close().catch(() => undefined);
+  }
+}
+
+async function verifyPublishedEstamaDiary(
+  page: Page,
+  input: PublishedDiaryInput,
+  baseline: PublishedDiaryBaseline,
+) {
+  const { listUrl } = baseline;
+
+  const timeoutAt = Date.now() + 35_000;
+  let lastMatch = { found: false, photoCount: null as number | null };
+  let lastError = "";
+  while (Date.now() < timeoutAt) {
+    try {
+      const candidates = await readPublicDiaryCandidates(page, listUrl, input);
+      lastMatch = findPublicDiaryPhotoCount(candidates, {
+        title: input.title,
+        body: input.body,
+        externalId: input.externalId,
+      }, baseline.signatures);
+      if (lastMatch.found && lastMatch.photoCount === input.expectedPhotos) {
+        assertPublishedPhotoCount(input.expectedPhotos, lastMatch.photoCount);
+        return listUrl;
+      }
+      lastError = "";
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await page.waitForTimeout(2_000);
+  }
+
+  const detail = lastMatch.found
+    ? `指定${input.expectedPhotos}枚 / 公開${lastMatch.photoCount ?? "不明"}枚`
+    : `該当する日記が見つかりません${lastError ? ` / ${lastError.slice(0, 180)}` : ""}`;
+  throw new EstamaSubmissionUncertainError(`魂セラピストの公開結果を確認できません（${detail}）。魂側を確認するまで再送できません`);
 }
 
 const normalizeEstamaName = (value: string) => value
@@ -1470,12 +1729,15 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   if (!external || external.sync_status !== "synced") throw new Error("先にセラピストをエステ魂へ登録してください");
   if (post.esutama_status === "posted") return { posted: true, skipped: true, reason: "already_posted" };
 
-  await admin.from("cast_posts").update({
+  const { data: postingPost, error: postingError } = await admin.from("cast_posts").update({
     esutama_status: "posting",
     esutama_error: null,
     esutama_attempts: Number(post.esutama_attempts || 0) + 1,
     last_attempt_at: new Date().toISOString(),
-  }).eq("id", postId);
+  }).eq("id", postId).eq("esutama_status", post.esutama_status).select("id").maybeSingle();
+  if (postingError || !postingPost) {
+    throw new Error(postingError?.message || "魂セラピスト投稿は別の処理が開始済みです");
+  }
 
   await page.goto(ESTAMA_SOUL_URL, { waitUntil: "domcontentloaded" });
   await ensureAdminLogin(page);
@@ -1509,22 +1771,53 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
   const imageUrls = Array.isArray(post.image_urls) ? post.image_urls.filter((url): url is string => typeof url === "string") : [];
   const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
+  if (!await diaryForm.count()) throw new Error("エステ魂の写メ日記投稿フォームが見つかりません");
   const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
     maxPhotos: 3,
     strict: true,
-    root: await diaryForm.count() ? diaryForm : undefined,
+    root: diaryForm,
   });
-  await clickSave(accountPage);
-  const visibleError = await accountPage.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible').allTextContents().catch(() => []);
-  if (visibleError.some((value) => value.trim())) throw new Error(`エステ魂: ${visibleError.join(" / ").slice(0, 300)}`);
+  assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
+  await assertFormPhotoCount(diaryForm, imageUrls.length);
+  const publishedDiaryInput: PublishedDiaryInput = {
+    publicProfileUrl: external.public_profile_url,
+    externalId: external.external_cast_id,
+    title: post.title || "写メ日記",
+    body: post.body,
+    expectedPhotos: imageUrls.length,
+  };
+  const publishedDiaryBaseline = await capturePublishedDiaryBaseline(accountPage, publishedDiaryInput);
+  const submittedBody = await bodyField.inputValue();
+  const baselineSuccessMessages = await visibleEstamaSuccessMessages(accountPage);
+  // The public baseline fetch can take a few seconds. Re-check the browser's
+  // actual native FormData immediately before the irreversible submit click.
+  await assertFormPhotoCount(diaryForm, imageUrls.length);
+  const submission = await clickSave(accountPage, { diary: true, root: diaryForm });
+  if (!submission) throw new EstamaSubmissionUncertainError();
+  await verifyEstamaDiarySubmission(
+    accountPage,
+    bodyField,
+    diaryForm,
+    submittedBody,
+    submission.initialUrl,
+    baselineSuccessMessages,
+  );
+  const publicDiaryUrl = await verifyPublishedEstamaDiary(
+    accountPage,
+    publishedDiaryInput,
+    publishedDiaryBaseline,
+  );
 
-  await admin.from("cast_posts").update({
+  const { data: postedPost, error: postedError } = await admin.from("cast_posts").update({
     esutama_status: "posted",
     esutama_error: null,
     posted_at: new Date().toISOString(),
-  }).eq("id", postId);
+  }).eq("id", postId).eq("esutama_status", "posting").select("id").maybeSingle();
+  if (postedError || !postedPost) {
+    throw new EstamaSubmissionUncertainError(`魂セラピストへの投稿後、管理画面の状態を保存できませんでした（${postedError?.message || "保存対象の状態が送信中ではありませんでした"}）`);
+  }
   await updatePostOverallStatus(admin, postId);
-  return { posted: true, uploadedPhotos, url: accountPage.url() };
+  return { posted: true, uploadedPhotos, url: publicDiaryUrl };
 }
 
 export type PreparedEstamaDiary = {
@@ -1535,6 +1828,8 @@ export type PreparedEstamaDiary = {
     name: string;
     externalId?: string | null;
     remoteName?: string | null;
+    publicUrl?: string | null;
+    shopId?: string | null;
   };
   post: {
     title?: string | null;
@@ -1571,20 +1866,45 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
       ? input.post.imageUrls.filter((url): url is string => typeof url === "string")
       : [];
     const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
+    if (!await diaryForm.count()) throw new Error("エステ魂の写メ日記投稿フォームが見つかりません");
     const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
       maxPhotos: 3,
       strict: true,
-      root: await diaryForm.count() ? diaryForm : undefined,
+      root: diaryForm,
     });
-    await clickSave(accountPage);
-    const visibleError = await accountPage.locator('.error:visible, .alert-danger:visible, [role="alert"]:visible').allTextContents().catch(() => []);
-    if (visibleError.some((value) => value.trim())) {
-      throw new Error(`エステ魂: ${visibleError.join(" / ").slice(0, 300)}`);
-    }
+    assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
+    await assertFormPhotoCount(diaryForm, imageUrls.length);
+    const publishedDiaryInput: PublishedDiaryInput = {
+      publicProfileUrl: input.cast.publicUrl,
+      shopId: input.cast.shopId,
+      externalId: input.cast.externalId,
+      title: input.post.title || "写メ日記",
+      body: input.post.body,
+      expectedPhotos: imageUrls.length,
+    };
+    const publishedDiaryBaseline = await capturePublishedDiaryBaseline(accountPage, publishedDiaryInput);
+    const submittedBody = await bodyField.inputValue();
+    const baselineSuccessMessages = await visibleEstamaSuccessMessages(accountPage);
+    await assertFormPhotoCount(diaryForm, imageUrls.length);
+    const submission = await clickSave(accountPage, { diary: true, root: diaryForm });
+    if (!submission) throw new EstamaSubmissionUncertainError();
+    await verifyEstamaDiarySubmission(
+      accountPage,
+      bodyField,
+      diaryForm,
+      submittedBody,
+      submission.initialUrl,
+      baselineSuccessMessages,
+    );
+    const publicDiaryUrl = await verifyPublishedEstamaDiary(
+      accountPage,
+      publishedDiaryInput,
+      publishedDiaryBaseline,
+    );
     return {
       posted: true,
       uploadedPhotos,
-      url: accountPage.url(),
+      url: publicDiaryUrl,
       soul: { status: "configured", loginUrl: ESTAMA_SOUL_LOGIN_URL },
     };
   } finally {
@@ -1642,6 +1962,20 @@ async function failJob(admin: AdminClient, job: AutomationJob, error: unknown) {
           last_error: message,
         }).eq("cast_id", job.cast_id).eq("provider", "estama")]
         : []),
+    ]);
+    if (postId) await updatePostOverallStatus(admin, postId);
+    return;
+  }
+  if (error instanceof EstamaSubmissionUncertainError) {
+    await Promise.all([
+      admin.from("automation_jobs").update({
+        status: "failed", error_message: message, finished_at: new Date().toISOString(),
+      }).eq("id", job.id),
+      ...(postId ? [admin.from("cast_posts").update({
+        esutama_status: "failed", esutama_error: message,
+      }).eq("id", postId)] : []),
+      ...(job.cast_id ? [admin.from("external_cast_profiles").update({ last_error: message })
+        .eq("cast_id", job.cast_id).eq("provider", "estama")] : []),
     ]);
     if (postId) await updatePostOverallStatus(admin, postId);
     return;

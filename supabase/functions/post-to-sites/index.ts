@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { workerFailureSafety, workerPhotoCount } from "./photo-count.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -7,6 +8,7 @@ const PORTAL_WORKER_URL = Deno.env.get("ESTAMA_PORTAL_WORKER_URL") || "https://n
 const O2_BASE = "https://m-sns.net";
 const O2_LOGIN = `${O2_BASE}/cast/login/`;
 const O2_POST_CREATE = `${O2_BASE}/cast/post/create/`;
+const REVIEW_REQUIRED_PREFIX = "【要確認・再送停止】";
 const ALLOWED_ORIGINS = new Set([
   "https://zenryokuesthe.com",
   "https://www.zenryokuesthe.com",
@@ -24,6 +26,7 @@ type PostRecord = {
   image_urls: string[] | null;
   o2_status: string;
   esutama_status: string;
+  esutama_error: string | null;
   o2_attempts: number;
   esutama_attempts: number;
 };
@@ -95,9 +98,9 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
 
   const postId = stringValue(payload.post_id);
   const [{ data: connection }, { data: cast }, { data: external }, { data: post }, { data: soulCredential }] = await Promise.all([
-    admin.from("automation_connections").select("browserbase_context_id,status").eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
+    admin.from("automation_connections").select("browserbase_context_id,status,shop_id").eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
     admin.from("casts").select("name").eq("id", job.cast_id).eq("store_id", job.store_id).eq("is_active", true).maybeSingle(),
-    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status").eq("cast_id", job.cast_id).eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
+    admin.from("external_cast_profiles").select("external_cast_id,remote_name,sync_status,public_profile_url").eq("cast_id", job.cast_id).eq("store_id", job.store_id).eq("provider", "estama").maybeSingle(),
     admin.from("cast_posts").select("title,body,image_urls").eq("id", postId).eq("cast_id", job.cast_id).eq("store_id", job.store_id).maybeSingle(),
     admin.from("cast_site_credentials").select("login_id,password").eq("cast_id", job.cast_id).eq("store_id", job.store_id).eq("site", "esutama").maybeSingle(),
   ]);
@@ -125,7 +128,13 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
           email: soulCredential!.login_id,
         },
       } : {}),
-      cast: { name: cast.name, externalId: external.external_cast_id, remoteName: external.remote_name },
+      cast: {
+        name: cast.name,
+        externalId: external.external_cast_id,
+        remoteName: external.remote_name,
+        publicUrl: external.public_profile_url,
+        shopId: connection.shop_id,
+      },
       post: { title: post.title, body: post.body, imageUrls: post.image_urls },
     },
   });
@@ -133,6 +142,13 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
 
 async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof createClient>, post: PostRecord) {
   if (post.esutama_status === "posted") return json(req, { status: "posted", skipped: true });
+  if (stringValue(post.esutama_error).startsWith(REVIEW_REQUIRED_PREFIX)) {
+    return json(req, {
+      status: "review_required",
+      error: post.esutama_error,
+      skipped: true,
+    }, 409);
+  }
   if (post.esutama_status === "posting") return json(req, { status: "posting", skipped: true });
 
   const [{ data: connection }, { data: external }] = await Promise.all([
@@ -216,54 +232,116 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
     .select("id,store_id,cast_id,status,attempts,max_attempts,payload").maybeSingle<AutomationJob>();
   if (!claimed) return json(req, { jobId: job.id, status: "posting", skipped: true });
 
-  await admin.from("cast_posts").update({
+  const { data: postingPost, error: postingError } = await admin.from("cast_posts").update({
     esutama_status: "posting",
     esutama_error: null,
     esutama_attempts: Number(post.esutama_attempts || 0) + 1,
     last_attempt_at: new Date().toISOString(),
-  }).eq("id", post.id);
+  }).eq("id", post.id).eq("esutama_status", post.esutama_status).select("id").maybeSingle();
+  if (postingError || !postingPost) {
+    const message = postingError
+      ? `魂セラピスト投稿の送信前ロックに失敗しました（${postingError.message}）`
+      : "魂セラピスト投稿は別の処理が開始済みです";
+    const { error: jobError } = await admin.from("automation_jobs").update({
+      status: "failed",
+      error_message: message,
+      finished_at: new Date().toISOString(),
+    }).eq("id", claimed.id);
+    if (jobError) console.error(JSON.stringify({ event: "estama_pre_submit_lock_cleanup_failed", error: jobError.message }));
+    return json(req, { jobId: claimed.id, status: postingError ? "failed" : "posting", error: message }, postingError ? 500 : 409);
+  }
 
-  const workerResponse = await fetch(PORTAL_WORKER_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jobId: claimed.id, workerToken }),
-  });
-  const workerPayload = await workerResponse.json().catch(() => ({})) as JsonRecord;
-  if (workerResponse.ok) {
-    const result = workerPayload.result && typeof workerPayload.result === "object" ? workerPayload.result as JsonRecord : {};
+  let workerResponse: Response | null = null;
+  let workerPayload: JsonRecord = {};
+  try {
+    workerResponse = await fetch(PORTAL_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId: claimed.id, workerToken }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    workerPayload = await workerResponse.json().catch(() => ({})) as JsonRecord;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    workerPayload = {
+      error: `${REVIEW_REQUIRED_PREFIX}魂セラピストへの送信結果を確認できません（${detail.slice(0, 240)}）`,
+      submissionUncertain: true,
+    };
+  }
+  const result = workerPayload.result && typeof workerPayload.result === "object" ? workerPayload.result as JsonRecord : {};
+  const photoCount = workerPhotoCount(post.image_urls, result);
+  const loginRequired = workerPayload.loginRequired === true;
+  const activationRequired = workerPayload.activationRequired === true;
+  const failureSafety = workerFailureSafety(workerResponse?.ok ?? null, workerPayload);
+  const waitingForLogin = failureSafety.waitingForLogin;
+  const workerResultMismatch = workerResponse?.ok === true && !photoCount.matches;
+  const submissionUncertain = failureSafety.submissionUncertain;
+  const reviewRequired = workerResultMismatch || submissionUncertain;
+  if (workerResponse?.ok === true && photoCount.matches && !reviewRequired) {
     const soul = result.soul && typeof result.soul === "object" ? result.soul as JsonRecord : null;
     if (soul) {
       const soulStatus = stringValue(soul.status);
-      await admin.from("external_cast_profiles").update({
+      const { error: soulUpdateError } = await admin.from("external_cast_profiles").update({
         soul_status: soulStatus === "configured" ? "configured" : soulStatus === "issued" ? "issued" : "error",
         soul_login_url: stringValue(soul.loginUrl) || null,
       }).eq("cast_id", post.cast_id).eq("provider", "estama");
+      if (soulUpdateError) console.warn(JSON.stringify({ event: "estama_soul_status_update_failed", error: soulUpdateError.message }));
     }
-    await Promise.all([
+    const [jobWrite, postWrite] = await Promise.all([
       admin.from("automation_jobs").update({
         status: "completed", result, error_message: null, finished_at: new Date().toISOString(),
-      }).eq("id", claimed.id),
+      }).eq("id", claimed.id).eq("status", "running").select("id").maybeSingle(),
       admin.from("cast_posts").update({
         esutama_status: "posted", esutama_error: null, posted_at: new Date().toISOString(),
-      }).eq("id", post.id),
+      }).eq("id", post.id).eq("esutama_status", "posting").select("id").maybeSingle(),
     ]);
+    const persistenceError = jobWrite.error || postWrite.error;
+    const persistenceMissing = !jobWrite.data || !postWrite.data;
+    if (persistenceError || persistenceMissing) {
+      const persistenceDetail = persistenceError?.message || "保存対象の状態が送信中ではありませんでした";
+      const message = `${REVIEW_REQUIRED_PREFIX}魂セラピストへの投稿後、管理画面の状態を保存できませんでした（${persistenceDetail}）。魂側を確認するまで再送できません`;
+      const [jobReviewWrite, postReviewWrite] = await Promise.all([
+        admin.from("automation_jobs").update({
+          status: "failed",
+          result: { ...result, warning_code: "persistence_failed" },
+          error_message: message,
+          finished_at: new Date().toISOString(),
+        }).eq("id", claimed.id),
+        admin.from("cast_posts").update({
+          esutama_status: "failed",
+          esutama_error: message,
+        }).eq("id", post.id),
+      ]);
+      console.error(JSON.stringify({
+        event: "estama_post_persistence_failed",
+        initialError: persistenceDetail,
+        jobReviewError: jobReviewWrite.error?.message || null,
+        postReviewError: postReviewWrite.error?.message || null,
+      }));
+      await updateOverallStatus(admin, post.id);
+      return json(req, { jobId: claimed.id, status: "review_required", error: message }, 500);
+    }
     await updateOverallStatus(admin, post.id);
     return json(req, { jobId: claimed.id, status: "posted", result });
   }
 
-  const message = stringValue(workerPayload.error) || "魂セラピスト投稿に失敗しました";
-  const loginRequired = workerPayload.loginRequired === true;
-  const soulLoginRequired = workerPayload.soulLoginRequired === true;
-  const activationRequired = workerPayload.activationRequired === true;
-  const waitingForLogin = loginRequired || soulLoginRequired || activationRequired;
-  const retry = !waitingForLogin && claimed.attempts < claimed.max_attempts;
+  const workerError = stringValue(workerPayload.error);
+  const message = workerResultMismatch
+    ? `${REVIEW_REQUIRED_PREFIX}${photoCount.posted ? "魂セラピストの写真枚数" : "魂セラピストの投稿完了報告"}が一致しません（指定${photoCount.expected}枚 / 設定${photoCount.uploaded ?? "不明"}枚）。魂側を確認するまで再送できません`
+    : submissionUncertain
+      ? workerError.startsWith(REVIEW_REQUIRED_PREFIX)
+        ? workerError
+        : `${REVIEW_REQUIRED_PREFIX}${workerError || "魂セラピストへの送信結果を確認できません"}。魂側を確認するまで再送できません`
+      : workerError || "魂セラピスト投稿に失敗しました";
+  const retry = !waitingForLogin && !reviewRequired && claimed.attempts < claimed.max_attempts;
   const delayMinutes = Math.min(60, 2 ** Math.max(0, claimed.attempts - 1));
-  await Promise.all([
+  const stateWrites = await Promise.all([
     admin.from("automation_jobs").update({
       status: waitingForLogin ? "waiting_for_login" : retry ? "queued" : "failed",
       error_message: message,
       available_at: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
       finished_at: waitingForLogin || retry ? null : new Date().toISOString(),
+      ...(reviewRequired ? { result: { ...result, warning_code: "review_required" } } : {}),
     }).eq("id", claimed.id),
     admin.from("cast_posts").update({
       esutama_status: waitingForLogin || retry ? "pending" : "failed",
@@ -274,8 +352,20 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
     ...(activationRequired ? [admin.from("external_cast_profiles").update({ soul_status: "issued", last_error: message })
       .eq("cast_id", post.cast_id).eq("provider", "estama")] : []),
   ]);
+  const stateWriteError = stateWrites.find((write) => write.error)?.error;
+  if (stateWriteError) {
+    console.error(JSON.stringify({
+      event: "estama_failure_state_persistence_failed",
+      error: stateWriteError.message,
+      reviewRequired,
+    }));
+  }
   await updateOverallStatus(admin, post.id);
-  return json(req, { jobId: claimed.id, status: waitingForLogin || retry ? "pending" : "failed", error: message }, waitingForLogin ? 409 : 422);
+  return json(req, {
+    jobId: claimed.id,
+    status: reviewRequired ? "review_required" : waitingForLogin || retry ? "pending" : "failed",
+    error: message,
+  }, waitingForLogin ? 409 : 422);
 }
 
 serve(async (req) => {
@@ -295,7 +385,7 @@ serve(async (req) => {
     if (!postId || !accessToken) return json(req, { error: "投稿IDとポータルトークンが必要です" }, 400);
     if (!['o2', 'esutama'].includes(target)) return json(req, { error: "送信先が正しくありません" }, 400);
     const { data: post, error: postError } = await admin.from("cast_posts")
-      .select("id,cast_id,store_id,title,body,image_urls,o2_status,esutama_status,o2_attempts,esutama_attempts")
+      .select("id,cast_id,store_id,title,body,image_urls,o2_status,esutama_status,o2_error,esutama_error,o2_attempts,esutama_attempts")
       .eq("id", postId)
       .maybeSingle<PostRecord>();
     if (postError) throw postError;

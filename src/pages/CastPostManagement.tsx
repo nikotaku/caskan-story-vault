@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CheckCircle, ChevronDown, ChevronUp, Clock, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, Trash2, X, XCircle } from "lucide-react";
+import { CheckCircle, ChevronDown, ChevronUp, Clock, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, ShieldAlert, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 
 interface Cast { id: string; name: string; }
 interface PendingImage {
@@ -77,6 +78,7 @@ const rpc = (name: string, args: Record<string, unknown>) =>
 const createTestPostBody = () => `【動作確認】\nO2・魂セラピスト連携のテスト投稿です。\n${format(new Date(), "yyyy年M月d日 HH:mm", { locale: ja })}`;
 
 const canDeleteFailedPost = (post: Post) => {
+  if (isEstamaReviewRequired(post.esutama_error)) return false;
   const hasPublishedTarget = [post.hp_status, post.o2_status, post.esutama_status].includes("posted");
   const isPosting = [post.o2_status, post.esutama_status].includes("posting");
   const hasError = post.status === "failed"
@@ -323,7 +325,7 @@ export default function CastPostManagement() {
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
       await load();
       if (results.some((result) => result.status === "rejected")) {
-        toast.warning("外部媒体の一部に送れませんでした。失敗した媒体だけ再送できます");
+        toast.warning("外部媒体の一部へ送信できませんでした。投稿履歴の状態を確認してください");
       } else {
         toast.success("O2・魂セラピストへの投稿処理が完了しました");
       }
@@ -374,13 +376,14 @@ export default function CastPostManagement() {
     const status = target === "o2" ? post.o2_status : post.esutama_status;
     const error = target === "o2" ? post.o2_error : post.esutama_error;
     const key = `${post.id}:${target}`;
+    const reviewRequired = target === "esutama" && isEstamaReviewRequired(error);
     return (
       <div className="flex items-start justify-between gap-3 text-xs">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span className="font-medium">{label}</span><span className="text-muted-foreground">{STATUS_LABEL[status] || status}</span></div>
-          {error && <p className="mt-1 break-words text-red-600">{error}</p>}
+          <div className="flex items-center gap-1.5">{reviewRequired ? <ShieldAlert size={13} className="text-amber-600" /> : STATUS_ICON[status] || STATUS_ICON.pending}<span className="font-medium">{label}</span><span className="text-muted-foreground">{reviewRequired ? "要確認（再送停止）" : STATUS_LABEL[status] || status}</span></div>
+          {error && <p className={`mt-1 break-words ${reviewRequired ? "text-amber-700" : "text-red-600"}`}>{error}</p>}
         </div>
-        {["pending", "failed", "skipped"].includes(status) && (
+        {!reviewRequired && ["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === key}>
             {retrying === key ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} className="mr-1" />}再送
           </Button>

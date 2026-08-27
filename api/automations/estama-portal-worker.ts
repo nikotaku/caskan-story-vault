@@ -1,10 +1,12 @@
 import {
+  EstamaSubmissionUncertainError,
   LoginRequiredError,
   runPreparedEstamaDiary,
   SoulActivationRequiredError,
   SoulLoginRequiredError,
   type PreparedEstamaDiary,
 } from "../../server/estama-automation.js";
+import { assertUploadedPhotoCount } from "../../server/estama-photo-upload.js";
 
 export const config = { maxDuration: 300 };
 
@@ -45,7 +47,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     });
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok) {
-      res.status(response.status).json({ error: typeof payload.error === "string" ? payload.error : "実行認証に失敗しました" });
+      res.status(response.status).json({
+        error: typeof payload.error === "string" ? payload.error : "実行認証に失敗しました",
+        safeToRetry: true,
+      });
       return;
     }
 
@@ -54,16 +59,28 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       throw new Error("魂セラピスト投稿データが不足しています");
     }
     const result = await runPreparedEstamaDiary(prepared);
+    const expectedPhotos = Array.isArray(prepared.post.imageUrls)
+      ? prepared.post.imageUrls.filter((url): url is string => typeof url === "string").length
+      : 0;
+    try {
+      if (result.posted !== true) throw new Error("魂セラピストの投稿完了報告がありません");
+      assertUploadedPhotoCount(expectedPhotos, result.uploadedPhotos);
+    } catch (error) {
+      throw new EstamaSubmissionUncertainError(error instanceof Error ? error.message : String(error));
+    }
     res.status(200).json({ status: "posted", result });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const activationRequired = error instanceof SoulActivationRequiredError;
     const soulLoginRequired = error instanceof SoulLoginRequiredError;
+    const submissionUncertain = error instanceof EstamaSubmissionUncertainError;
     res.status(error instanceof LoginRequiredError || activationRequired || soulLoginRequired ? 409 : 422).json({
       error: message,
       loginRequired: error instanceof LoginRequiredError,
       soulLoginRequired,
       activationRequired,
+      submissionUncertain,
+      safeToRetry: !submissionUncertain,
     });
   }
 }

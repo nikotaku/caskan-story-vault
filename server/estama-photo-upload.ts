@@ -44,6 +44,32 @@ function photoExtension(contentType: string) {
   return "jpg";
 }
 
+export function assertUploadedPhotoCount(requested: number, uploaded: number) {
+  if (!Number.isInteger(requested) || !Number.isInteger(uploaded) || requested < 0 || uploaded !== requested) {
+    throw new Error(`エステ魂の写真枚数が一致しません（指定${requested}枚 / 設定${uploaded}枚）`);
+  }
+}
+
+export async function assertFormPhotoCount(form: Locator, requested: number) {
+  let serialized: number;
+  try {
+    serialized = await form.evaluate((element) => {
+      if (!(element instanceof HTMLFormElement)) throw new Error("投稿フォームではありません");
+      const data = new FormData(element);
+      return Array.from(data.values()).filter((value) => value instanceof File
+        && value.size > 0
+        && (value.type.startsWith("image/") || /\.(?:avif|gif|jpe?g|png|webp)$/i.test(value.name))).length;
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`エステ魂の送信フォーム内の写真枚数を確認できません（${detail}）`);
+  }
+  if (serialized !== requested) {
+    throw new Error(`エステ魂の送信フォーム内の写真枚数が一致しません（指定${requested}枚 / 送信${serialized}枚）`);
+  }
+  return serialized;
+}
+
 export async function uploadPhotos(
   page: Page,
   urls: string[],
@@ -56,7 +82,6 @@ export async function uploadPhotos(
     fetchPhoto = fetch,
   } = options;
   const requestedUrls = urls.slice(0, maxPhotos);
-  if (!requestedUrls.length) return 0;
 
   const inputRoot = root || page;
   const inputs = inputRoot.locator('input[type="file"]');
@@ -158,10 +183,42 @@ export async function uploadPhotos(
     await page.waitForTimeout(1_000);
   }
   const finalInputs = inputRoot.locator('input[type="file"]');
-  const selectedFiles = await finalInputs.evaluateAll((elements) => elements.reduce((total, element) => {
+  const inspectSelectedFiles = () => finalInputs.evaluateAll((elements) => elements.reduce((total, element) => {
     const input = element as HTMLInputElement;
-    return total + (input.files?.length || 0);
+    const accept = String(input.accept || "").toLowerCase();
+    const identity = `${input.name || ""} ${input.id || ""}`.toLowerCase();
+    const acceptsImages = !accept
+      || accept === "*/*"
+      || accept.split(",").some((value) => /image\/|\.(?:avif|gif|jpe?g|png|webp)/.test(value.trim()));
+    const otherMedia = /(?:^|[_-])(audio|document|movie|pdf|video)(?:$|[_-])/.test(identity);
+    return !input.disabled && acceptsImages && !otherMedia
+      ? total + (input.files?.length || 0)
+      : total;
   }, 0)).catch(() => null);
+  let selectedFiles: number | null = null;
+  let stableChecks = 0;
+  const requiredStableChecks = strict ? 3 : 1;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    selectedFiles = await inspectSelectedFiles();
+    stableChecks = selectedFiles === requestedUrls.length ? stableChecks + 1 : 0;
+    if (stableChecks >= requiredStableChecks) break;
+    if (attempt < 4) await page.waitForTimeout(500);
+  }
+
+  if (strict) {
+    try {
+      assertUploadedPhotoCount(requestedUrls.length, uploaded);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+    if (selectedFiles === null) {
+      errors.push("送信直前の写真枚数を確認できません");
+    } else if (selectedFiles !== requestedUrls.length) {
+      errors.push(`送信直前の写真枚数が一致しません（指定${requestedUrls.length}枚 / 選択${selectedFiles}枚）`);
+    } else if (stableChecks < requiredStableChecks) {
+      errors.push(`送信直前の写真枚数が安定しません（指定${requestedUrls.length}枚 / 選択${selectedFiles}枚）`);
+    }
+  }
   console.log(JSON.stringify({
     event: "estama_photo_upload",
     requested: requestedUrls.length,
@@ -170,6 +227,7 @@ export async function uploadPhotos(
     multipleInput: multipleInputIndex >= 0,
     uploaded,
     selectedFiles,
+    stableChecks,
     errorCount: errors.length,
   }));
 
