@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   getAdminClient,
   LoginRequiredError,
@@ -7,7 +8,11 @@ import {
 
 export const config = { maxDuration: 300 };
 
-type RequestLike = { method?: string; headers?: Record<string, string | string[] | undefined> };
+type RequestLike = {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
+};
 type ResponseLike = {
   status(code: number): ResponseLike;
   json(body: unknown): void;
@@ -154,15 +159,45 @@ async function saveFailure(
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
   res.setHeader("Cache-Control", "private, no-store");
-  const header = req.headers?.authorization;
-  const authorization = Array.isArray(header) ? header[0] : header;
-  const cronSecret = process.env.CRON_SECRET;
-  if (req.method !== "GET" || !cronSecret || authorization !== `Bearer ${cronSecret}`) {
-    res.status(401).json({ error: "Unauthorized" });
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
   const admin = getAdminClient();
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = typeof req.body === "string"
+      ? JSON.parse(req.body) as Record<string, unknown>
+      : (req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {});
+  } catch {
+    res.status(400).json({ error: "Invalid JSON" });
+    return;
+  }
+  const token = typeof payload.token === "string" ? payload.token : "";
+  if (token.length < 48) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const { data: claimed, error: claimError } = await admin
+    .from("estama_sync_tokens")
+    .update({ used_at: new Date().toISOString() })
+    .eq("token_hash", tokenHash)
+    .eq("purpose", "availability-refresh")
+    .is("used_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .select("id")
+    .maybeSingle();
+  if (claimError) {
+    res.status(500).json({ ok: false, error: claimError.message });
+    return;
+  }
+  if (!claimed?.id) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   const { data, error } = await admin
     .from("automation_connections")
     .select("id,store_id,status,browserbase_context_id,setup_session_id,shop_id,configuration")
