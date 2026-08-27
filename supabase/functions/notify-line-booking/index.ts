@@ -144,29 +144,55 @@ async function sendEmail(
   reservationId: string,
 ): Promise<ChannelResult> {
   const resendKey = Deno.env.get("RESEND_API_KEY");
-  if (!resendKey) return { ok: true, skipped: true };
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${resendKey}`,
-        "Idempotency-Key": `web-booking/${reservationId}`,
-      },
-      body: JSON.stringify({
-        from: Deno.env.get("RESEND_FROM") || "onboarding@resend.dev",
-        to: [NOTIFY_EMAIL],
-        subject,
-        text: message,
-      }),
-    });
+    if (resendKey) {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${resendKey}`,
+          "Idempotency-Key": `web-booking/${reservationId}`,
+        },
+        body: JSON.stringify({
+          from: Deno.env.get("RESEND_FROM") || "onboarding@resend.dev",
+          to: [NOTIFY_EMAIL],
+          subject,
+          text: message,
+        }),
+      });
 
-    const body = await response.json().catch(() => null) as { id?: string } | null;
-    if (response.ok) return { ok: true, providerRequestId: body?.id ?? null };
+      const body = await response.json().catch(() => null) as { id?: string } | null;
+      if (response.ok) return { ok: true, providerRequestId: body?.id ?? null };
 
-    console.error("Email booking notification failed", { status: response.status });
-    return { ok: false, errorCode: `email_http_${response.status}` };
+      console.error("Email booking notification failed", { status: response.status });
+      return { ok: false, errorCode: `email_http_${response.status}` };
+    }
+
+    // Keep a provider-independent escape route for booking alerts. Previously a
+    // missing Resend key was recorded as a successful skip, leaving LINE as the
+    // only effective channel and making a LINE 429 a complete notification loss.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const response = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(NOTIFY_EMAIL)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          _subject: subject,
+          _template: "table",
+          reservation_id: reservationId,
+          booking: message,
+        }),
+        signal: controller.signal,
+      });
+      if (response.ok) return { ok: true };
+
+      console.error("Fallback email booking notification failed", { status: response.status });
+      return { ok: false, errorCode: `email_fallback_http_${response.status}` };
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch {
     console.error("Email booking notification network error");
     return { ok: false, errorCode: "email_network_error" };
@@ -248,16 +274,22 @@ Deno.serve(async (req: Request) => {
     };
     if (attemptLine) sendingPatch.line_notification_status = "sending";
     if (attemptEmail) sendingPatch.email_notification_status = "sending";
-    const { error: sendingError } = await sb
+    const { data: claimedReservation, error: sendingError } = await sb
       .from("reservations")
       .update(sendingPatch)
-      .eq("id", reservationId);
+      .eq("id", reservationId)
+      .eq("notification_attempt_count", reservation.notification_attempt_count || 0)
+      .select("id")
+      .maybeSingle();
     if (sendingError) {
       console.error("Notification sending state could not be saved", {
         reservationId,
         code: sendingError.code,
       });
       return jsonResponse({ error: "Notification state could not be saved" }, 500);
+    }
+    if (!claimedReservation) {
+      return jsonResponse({ success: true, idempotent: true, in_progress: true }, 202);
     }
 
     const discountIds = (reservation.discount_ids || []).filter((id) => UUID_PATTERN.test(id));
@@ -415,7 +447,11 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Notification result could not be saved" }, 500);
     }
 
-    if (!lineResult.ok || !emailResult.ok) {
+    const lineDelivered = lineAlreadySent || (attemptLine && lineResult.ok);
+    const emailDelivered = emailAlreadySent
+      || (attemptEmail && emailResult.ok && !emailResult.skipped);
+
+    if ((!lineResult.ok || !emailResult.ok) && !lineDelivered && !emailDelivered) {
       return jsonResponse({
         success: false,
         line: attemptLine ? (lineResult.ok ? "sent" : "failed") : reservation.line_notification_status,
@@ -426,8 +462,12 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({
       success: true,
-      line: attemptLine ? "sent" : reservation.line_notification_status,
-      email: attemptEmail ? (emailResult.skipped ? "skipped" : "sent") : reservation.email_notification_status,
+      line: attemptLine ? (lineResult.ok ? "sent" : "failed") : reservation.line_notification_status,
+      email: attemptEmail
+        ? (emailResult.skipped ? "skipped" : emailResult.ok ? "sent" : "failed")
+        : reservation.email_notification_status,
+      partial: !lineResult.ok || !emailResult.ok,
+      error_code: lineResult.errorCode || emailResult.errorCode,
       idempotent: false,
     }, 200);
   } catch (error) {
