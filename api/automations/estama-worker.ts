@@ -1,7 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
 import {
-  EstamaContextBusyError,
-  getAdminClient,
   syncEstamaShiftBatch,
   type EstamaShiftBatchInput,
   type EstamaShiftEvidenceReport,
@@ -29,31 +26,6 @@ const PUBLISHABLE_KEY =
   "sb_publishable_T0a9mtOIbupU5n_VAe9caw_xlnbbWfB";
 
 const stringValue = (value: unknown) => typeof value === "string" ? value : "";
-
-async function redispatchAfterContextBusy(body: Record<string, unknown>) {
-  const retryCount = Math.max(0, Math.trunc(Number(body.contextRetry) || 0));
-  if (retryCount >= 5) return null;
-
-  const admin = getAdminClient();
-  const token = randomBytes(32).toString("hex");
-  const tokenHash = createHash("sha256").update(token).digest("hex");
-  const { error: tokenError } = await admin.from("estama_sync_tokens").insert({
-    token_hash: tokenHash,
-    purpose: "worker",
-    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-  });
-  if (tokenError) throw tokenError;
-
-  await new Promise((resolve) => setTimeout(resolve, 15_000));
-  const payload = { ...body, token, contextRetry: retryCount + 1 };
-  const { data: requestId, error: dispatchError } = await admin.rpc(
-    "dispatch_estama_worker_request",
-    { p_payload: payload },
-  );
-  if (dispatchError) throw dispatchError;
-  if (!requestId) throw new Error("競合解消後のシフト同期を再開できませんでした");
-  return { requestId, retryCount: retryCount + 1 };
-}
 
 async function claimToken(token: string) {
   if (!token || token.length < 48) return false;
@@ -260,33 +232,6 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     }));
     res.status(200).json({ ok: true, ...result });
   } catch (error) {
-    if (error instanceof EstamaContextBusyError) {
-      try {
-        const redispatched = await redispatchAfterContextBusy(req.body || {});
-        if (redispatched) {
-          console.warn(JSON.stringify({
-            level: "warning",
-            msg: "estama_shift_worker_deferred_for_context",
-            storeId,
-            ...redispatched,
-          }));
-          res.status(202).json({
-            ok: true,
-            deferred: true,
-            reason: error.message,
-            ...redispatched,
-          });
-          return;
-        }
-      } catch (redispatchError) {
-        console.error(JSON.stringify({
-          level: "error",
-          msg: "estama_shift_worker_redispatch_failed",
-          storeId,
-          error: redispatchError instanceof Error ? redispatchError.message : String(redispatchError),
-        }));
-      }
-    }
     const message = error instanceof Error ? error.message : String(error);
     const fatalResults: EstamaShiftBatchResult[] = [...reportedResults.values()];
     for (const item of parsedItems) {
