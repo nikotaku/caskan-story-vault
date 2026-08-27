@@ -131,7 +131,10 @@ begin
           and job.provider = 'estama'
           and job.status = 'running'
           and coalesce(job.started_at, job.updated_at, job.created_at)
-            > now() - interval '15 minutes'
+            > now() - case
+              when job.job_type = 'estama_sync_shift' then interval '3 hours'
+              else interval '15 minutes'
+            end
       )
       or exists (
         select 1
@@ -176,7 +179,10 @@ begin
           and job.provider = 'estama'
           and job.status = 'running'
           and coalesce(job.started_at, job.updated_at, job.created_at)
-            > now() - interval '15 minutes'
+            > now() - case
+              when job.job_type = 'estama_sync_shift' then interval '3 hours'
+              else interval '15 minutes'
+            end
       )
       and not exists (
         select 1
@@ -254,7 +260,10 @@ begin
         and job.provider = 'estama'
         and job.status = 'running'
         and coalesce(job.started_at, job.updated_at, job.created_at)
-          > now() - interval '15 minutes'
+          > now() - case
+            when job.job_type = 'estama_sync_shift' then interval '3 hours'
+            else interval '15 minutes'
+          end
     )
     and exists (
       select 1
@@ -319,7 +328,10 @@ begin
          and job.provider = 'estama'
          and job.status = 'running'
          and coalesce(job.started_at, job.updated_at, job.created_at)
-           > now() - interval '15 minutes'
+           > now() - case
+             when job.job_type = 'estama_sync_shift' then interval '3 hours'
+             else interval '15 minutes'
+           end
      ) then
     delete from private.estama_context_leases
     where store_id = p_store_id
