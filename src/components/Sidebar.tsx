@@ -20,6 +20,7 @@ import {
   BookUser,
   Link2,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminStore } from "@/hooks/useAdminStore";
@@ -41,7 +42,7 @@ interface MenuSubGroup {
 interface MenuItem {
   href?: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
   children?: MenuItemChild[];
   subGroups?: MenuSubGroup[];
 }
@@ -60,6 +61,7 @@ const menuItems: MenuItem[] = [
       { href: "/admin-schedule", label: "日別予約情報" },
       { href: "/schedule/monthly-shift", label: "月別シフト" },
       { href: "/schedule/web-bookings", label: "WEB予約受付" },
+      { href: "/schedule/estama-sync-history", label: "エスたま同期履歴" },
       { href: "/schedule/reservations-list", label: "予約一覧" },
       { href: "/schedule/available-slots", label: "空き枠" },
     ],

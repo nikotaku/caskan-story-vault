@@ -184,20 +184,6 @@ function buildEvidenceMessage(report: EvidenceReport, imageLabels: string[]) {
   return lines.join("\n").slice(0, 4_900);
 }
 
-async function pushLine(token: string, groupId: string, messages: Array<Record<string, string>>) {
-  for (let index = 0; index < messages.length; index += 5) {
-    const response = await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to: groupId, messages: messages.slice(index, index + 5) }),
-    });
-    const detail = await response.text();
-    if (!response.ok) {
-      throw new Error(`LINE API failed (${response.status}): ${detail.slice(0, 300)}`);
-    }
-  }
-}
-
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: jsonHeaders });
@@ -241,17 +227,23 @@ Deno.serve(async (request: Request) => {
 
     const report = payload.report && typeof payload.report === "object" ? payload.report : null;
     const legacyMessage = typeof payload.message === "string" ? payload.message.trim() : "";
-    if (!report && (!legacyMessage || legacyMessage.length > 5_000)) {
-      return new Response(JSON.stringify({ error: "Invalid message" }), { status: 400, headers: jsonHeaders });
+    if (!report || !report.storeId || (legacyMessage && legacyMessage.length > 5_000)) {
+      return new Response(JSON.stringify({ error: "storeIdを含む同期結果が必要です" }), { status: 400, headers: jsonHeaders });
     }
 
-    const lineToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
-    const groupId = Deno.env.get("LINE_GROUP_ID");
-    if (!lineToken || !groupId) throw new Error("LINE credentials are not configured");
-
-    const imageMessages: Array<Record<string, string>> = [];
     const imageLabels: string[] = [];
-    const uploaded: Array<{ path: string; publicUrl: string; label: string }> = [];
+    const uploaded: Array<{
+      path: string;
+      publicUrl: string;
+      label: string;
+      castName: string;
+      weekStart: string;
+      verified: boolean;
+      capturedAt: string;
+      publicUrlChecked: string;
+      expected: EvidenceItem["expected"];
+      error: string;
+    }> = [];
     const evidence = report && Array.isArray(report.evidence) ? report.evidence.slice(0, 30) : [];
     const batchId = notificationTokenHash.slice(0, 16) || crypto.randomUUID().replaceAll("-", "").slice(0, 16);
     const day = (report?.finishedAt || new Date().toISOString()).slice(0, 10);
@@ -279,13 +271,57 @@ Deno.serve(async (request: Request) => {
         ? `${shiftDateLabel(weekStart)}〜${shiftDateLabel(rangeEnd)}`
         : "表示期間不明";
       const label = `${compact(item.castName, 40) || "セラピスト"} ${range} ${item.verified === true ? "✅ 一致" : "⚠️ 要確認"}`;
-      uploaded.push({ path, publicUrl, label });
+      uploaded.push({
+        path,
+        publicUrl,
+        label,
+        castName: compact(item.castName, 40),
+        weekStart,
+        verified: item.verified === true,
+        capturedAt: compact(item.capturedAt, 40),
+        publicUrlChecked: compact(item.publicUrl, 500),
+        expected: Array.isArray(item.expected) ? item.expected.slice(0, 30) : [],
+        error: compact(item.error, 500),
+      });
       imageLabels.push(label);
-      imageMessages.push({ type: "image", originalContentUrl: publicUrl, previewImageUrl: publicUrl });
     }
 
-    const message = report ? buildEvidenceMessage(report, imageLabels) : legacyMessage;
-    await pushLine(lineToken, groupId, [{ type: "text", text: message }, ...imageMessages]);
+    const results = Array.isArray(report.results) ? report.results.slice(0, 200) : [];
+    const missingProfiles = Array.isArray(report.missingProfiles)
+      ? report.missingProfiles.filter((item): item is string => typeof item === "string").slice(0, 100)
+      : [];
+    const fatalError = compact(report.fatalError, 1_000) || null;
+    const successCount = results.filter((item) => item.ok === true).length;
+    const hasWarning = results.some((item) => item.ok !== true)
+      || evidence.some((item) => item.verified !== true)
+      || missingProfiles.length > 0;
+    const status = fatalError ? "error" : hasWarning ? "warning" : "success";
+    const castNames = [...new Set([
+      ...results.map((item) => compact(item.castName, 40)),
+      ...uploaded.map((item) => item.castName),
+    ].filter(Boolean))].slice(0, 100);
+    const message = legacyMessage || buildEvidenceMessage(report, imageLabels);
+
+    const { data: savedReport, error: saveError } = await admin
+      .from("estama_sync_reports")
+      .insert({
+        store_id: report.storeId,
+        shop_id: compact(report.shopId, 100) || null,
+        status,
+        started_at: report.startedAt || null,
+        finished_at: report.finishedAt || new Date().toISOString(),
+        total_count: results.length,
+        success_count: successCount,
+        cast_names: castNames,
+        summary: message,
+        results,
+        evidence: uploaded,
+        missing_profiles: missingProfiles,
+        fatal_error: fatalError,
+      })
+      .select("id")
+      .single();
+    if (saveError) throw saveError;
 
     if (customTokenClaimed) {
       const { error: useError } = await admin
@@ -298,6 +334,7 @@ Deno.serve(async (request: Request) => {
 
     return new Response(JSON.stringify({
       success: true,
+      reportId: savedReport.id,
       images: uploaded.map((item) => ({ path: item.path, publicUrl: item.publicUrl, label: item.label })),
     }), { headers: jsonHeaders });
   } catch (error) {

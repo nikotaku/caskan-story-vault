@@ -2467,6 +2467,68 @@ export type Database = {
           },
         ]
       }
+      estama_sync_reports: {
+        Row: {
+          cast_names: string[]
+          created_at: string
+          evidence: Json
+          fatal_error: string | null
+          finished_at: string
+          id: string
+          missing_profiles: string[]
+          results: Json
+          shop_id: string | null
+          started_at: string | null
+          status: string
+          store_id: string
+          success_count: number
+          summary: string
+          total_count: number
+        }
+        Insert: {
+          cast_names?: string[]
+          created_at?: string
+          evidence?: Json
+          fatal_error?: string | null
+          finished_at?: string
+          id?: string
+          missing_profiles?: string[]
+          results?: Json
+          shop_id?: string | null
+          started_at?: string | null
+          status: string
+          store_id: string
+          success_count?: number
+          summary: string
+          total_count?: number
+        }
+        Update: {
+          cast_names?: string[]
+          created_at?: string
+          evidence?: Json
+          fatal_error?: string | null
+          finished_at?: string
+          id?: string
+          missing_profiles?: string[]
+          results?: Json
+          shop_id?: string | null
+          started_at?: string | null
+          status?: string
+          store_id?: string
+          success_count?: number
+          summary?: string
+          total_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estama_sync_reports_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estama_sync_tokens: {
         Row: {
           created_at: string

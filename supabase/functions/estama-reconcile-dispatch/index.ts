@@ -70,7 +70,7 @@ async function notifyWithoutEvidence(
   });
   const detail = await response.text();
   if (!response.ok) {
-    throw new Error(`エスたまLINE通知 ${response.status}: ${detail.slice(0, 300)}`);
+    throw new Error(`エスたま同期履歴の保存 ${response.status}: ${detail.slice(0, 300)}`);
   }
 }
 
