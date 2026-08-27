@@ -51,22 +51,33 @@
     const placeholder = document.getElementById('placeholder');
     const playButton = document.getElementById('playButton');
 
-    courseText.textContent = course || 'ご予約コース';
+    const courseDuration = course.match(/(?:^|\D)(70|110)分/)?.[1];
+    const currentCourse = courseDuration
+      ? `エスたま限定 ${courseDuration}分`
+      : course;
+
+    if (courseDuration && course !== currentCourse) {
+      const canonicalUrl = new URL(location.href);
+      canonicalUrl.searchParams.set('course', currentCourse);
+      history.replaceState(null, '', `${canonicalUrl.pathname}${canonicalUrl.search}${canonicalUrl.hash}`);
+    }
+
+    courseText.textContent = currentCourse || 'ご予約コース';
     optionText.textContent = options.length ? options.join('、') : 'なし';
 
     const normalize = (s) => s.replace(/\s+/g,'');
-    const c = normalize(course);
-    const all = normalize([course, ...options].join(' '));
+    const c = normalize(currentCourse);
+    const all = normalize([currentCourse, ...options].join(' '));
 
     let lines = [];
     let videoKey = 'basic';
 
-    if (c.includes('70分お試し')) {
-      videoKey = 'trial70';
-      lines.push('こちらの70分お試しプランは、60分の施術に10分延長が付き、マイクロビキニでの施術が含まれています。');
-    } else if (c.includes('110分リラックス')) {
-      videoKey = 'relax110';
-      lines.push('こちらの110分リラックスプランは、100分の施術に加え、マイクロビキニと深層リンパドレナージュが含まれています。');
+    if (c.includes('エスたま限定70分')) {
+      videoKey = 'estama70';
+      lines.push('こちらのエスたま限定70分プランは、60分の施術に10分延長が付き、マイクロビキニでの施術が含まれています。');
+    } else if (c.includes('エスたま限定110分')) {
+      videoKey = 'estama110';
+      lines.push('こちらのエスたま限定110分プランは、100分の施術に加え、マイクロビキニと深層リンパドレナージュが含まれています。');
     } else {
       lines.push(`こちらは「${course || 'ご予約のコース'}」です。ご予約内容に沿って施術をご案内します。`);
     }
@@ -85,8 +96,8 @@
 
     const videoSources = {
       basic: '/course-guides/basic.mp4',
-      trial70: '/course-guides/trial70.mp4',
-      relax110: '/course-guides/relax110.mp4',
+      estama70: '/course-guides/trial70.mp4',
+      estama110: '/course-guides/relax110.mp4',
       sakura: '/course-guides/sakura.mp4',
       botan: '/course-guides/botan.mp4'
     };

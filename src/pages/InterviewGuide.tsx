@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import wPricingImage from "@/assets/interview/enka-w-pricing.webp";
 import {
   ArrowLeft, MapPin, Clock, Train, ShieldCheck,
   Home, IdCard, Camera, AlertTriangle, Sparkles, Check, ChevronDown,
@@ -141,25 +140,12 @@ export default function InterviewGuide() {
       </Section>
 
       {/* 料金・報酬システム */}
-      <Section icon={ShieldCheck} title="料金・報酬システム" sub="通常コース・Wセラピスト" tone="rose" wide>
-        <a
-          href={wPricingImage}
-          target="_blank"
-          rel="noreferrer"
-          className="block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
-          aria-label="料金・報酬システムの画像を拡大表示"
-        >
-          <img
-            src={wPricingImage}
-            alt="艶華の通常コースとWセラピストの料金・報酬システム"
-            width={965}
-            height={1630}
-            loading="lazy"
-            decoding="async"
-            className="h-auto w-full object-contain"
-          />
-        </a>
-        <p className="mt-2 text-center text-xs text-gray-400">画像をタップすると原寸で開きます</p>
+      <Section icon={ShieldCheck} title="料金・報酬システム" tone="rose">
+        <Card className="py-5">
+          <p className="text-sm leading-relaxed text-gray-700">
+            料金・報酬の詳細は、面談時に個別にご案内します。
+          </p>
+        </Card>
       </Section>
 
       {/* ルーム環境 */}
