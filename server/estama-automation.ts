@@ -3394,7 +3394,7 @@ export async function appealEstamaTherapist(
   const { bb, session } = await createBrowserSession(
     connection.browserbase_context_id,
     false,
-    { action: "therapist-appeal", storeId: connection.store_id, slot: target.slot },
+    { action: "therapist-appeal", storeId: connection.store_id, slot: String(target.slot) },
     { solveCaptchas: false },
   );
   let browser: Browser | null = null;
