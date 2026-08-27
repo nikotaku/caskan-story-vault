@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test:estama": "node --experimental-strip-types --test tests/estama*.test.ts",
     "test:payment": "node --experimental-strip-types --test tests/paymentFee.test.ts",
+    "test:public-copy": "node --experimental-strip-types --test tests/publicCourseNames.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
