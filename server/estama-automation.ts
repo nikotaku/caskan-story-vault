@@ -12,6 +12,11 @@ import {
   parseEstamaShiftRange,
 } from "./estama-availability.js";
 import {
+  isConfirmedEstamaAppeal,
+  parseEstamaAppealRemaining,
+  parseEstamaLastAppeal,
+} from "./estama-appeal.js";
+import {
   assertPublishedPhotoCount,
   findPublicDiaryPhotoCount,
   matchingPublicDiarySignatures,
@@ -215,7 +220,12 @@ export async function assertStoreManager(admin: AdminClient, userId: string, sto
   }
 }
 
-async function createBrowserSession(contextId: string | null, keepAlive = false, metadata: Json = {}) {
+async function createBrowserSession(
+  contextId: string | null,
+  keepAlive = false,
+  metadata: Json = {},
+  options: { solveCaptchas?: boolean } = {},
+) {
   const bb = getBrowserbase();
   const session = await bb.sessions.create({
     projectId: projectId(),
@@ -226,7 +236,7 @@ async function createBrowserSession(contextId: string | null, keepAlive = false,
       ...(contextId ? { context: { id: contextId, persist: true } } : {}),
       allowedDomains: ["estama.jp"],
       viewport: { width: 1440, height: 1000 },
-      solveCaptchas: true,
+      solveCaptchas: options.solveCaptchas ?? true,
     },
     userMetadata: { integration: "newkyasukan-estama", ...metadata },
   });
@@ -3204,6 +3214,275 @@ export async function refreshEstamaAvailability(
         error: releaseError.message,
       }));
     }
+  }
+}
+
+export type EstamaTherapistAppealTarget = {
+  slot: number;
+  castId: string;
+  castName: string;
+  externalId: string;
+  remoteName?: string | null;
+  scheduledFor: string;
+};
+
+export type EstamaTherapistAppealResult = {
+  status: "success" | "skipped";
+  appealUrl: string;
+  remainingBefore: number;
+  remainingAfter: number;
+  lastAppealBefore: string | null;
+  lastAppealAfter: string | null;
+  reason?: "remaining_exhausted";
+};
+
+async function discoverTherapistAppealAdminUrl(page: Page) {
+  const findLink = async () => {
+    const links = await page.locator("a[href]").evaluateAll((elements) => elements.map((element) => ({
+      href: (element as HTMLAnchorElement).href,
+      text: (element.textContent || "").normalize("NFKC").replace(/\s+/g, "").trim(),
+    })));
+    return links.find((link) => link.text.includes("セラピストアピール"))?.href || null;
+  };
+
+  await page.goto(ESTAMA_CAST_EDIT_URL, { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page, "#Name");
+  let url = await findLink();
+  if (url) return url;
+
+  await page.goto("https://estama.jp/admin/", { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page);
+  url = await findLink();
+  if (url) return url;
+  throw new Error("エスたま管理画面の「セラピストアピール」メニューが見つかりません");
+}
+
+async function locateTherapistAppealCard(
+  page: Page,
+  target: Pick<EstamaTherapistAppealTarget, "externalId" | "remoteName" | "castName">,
+) {
+  const containers = page.locator("tr, li, article, section, form, div");
+  const lookup = await containers.evaluateAll((elements, options) => {
+    const normalize = (value: string) => value
+      .normalize("NFKC")
+      .toLocaleLowerCase("ja-JP")
+      .replace(/[\s\u3000・･·_＿―—–-]+/g, "")
+      .replace(/[()（）\u005b\u005d【】「」『』]/g, "")
+      .trim();
+    const names = [...new Set([options.remoteName, options.castName]
+      .filter(Boolean)
+      .map((name) => normalize(String(name))))];
+    const externalIdPattern = options.externalId
+      ? new RegExp(`(^|\\D)${String(options.externalId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\D|$)`)
+      : null;
+    const candidates = elements.map((element, index) => {
+      const htmlElement = element as HTMLElement;
+      const style = window.getComputedStyle(htmlElement);
+      const text = htmlElement.innerText || htmlElement.textContent || "";
+      if (
+        !text
+        || text.length > 10_000
+        || !/(?:最終|最新)\s*アピール/.test(text.normalize("NFKC"))
+        || htmlElement.getClientRects().length === 0
+        || style.display === "none"
+        || style.visibility === "hidden"
+      ) return null;
+      const lines = text.split(/\r?\n/).map(normalize).filter(Boolean);
+      const exactName = names.some((name) => lines.includes(name));
+      const identityElements = [htmlElement, ...Array.from(htmlElement.querySelectorAll(
+        "a[href], form[action], input[type='hidden'], [data-id], [data-cast-id], [data-therapist-id]",
+      ))];
+      const identity = identityElements.flatMap((identityElement) => {
+        const attributes = Array.from(identityElement.attributes)
+          .filter((attribute) => /^(?:href|action|formaction|id|name|value|data-.+)$/.test(attribute.name))
+          .map((attribute) => `${attribute.name}=${attribute.value}`);
+        return attributes;
+      }).join(" ");
+      const externalIdMatch = Boolean(externalIdPattern?.test(identity));
+      if (!externalIdMatch && !exactName) return null;
+      return {
+        element: htmlElement,
+        index,
+        exactName,
+        externalIdMatch,
+        size: text.length,
+      };
+    }).filter((candidate): candidate is {
+      element: HTMLElement;
+      index: number;
+      exactName: boolean;
+      externalIdMatch: boolean;
+      size: number;
+    } => candidate !== null);
+
+    const mostSpecific = (matches: typeof candidates) => matches.filter((candidate) => (
+      !matches.some((other) => (
+        other !== candidate && candidate.element.contains(other.element)
+      ))
+    ));
+    const externalMatches = mostSpecific(candidates.filter((candidate) => candidate.externalIdMatch));
+    if (externalMatches.length === 1) {
+      return { index: externalMatches[0].index, ambiguous: false };
+    }
+    if (externalMatches.length > 1) {
+      return { index: null, ambiguous: true };
+    }
+
+    // Some Estama views do not expose the cast ID in the rendered card. In
+    // that case a name fallback is safe only when exactly one card matches.
+    const nameMatches = mostSpecific(candidates.filter((candidate) => candidate.exactName));
+    if (nameMatches.length === 1) {
+      return { index: nameMatches[0].index, ambiguous: false };
+    }
+    return { index: null, ambiguous: nameMatches.length > 1 };
+  }, {
+    externalId: target.externalId,
+    remoteName: target.remoteName || "",
+    castName: target.castName,
+  });
+
+  if (lookup.ambiguous) {
+    throw new Error(
+      `エスたまに「${target.remoteName || target.castName}」と同名の候補が複数あるため、安全のためアピールを実行しません`,
+    );
+  }
+  if (lookup.index === null) {
+    throw new Error(`エスたまに「${target.remoteName || target.castName}」のアピール欄が見つかりません`);
+  }
+  return containers.nth(lookup.index);
+}
+
+async function locateTherapistAppealAction(
+  page: Page,
+  target: Pick<EstamaTherapistAppealTarget, "externalId" | "remoteName" | "castName">,
+) {
+  const card = await locateTherapistAppealCard(page, target);
+  const actions = card.locator('button, a, [role="button"], input[type="submit"], input[type="button"]');
+  const actionIndexes = await actions.evaluateAll((elements) => elements.flatMap((element, index) => {
+    const htmlElement = element as HTMLElement;
+    const style = window.getComputedStyle(htmlElement);
+    const label = element instanceof HTMLInputElement ? element.value : element.textContent || "";
+    const normalized = label.normalize("NFKC").replace(/\s+/g, "").trim();
+    const visible = htmlElement.getClientRects().length > 0
+      && style.display !== "none"
+      && style.visibility !== "hidden";
+    return normalized === "アピールする" && visible ? [index] : [];
+  }));
+  if (actionIndexes.length !== 1) {
+    if (actionIndexes.length > 1) {
+      throw new Error(
+        `エスたまの「${target.remoteName || target.castName}」にアピールボタンが複数あるため、安全のため実行しません`,
+      );
+    }
+    throw new Error(`エスたまの「${target.remoteName || target.castName}」にアピールボタンが見つかりません`);
+  }
+  const action = actions.nth(actionIndexes[0]);
+  return { action, card };
+}
+
+export async function appealEstamaTherapist(
+  client: AdminClient,
+  connection: Connection,
+  runToken: string,
+  target: EstamaTherapistAppealTarget,
+): Promise<EstamaTherapistAppealResult> {
+  if (!connection.browserbase_context_id) {
+    throw new LoginRequiredError("Browserbaseの保存済みログイン情報がありません");
+  }
+
+  // The appeal automation must not attempt to bypass CAPTCHA or other access controls.
+  const { bb, session } = await createBrowserSession(
+    connection.browserbase_context_id,
+    false,
+    { action: "therapist-appeal", storeId: connection.store_id, slot: target.slot },
+    { solveCaptchas: false },
+  );
+  let browser: Browser | null = null;
+  try {
+    const connected = await connectSession(session.connectUrl);
+    browser = connected.browser;
+    const { page } = connected;
+    page.setDefaultTimeout(10_000);
+
+    const appealUrl = await discoverTherapistAppealAdminUrl(page);
+    await page.goto(appealUrl, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    await page.waitForTimeout(500);
+
+    const bodyBefore = await page.locator("body").innerText();
+    const remainingBefore = parseEstamaAppealRemaining(bodyBefore);
+    if (remainingBefore === null) {
+      throw new Error("エスたまの本日のアピール残り回数を読み取れません");
+    }
+    if (remainingBefore <= 0) {
+      return {
+        status: "skipped",
+        appealUrl,
+        remainingBefore,
+        remainingAfter: remainingBefore,
+        lastAppealBefore: null,
+        lastAppealAfter: null,
+        reason: "remaining_exhausted",
+      };
+    }
+    const beforeTarget = await locateTherapistAppealAction(page, target);
+    const lastAppealBefore = parseEstamaLastAppeal(await beforeTarget.card.innerText());
+
+    // Verify Playwright can actually act on the control before marking the
+    // external click as started. A disabled or covered button remains safely
+    // retryable because no click-start record has been written yet.
+    await beforeTarget.action.click({ trial: true, timeout: 10_000 });
+
+    const { data: marked, error: markError } = await client.rpc("mark_estama_appeal_click", {
+      p_run_token: runToken,
+      p_store_id: connection.store_id,
+      p_slot: target.slot,
+    });
+    if (markError || marked !== true) {
+      throw new Error(`アピール実行直前の重複確認に失敗しました: ${markError?.message || "実行枠が無効です"}`);
+    }
+
+    await Promise.all([
+      page.waitForLoadState("domcontentloaded").catch(() => undefined),
+      clickWithDomFallback(beforeTarget.action, 10_000),
+    ]);
+
+    let remainingAfter: number | null = null;
+    let lastAppealAfter: string | null = null;
+    const timeoutAt = Date.now() + 15_000;
+    while (Date.now() < timeoutAt) {
+      await page.waitForTimeout(500);
+      const bodyAfter = await page.locator("body").innerText().catch(() => "");
+      remainingAfter = parseEstamaAppealRemaining(bodyAfter);
+      try {
+        const afterCard = await locateTherapistAppealCard(page, target);
+        lastAppealAfter = parseEstamaLastAppeal(await afterCard.innerText());
+      } catch {
+        lastAppealAfter = null;
+      }
+      if (isConfirmedEstamaAppeal({
+        beforeRemaining: remainingBefore,
+        afterRemaining: remainingAfter,
+        beforeLastAppeal: lastAppealBefore,
+        afterLastAppeal: lastAppealAfter,
+      })) {
+        return {
+          status: "success",
+          appealUrl,
+          remainingBefore,
+          remainingAfter: remainingAfter as number,
+          lastAppealBefore,
+          lastAppealAfter,
+        };
+      }
+    }
+
+    throw new EstamaSubmissionUncertainError(
+      `セラピストアピール後の更新を確認できません（残り ${remainingBefore}→${remainingAfter ?? "不明"} / 最終 ${lastAppealBefore || "未記録"}→${lastAppealAfter || "不明"}）`,
+    );
+  } finally {
+    if (browser) await disconnect(browser);
+    await releaseSession(bb, session.id);
   }
 }
 

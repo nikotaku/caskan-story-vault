@@ -36,6 +36,7 @@ type SyncReport = {
   success_count: number;
   cast_names: string[];
   summary: string;
+  results: unknown;
   evidence: unknown;
   missing_profiles: string[];
   fatal_error: string | null;
@@ -63,6 +64,19 @@ const readEvidence = (value: unknown): Evidence[] => Array.isArray(value)
   ? value.filter((item): item is Evidence => Boolean(item) && typeof item === "object")
   : [];
 
+type ReportKind = "sync" | "availability" | "appeal";
+
+const reportKind = (value: unknown): ReportKind => {
+  const items = Array.isArray(value) ? value : [value];
+  if (items.some((item) => (
+    item && typeof item === "object" && (item as { kind?: unknown }).kind === "therapist_appeal"
+  ))) return "appeal";
+  if (items.some((item) => (
+    item && typeof item === "object" && (item as { kind?: unknown }).kind === "availability_refresh"
+  ))) return "availability";
+  return "sync";
+};
+
 export default function EstamaSyncHistory() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [reports, setReports] = useState<SyncReport[]>([]);
@@ -84,7 +98,7 @@ export default function EstamaSyncHistory() {
     setLoadError("");
     const { data, error } = await supabase
       .from("estama_sync_reports")
-      .select("id,status,started_at,finished_at,total_count,success_count,cast_names,summary,evidence,missing_profiles,fatal_error")
+      .select("id,status,started_at,finished_at,total_count,success_count,cast_names,summary,results,evidence,missing_profiles,fatal_error")
       .eq("store_id", storeId)
       .order("finished_at", { ascending: false })
       .limit(50);
@@ -117,9 +131,9 @@ export default function EstamaSyncHistory() {
         <div className="mx-auto max-w-6xl space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">エスたま同期履歴</h1>
+              <h1 className="text-2xl font-bold">エスたま自動化履歴</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                自動同期の結果と、公開ページで確認した画像をここで確認できます。
+                自動同期、ご案内状況、セラピストアピールの結果をここで確認できます。
               </p>
             </div>
             <Button variant="outline" disabled={refreshing} onClick={() => void loadReports(true)}>
@@ -139,7 +153,7 @@ export default function EstamaSyncHistory() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground">最新の掲載確認</p>
+                <p className="text-xs text-muted-foreground">最新の処理件数</p>
                 <p className="mt-1 text-lg font-bold">
                   {latest?.total_count ? `${latest.success_count}/${latest.total_count}件` : "—"}
                 </p>
@@ -174,13 +188,25 @@ export default function EstamaSyncHistory() {
                 const view = statusView[report.status];
                 const StatusIcon = view.icon;
                 const evidence = readEvidence(report.evidence);
+                const kind = reportKind(report.results);
+                const title = kind === "appeal"
+                  ? "セラピストアピール"
+                  : kind === "availability"
+                    ? "ご案内状況更新"
+                    : "同期";
+                const countLabel = kind === "appeal"
+                  ? "アピール"
+                  : kind === "availability"
+                    ? "更新対象"
+                    : "掲載確認";
                 return (
                   <Card key={report.id} className={report.status === "success" ? "" : "border-amber-200"}>
                     <CardHeader className="pb-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <CardTitle className="text-base">
-                            {format(new Date(report.finished_at), "yyyy/M/d HH:mm", { locale: ja })} の同期
+                            {format(new Date(report.finished_at), "yyyy/M/d HH:mm", { locale: ja })}
+                            {` の${title}`}
                           </CardTitle>
                           {report.cast_names.length > 0 && (
                             <p className="mt-1 text-sm text-muted-foreground">{report.cast_names.join("、")}</p>
@@ -194,7 +220,7 @@ export default function EstamaSyncHistory() {
                     <CardContent className="space-y-4">
                       {report.total_count > 0 && (
                         <p className="text-sm font-medium">
-                          掲載確認 {report.success_count}/{report.total_count}件
+                          {countLabel} {report.success_count}/{report.total_count}件
                         </p>
                       )}
                       <p className="whitespace-pre-wrap rounded-lg bg-muted/50 p-4 text-sm leading-6">
