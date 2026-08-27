@@ -1,10 +1,16 @@
 import Browserbase from "@browserbasehq/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { chromium, type Browser, type Dialog, type Locator, type Page } from "playwright-core";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { uploadPhotos } from "./estama-photo-upload.js";
+import {
+  isEstamaAvailabilitySelect,
+  isEstamaShiftActive,
+  jstBusinessMinutes,
+  parseEstamaShiftRange,
+} from "./estama-availability.js";
 import { clickWithDomFallback } from "./playwright-actions.js";
 
 type QrDecoder = (
@@ -129,6 +135,58 @@ export class SoulActivationRequiredError extends Error {
     this.name = "SoulActivationRequiredError";
   }
 }
+
+export class EstamaContextBusyError extends Error {
+  constructor(message = "別のエスたま同期が実行中です") {
+    super(message);
+    this.name = "EstamaContextBusyError";
+  }
+}
+
+async function claimEstamaContextLease(
+  admin: AdminClient,
+  storeId: string,
+  operation: string,
+  waitMs = 0,
+) {
+  const ownerToken = randomUUID();
+  const deadline = Date.now() + Math.max(0, waitMs);
+  do {
+    const { data, error } = await admin.rpc("claim_estama_context_lease", {
+      p_store_id: storeId,
+      p_owner_token: ownerToken,
+      p_operation: operation,
+      p_ttl_seconds: 480,
+    });
+    if (error) throw new Error(`エスたま同時実行ロックを取得できません: ${error.message}`);
+    if (data === true) return ownerToken;
+    if (Date.now() >= deadline) return null;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  } while (Date.now() <= deadline);
+  return null;
+}
+
+async function releaseEstamaContextLease(
+  admin: AdminClient,
+  storeId: string,
+  ownerToken: string | null,
+) {
+  if (!ownerToken) return;
+  const { error } = await admin.rpc("release_estama_context_lease", {
+    p_store_id: storeId,
+    p_owner_token: ownerToken,
+  });
+  if (error) {
+    console.warn(JSON.stringify({
+      level: "warning",
+      msg: "estama_context_lease_release_failed",
+      storeId,
+      error: error.message,
+    }));
+  }
+}
+
+const settleEstamaContext = () => new Promise((resolve) => setTimeout(resolve, 1_500));
 
 const requiredEnv = (name: string) => {
   const value = process.env[name];
@@ -2315,12 +2373,37 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   if (!input.contextId) throw new Error("Browserbaseの保存済みログイン情報がありません");
   if (!items.length) return { sessionId: null, shiftUrl: null, results: [] };
 
-  const { bb, session } = await createBrowserSession(input.contextId, false, {
-    action: "edge-shift-worker",
-    storeId: input.storeId,
-    itemCount: String(items.length),
-  });
-  const { browser, page } = await connectSession(session.connectUrl);
+  const admin = getAdminClient();
+  const leaseToken = await claimEstamaContextLease(
+    admin,
+    input.storeId,
+    "shift-batch",
+    45_000,
+  );
+  if (!leaseToken) throw new EstamaContextBusyError();
+
+  let created: Awaited<ReturnType<typeof createBrowserSession>>;
+  try {
+    created = await createBrowserSession(input.contextId, false, {
+      action: "edge-shift-worker",
+      storeId: input.storeId,
+      itemCount: String(items.length),
+    });
+  } catch (error) {
+    await releaseEstamaContextLease(admin, input.storeId, leaseToken);
+    throw error;
+  }
+  const { bb, session } = created;
+  let connected: Awaited<ReturnType<typeof connectSession>>;
+  try {
+    connected = await connectSession(session.connectUrl);
+  } catch (error) {
+    await releaseSession(bb, session.id);
+    await settleEstamaContext();
+    await releaseEstamaContextLease(admin, input.storeId, leaseToken);
+    throw error;
+  }
+  const { browser, page } = connected;
   page.setDefaultTimeout(8_000);
   const results: EstamaShiftBatchResult[] = [];
   const evidence: EstamaShiftEvidence[] = [];
@@ -2586,6 +2669,254 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   } finally {
     await disconnect(browser);
     await releaseSession(bb, session.id);
+    await settleEstamaContext();
+    await releaseEstamaContextLease(admin, input.storeId, leaseToken);
+  }
+}
+
+type AvailabilityControl = {
+  index: number;
+  options: string[];
+  text: string;
+  castName: string;
+};
+
+export type EstamaAvailabilityRefreshResult = {
+  availabilityUrl: string;
+  activeCount: number;
+  availableNowCount: number;
+  inactiveCount: number;
+  manualPreservedCount: number;
+  skippedCount: number;
+  castNames: string[];
+  confirmation: string;
+  validUntil: string | null;
+  deferred: boolean;
+  updated: boolean;
+};
+
+async function discoverAvailabilityAdminUrl(page: Page) {
+  const findLink = async () => {
+    const links = await page.locator("a[href]").evaluateAll((elements) => elements.map((element) => ({
+      href: (element as HTMLAnchorElement).href,
+      text: (element.textContent || "").normalize("NFKC").replace(/\s+/g, "").trim(),
+    })));
+    return links.find((link) => link.text.includes("ご案内状況"))?.href || null;
+  };
+
+  await page.goto(ESTAMA_CAST_EDIT_URL, { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page, "#Name");
+  let url = await findLink();
+  if (url) return url;
+
+  await page.goto("https://estama.jp/admin/", { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page);
+  url = await findLink();
+  if (url) return url;
+  throw new Error("エスたま管理画面の「ご案内状況」メニューが見つかりません");
+}
+
+async function readAvailabilityControls(page: Page): Promise<AvailabilityControl[]> {
+  return page.locator("select").evaluateAll((elements) => elements.map((element, index) => {
+    const select = element as HTMLSelectElement;
+    const options = Array.from(select.options).map((option) => (option.textContent || "").trim());
+    let container: HTMLElement | null = select.parentElement;
+    let text = "";
+    for (let depth = 0; container && depth < 8; depth += 1) {
+      text = (container.innerText || "").replace(/\s+/g, " ").trim();
+      if (/\d{1,2}:\d{2}\s*[〜～~\-–—]\s*\d{1,2}:\d{2}/.test(text)) break;
+      container = container.parentElement;
+    }
+    const nameElement = container?.querySelector(
+      'h1, h2, h3, h4, strong, b, a[href*="cast"], a[href*="therapist"]',
+    );
+    const castName = (nameElement?.textContent || "").replace(/\s+/g, " ").trim();
+    return { index, options, text, castName };
+  }));
+}
+
+const compactAvailabilityConfirmation = (value: string) => value
+  .split("\n")
+  .map((line) => line.replace(/\s+/g, " ").trim())
+  .filter((line) => /ご案内状況を表示しました|まで表示|残り\d+分/.test(line))
+  .slice(0, 3)
+  .join(" / ")
+  .slice(0, 500);
+
+export async function refreshEstamaAvailability(
+  admin: AdminClient,
+  connection: Connection,
+  now = new Date(),
+): Promise<EstamaAvailabilityRefreshResult> {
+  if (!connection.browserbase_context_id) {
+    throw new LoginRequiredError("Browserbaseの保存済みログイン情報がありません");
+  }
+
+  const leaseToken = await claimEstamaContextLease(
+    admin,
+    connection.store_id,
+    "availability-refresh",
+  );
+  if (!leaseToken) {
+    return {
+      availabilityUrl: "",
+      activeCount: 0,
+      availableNowCount: 0,
+      inactiveCount: 0,
+      manualPreservedCount: 0,
+      skippedCount: 0,
+      castNames: [],
+      confirmation: "別のエスたま同期が実行中のため、今回は更新を延期しました",
+      validUntil: null,
+      deferred: true,
+      updated: false,
+    };
+  }
+
+  let created: Awaited<ReturnType<typeof createBrowserSession>>;
+  try {
+    created = await createBrowserSession(connection.browserbase_context_id, false, {
+      action: "hourly-availability-refresh",
+      storeId: connection.store_id,
+    });
+  } catch (error) {
+    await releaseEstamaContextLease(admin, connection.store_id, leaseToken);
+    throw error;
+  }
+  const { bb, session } = created;
+  let connected: Awaited<ReturnType<typeof connectSession>>;
+  try {
+    connected = await connectSession(session.connectUrl);
+  } catch (error) {
+    await releaseSession(bb, session.id);
+    await settleEstamaContext();
+    await releaseEstamaContextLease(admin, connection.store_id, leaseToken);
+    throw error;
+  }
+  const { browser, page } = connected;
+  page.setDefaultTimeout(10_000);
+
+  try {
+    const availabilityUrl = await discoverAvailabilityAdminUrl(page);
+    await page.goto(availabilityUrl, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    await page.waitForTimeout(500);
+
+    const controls = (await readAvailabilityControls(page))
+      .filter((control) => isEstamaAvailabilitySelect(control.options));
+    if (!controls.length) {
+      throw new Error("エスたまのセラピスト別「ご案内状況」欄が見つかりません");
+    }
+
+    const currentMinutes = jstBusinessMinutes(now);
+    const castNames: string[] = [];
+    let activeCount = 0;
+    let availableNowCount = 0;
+    let inactiveCount = 0;
+    let manualPreservedCount = 0;
+    let skippedCount = 0;
+
+    for (const control of controls) {
+      const range = parseEstamaShiftRange(control.text);
+      if (!range) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const select = page.locator("select").nth(control.index);
+      const active = isEstamaShiftActive(range, currentMinutes);
+      if (!active) {
+        inactiveCount += 1;
+        continue;
+      }
+
+      activeCount += 1;
+      const currentLabel = (await select.locator("option:checked").textContent().catch(() => "") || "")
+        .normalize("NFKC")
+        .replace(/\s+/g, "")
+        .trim();
+      if (currentLabel !== "未設定" && currentLabel !== "今すぐ") {
+        manualPreservedCount += 1;
+        continue;
+      }
+      if (currentLabel !== "今すぐ") await select.selectOption({ label: "今すぐ" });
+      availableNowCount += 1;
+      castNames.push(control.castName || `出勤者${availableNowCount}`);
+    }
+
+    if (skippedCount > 0) {
+      throw new Error(`勤務時間を読み取れないご案内状況欄が${skippedCount}件あります`);
+    }
+
+    if (availableNowCount === 0) {
+      return {
+        availabilityUrl,
+        activeCount,
+        availableNowCount,
+        inactiveCount,
+        manualPreservedCount,
+        skippedCount,
+        castNames,
+        confirmation: activeCount === 0
+          ? "現在勤務中のセラピストがいないため更新対象なし"
+          : "勤務中のセラピストは手動の案内状態を優先したため、店舗表示は更新していません",
+        validUntil: null,
+        deferred: false,
+        updated: false,
+      };
+    }
+
+    const beforeBodyText = await page.locator("body").innerText().catch(() => "");
+    const beforeValidUntil = [...beforeBodyText.matchAll(
+      /(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})まで表示/g,
+    )].at(-1)?.[1] || null;
+    let dialogText = "";
+    page.once("dialog", async (dialog: Dialog) => {
+      dialogText = dialog.message();
+      await dialog.accept();
+    });
+    let submit = page.locator('button, a, input[type="submit"], input[type="button"]').filter({
+      hasText: /今すぐご案内可.*表示/,
+    }).last();
+    if (!await submit.count()) {
+      submit = page.locator(
+        'input[type="submit"][value*="今すぐご案内可"], input[type="button"][value*="今すぐご案内可"]',
+      ).last();
+    }
+    if (!await submit.count()) {
+      throw new Error("エスたまの「今すぐご案内可で表示」ボタンが見つかりません");
+    }
+
+    await clickWithDomFallback(submit, 10_000);
+    await page.waitForTimeout(1_000);
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const confirmation = compactAvailabilityConfirmation(`${dialogText}\n${bodyText}`);
+    const validUntilPattern = /(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})まで表示/g;
+    const dialogValidUntil = [...dialogText.matchAll(validUntilPattern)].at(-1)?.[1] || null;
+    const bodyValidUntil = [...bodyText.matchAll(validUntilPattern)].at(-1)?.[1] || null;
+    const validUntil = dialogValidUntil || bodyValidUntil;
+    if (!dialogText.includes("表示しました") && (!validUntil || validUntil === beforeValidUntil)) {
+      throw new Error("「今すぐご案内可」の更新完了を画面上で確認できませんでした");
+    }
+
+    return {
+      availabilityUrl,
+      activeCount,
+      availableNowCount,
+      inactiveCount,
+      manualPreservedCount,
+      skippedCount,
+      castNames: [...new Set(castNames)],
+      confirmation: confirmation || "◎今すぐご案内可で更新完了",
+      validUntil,
+      deferred: false,
+      updated: true,
+    };
+  } finally {
+    await disconnect(browser);
+    await releaseSession(bb, session.id);
+    await settleEstamaContext();
+    await releaseEstamaContextLease(admin, connection.store_id, leaseToken);
   }
 }
 
@@ -2608,6 +2939,7 @@ export async function processAvailableJobs(
   let browser: Browser | null = null;
   let page: Page | null = null;
   let sessionId = "";
+  let leaseToken: string | null = null;
 
   try {
     for (let index = 0; index < limit; index += 1) {
@@ -2645,15 +2977,42 @@ export async function processAvailableJobs(
         if (!connection || activeStore !== job.store_id) {
           if (browser) await disconnect(browser);
           if (bb && sessionId) await releaseSession(bb, sessionId);
+          if (leaseToken && activeStore) {
+            await settleEstamaContext();
+            await releaseEstamaContextLease(admin, activeStore, leaseToken);
+          }
+          browser = null;
+          page = null;
+          bb = null;
+          sessionId = "";
+          leaseToken = null;
           connection = await getConnection(admin, job.store_id);
           activeStore = job.store_id;
           if (!connection?.browserbase_context_id || connection.status !== "ready") throw new LoginRequiredError("エステ魂ログイン設定が未完了です");
-          const created = await createBrowserSession(connection.browserbase_context_id, false, { action: "worker", storeId: job.store_id });
-          bb = created.bb;
-          sessionId = created.session.id;
-          const connected = await connectSession(created.session.connectUrl);
-          browser = connected.browser;
-          page = connected.page;
+          leaseToken = await claimEstamaContextLease(admin, job.store_id, "automation-worker", 45_000);
+          if (!leaseToken) {
+            connection = null;
+            activeStore = "";
+            throw new EstamaContextBusyError();
+          }
+          try {
+            const created = await createBrowserSession(connection.browserbase_context_id, false, { action: "worker", storeId: job.store_id });
+            bb = created.bb;
+            sessionId = created.session.id;
+            const connected = await connectSession(created.session.connectUrl);
+            browser = connected.browser;
+            page = connected.page;
+          } catch (error) {
+            if (bb && sessionId) await releaseSession(bb, sessionId);
+            await settleEstamaContext();
+            await releaseEstamaContextLease(admin, job.store_id, leaseToken);
+            leaseToken = null;
+            connection = null;
+            activeStore = "";
+            bb = null;
+            sessionId = "";
+            throw error;
+          }
           await admin.from("automation_jobs").update({ browserbase_session_id: sessionId }).eq("id", job.id);
         }
         if (!page || !connection) throw new Error("ブラウザセッションを開始できませんでした");
@@ -2674,6 +3033,10 @@ export async function processAvailableJobs(
   } finally {
     if (browser) await disconnect(browser);
     if (bb && sessionId) await releaseSession(bb, sessionId);
+    if (leaseToken && activeStore) {
+      await settleEstamaContext();
+      await releaseEstamaContextLease(admin, activeStore, leaseToken);
+    }
   }
   return results;
 }
