@@ -136,58 +136,6 @@ export class SoulActivationRequiredError extends Error {
   }
 }
 
-export class EstamaContextBusyError extends Error {
-  constructor(message = "別のエスたま同期が実行中です") {
-    super(message);
-    this.name = "EstamaContextBusyError";
-  }
-}
-
-async function claimEstamaContextLease(
-  admin: AdminClient,
-  storeId: string,
-  operation: string,
-  waitMs = 0,
-) {
-  const ownerToken = randomUUID();
-  const deadline = Date.now() + Math.max(0, waitMs);
-  do {
-    const { data, error } = await admin.rpc("claim_estama_context_lease", {
-      p_store_id: storeId,
-      p_owner_token: ownerToken,
-      p_operation: operation,
-      p_ttl_seconds: 480,
-    });
-    if (error) throw new Error(`エスたま同時実行ロックを取得できません: ${error.message}`);
-    if (data === true) return ownerToken;
-    if (Date.now() >= deadline) return null;
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-  } while (Date.now() <= deadline);
-  return null;
-}
-
-async function releaseEstamaContextLease(
-  admin: AdminClient,
-  storeId: string,
-  ownerToken: string | null,
-) {
-  if (!ownerToken) return;
-  const { error } = await admin.rpc("release_estama_context_lease", {
-    p_store_id: storeId,
-    p_owner_token: ownerToken,
-  });
-  if (error) {
-    console.warn(JSON.stringify({
-      level: "warning",
-      msg: "estama_context_lease_release_failed",
-      storeId,
-      error: error.message,
-    }));
-  }
-}
-
-const settleEstamaContext = () => new Promise((resolve) => setTimeout(resolve, 1_500));
-
 const requiredEnv = (name: string) => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} がVercelに設定されていません`);
@@ -2373,34 +2321,16 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   if (!input.contextId) throw new Error("Browserbaseの保存済みログイン情報がありません");
   if (!items.length) return { sessionId: null, shiftUrl: null, results: [] };
 
-  const admin = getAdminClient();
-  const leaseToken = await claimEstamaContextLease(
-    admin,
-    input.storeId,
-    "shift-batch",
-    45_000,
-  );
-  if (!leaseToken) throw new EstamaContextBusyError();
-
-  let created: Awaited<ReturnType<typeof createBrowserSession>>;
-  try {
-    created = await createBrowserSession(input.contextId, false, {
-      action: "edge-shift-worker",
-      storeId: input.storeId,
-      itemCount: String(items.length),
-    });
-  } catch (error) {
-    await releaseEstamaContextLease(admin, input.storeId, leaseToken);
-    throw error;
-  }
-  const { bb, session } = created;
+  const { bb, session } = await createBrowserSession(input.contextId, false, {
+    action: "edge-shift-worker",
+    storeId: input.storeId,
+    itemCount: String(items.length),
+  });
   let connected: Awaited<ReturnType<typeof connectSession>>;
   try {
     connected = await connectSession(session.connectUrl);
   } catch (error) {
     await releaseSession(bb, session.id);
-    await settleEstamaContext();
-    await releaseEstamaContextLease(admin, input.storeId, leaseToken);
     throw error;
   }
   const { browser, page } = connected;
@@ -2669,8 +2599,6 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
   } finally {
     await disconnect(browser);
     await releaseSession(bb, session.id);
-    await settleEstamaContext();
-    await releaseEstamaContextLease(admin, input.storeId, leaseToken);
   }
 }
 
@@ -2744,20 +2672,26 @@ const compactAvailabilityConfirmation = (value: string) => value
   .slice(0, 500);
 
 export async function refreshEstamaAvailability(
-  admin: AdminClient,
+  client: AdminClient,
   connection: Connection,
+  runToken: string,
   now = new Date(),
 ): Promise<EstamaAvailabilityRefreshResult> {
   if (!connection.browserbase_context_id) {
     throw new LoginRequiredError("Browserbaseの保存済みログイン情報がありません");
   }
 
-  const leaseToken = await claimEstamaContextLease(
-    admin,
-    connection.store_id,
-    "availability-refresh",
+  const leaseOwner = randomUUID();
+  const { data: leaseClaimed, error: leaseError } = await client.rpc(
+    "claim_estama_availability_lease",
+    {
+      p_run_token: runToken,
+      p_store_id: connection.store_id,
+      p_owner_token: leaseOwner,
+    },
   );
-  if (!leaseToken) {
+  if (leaseError) throw new Error(`エスたま同時実行ロックを取得できません: ${leaseError.message}`);
+  if (leaseClaimed !== true) {
     return {
       availabilityUrl: "",
       activeCount: 0,
@@ -2780,7 +2714,11 @@ export async function refreshEstamaAvailability(
       storeId: connection.store_id,
     });
   } catch (error) {
-    await releaseEstamaContextLease(admin, connection.store_id, leaseToken);
+    await client.rpc("release_estama_availability_lease", {
+      p_run_token: runToken,
+      p_store_id: connection.store_id,
+      p_owner_token: leaseOwner,
+    });
     throw error;
   }
   const { bb, session } = created;
@@ -2789,8 +2727,11 @@ export async function refreshEstamaAvailability(
     connected = await connectSession(session.connectUrl);
   } catch (error) {
     await releaseSession(bb, session.id);
-    await settleEstamaContext();
-    await releaseEstamaContextLease(admin, connection.store_id, leaseToken);
+    await client.rpc("release_estama_availability_lease", {
+      p_run_token: runToken,
+      p_store_id: connection.store_id,
+      p_owner_token: leaseOwner,
+    });
     throw error;
   }
   const { browser, page } = connected;
@@ -2915,8 +2856,20 @@ export async function refreshEstamaAvailability(
   } finally {
     await disconnect(browser);
     await releaseSession(bb, session.id);
-    await settleEstamaContext();
-    await releaseEstamaContextLease(admin, connection.store_id, leaseToken);
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const { error: releaseError } = await client.rpc("release_estama_availability_lease", {
+      p_run_token: runToken,
+      p_store_id: connection.store_id,
+      p_owner_token: leaseOwner,
+    });
+    if (releaseError) {
+      console.warn(JSON.stringify({
+        level: "warning",
+        msg: "estama_availability_lease_release_failed",
+        storeId: connection.store_id,
+        error: releaseError.message,
+      }));
+    }
   }
 }
 
@@ -2939,7 +2892,6 @@ export async function processAvailableJobs(
   let browser: Browser | null = null;
   let page: Page | null = null;
   let sessionId = "";
-  let leaseToken: string | null = null;
 
   try {
     for (let index = 0; index < limit; index += 1) {
@@ -2977,39 +2929,27 @@ export async function processAvailableJobs(
         if (!connection || activeStore !== job.store_id) {
           if (browser) await disconnect(browser);
           if (bb && sessionId) await releaseSession(bb, sessionId);
-          if (leaseToken && activeStore) {
-            await settleEstamaContext();
-            await releaseEstamaContextLease(admin, activeStore, leaseToken);
-          }
           browser = null;
           page = null;
           bb = null;
           sessionId = "";
-          leaseToken = null;
           connection = await getConnection(admin, job.store_id);
           activeStore = job.store_id;
           if (!connection?.browserbase_context_id || connection.status !== "ready") throw new LoginRequiredError("エステ魂ログイン設定が未完了です");
-          leaseToken = await claimEstamaContextLease(admin, job.store_id, "automation-worker", 45_000);
-          if (!leaseToken) {
-            connection = null;
-            activeStore = "";
-            throw new EstamaContextBusyError();
-          }
           try {
             const created = await createBrowserSession(connection.browserbase_context_id, false, { action: "worker", storeId: job.store_id });
             bb = created.bb;
             sessionId = created.session.id;
-            const connected = await connectSession(created.session.connectUrl);
-            browser = connected.browser;
-            page = connected.page;
+            const nextSession = await connectSession(created.session.connectUrl);
+            browser = nextSession.browser;
+            page = nextSession.page;
           } catch (error) {
             if (bb && sessionId) await releaseSession(bb, sessionId);
-            await settleEstamaContext();
-            await releaseEstamaContextLease(admin, job.store_id, leaseToken);
-            leaseToken = null;
             connection = null;
             activeStore = "";
             bb = null;
+            browser = null;
+            page = null;
             sessionId = "";
             throw error;
           }
@@ -3033,10 +2973,6 @@ export async function processAvailableJobs(
   } finally {
     if (browser) await disconnect(browser);
     if (bb && sessionId) await releaseSession(bb, sessionId);
-    if (leaseToken && activeStore) {
-      await settleEstamaContext();
-      await releaseEstamaContextLease(admin, activeStore, leaseToken);
-    }
   }
   return results;
 }
