@@ -113,51 +113,6 @@ comment on column public.estama_therapist_appeal_runs.click_started_at is
 comment on column public.estama_therapist_appeal_runs.attempt_count is
   'クリック前エラーの再試行回数を含む実行回数。恒久エラー時の外部ブラウザ消費を防ぐため最大3回。';
 
-create or replace function private.guard_estama_job_context_lease()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if new.provider <> 'estama'
-     or old.status <> 'queued'
-     or new.status <> 'running'
-     or new.store_id is null then
-    return new;
-  end if;
-
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended('estama-context:' || new.store_id::text, 0)
-  );
-
-  if exists (
-    select 1
-    from private.estama_context_leases as lease
-    where lease.store_id = new.store_id
-      and lease.expires_at > now()
-  ) then
-    return null;
-  end if;
-  return new;
-end;
-$$;
-
-revoke all on function private.guard_estama_job_context_lease()
-  from public, anon, authenticated;
-
-drop trigger if exists guard_estama_job_context_lease
-  on public.automation_jobs;
-create trigger guard_estama_job_context_lease
-before update of status on public.automation_jobs
-for each row
-when (
-  old.status = 'queued'
-  and new.status = 'running'
-  and new.provider = 'estama'
-)
-execute function private.guard_estama_job_context_lease();
-
 create or replace function public.claim_estama_appeal_dispatch(p_token text)
 returns jsonb
 language plpgsql
@@ -379,11 +334,6 @@ begin
     return jsonb_build_object('claimed', false, 'reason', 'slot_not_due');
   end if;
 
-  -- Serialize the running-job check with the queued -> running trigger so a
-  -- regular Estama job cannot start in the gap before this appeal lease.
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended('estama-context:' || p_store_id::text, 0)
-  );
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(
       'estama-appeal:' || p_store_id::text || ':' || v_business_date::text,
