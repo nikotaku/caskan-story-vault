@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 
 type Post = {
   id: string;
@@ -189,7 +190,7 @@ export default function TherapistPostPage() {
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
       await fetchPosts();
       if (results.some((result) => result.status === "rejected")) {
-        toast.warning("外部媒体の一部に送れませんでした。履歴から失敗分だけ再送できます");
+        toast.warning("外部媒体の一部へ送信できませんでした。履歴の状態を確認してください");
       } else {
         toast.success("2媒体への送信処理が完了しました");
       }
@@ -252,13 +253,14 @@ export default function TherapistPostPage() {
     const status = target === "o2" ? post.o2_status : post.esutama_status;
     const error = target === "o2" ? post.o2_error : post.esutama_error;
     const retryKey = `${post.id}:${target}`;
+    const reviewRequired = target === "esutama" && isEstamaReviewRequired(error);
     return (
       <div className="flex items-start justify-between gap-2 text-xs">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">{STATUS_ICON[status] || STATUS_ICON.pending}<span>{label}</span><span className="text-muted-foreground">{status}</span></div>
-          {error && <p className="mt-1 text-red-600 break-words">{error}</p>}
+          <div className="flex items-center gap-1.5">{reviewRequired ? <ShieldAlert size={13} className="text-amber-600" /> : STATUS_ICON[status] || STATUS_ICON.pending}<span>{label}</span><span className="text-muted-foreground">{reviewRequired ? "要確認（再送停止）" : status}</span></div>
+          {error && <p className={`mt-1 break-words ${reviewRequired ? "text-amber-700" : "text-red-600"}`}>{error}</p>}
         </div>
-        {["pending", "failed", "skipped"].includes(status) && (
+        {!reviewRequired && ["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === retryKey}>
             {retrying === retryKey ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             <span className="ml-1">再送</span>
@@ -285,7 +287,7 @@ export default function TherapistPostPage() {
         </div>
 
         <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          O2と魂セラピストへ別々に送信します。片方が失敗しても、失敗した媒体だけ再送できます。HP写メ日記やその他のSNSには掲載しません。
+          O2と魂セラピストへ別々に送信します。通常の送信前エラーは失敗した媒体だけ再送できます。送信結果が「要確認」の場合は重複防止のため再送を停止します。HP写メ日記やその他のSNSには掲載しません。
         </div>
 
         {posts.length === 0 ? <div className="text-center py-12 text-muted-foreground text-sm">投稿がありません</div> : (
