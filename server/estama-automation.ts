@@ -5,6 +5,12 @@ import { createHash } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { uploadPhotos } from "./estama-photo-upload.js";
+import {
+  isEstamaAvailabilitySelect,
+  isEstamaShiftActive,
+  jstBusinessMinutes,
+  parseEstamaShiftRange,
+} from "./estama-availability.js";
 import { clickWithDomFallback } from "./playwright-actions.js";
 
 type QrDecoder = (
@@ -2582,6 +2588,181 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
         ...entry,
         screenshotBytes: Buffer.byteLength(screenshotBase64, "base64"),
       })),
+    };
+  } finally {
+    await disconnect(browser);
+    await releaseSession(bb, session.id);
+  }
+}
+
+type AvailabilityControl = {
+  index: number;
+  options: string[];
+  text: string;
+  castName: string;
+};
+
+export type EstamaAvailabilityRefreshResult = {
+  availabilityUrl: string;
+  activeCount: number;
+  clearedCount: number;
+  skippedCount: number;
+  castNames: string[];
+  confirmation: string;
+  validUntil: string | null;
+  updated: boolean;
+};
+
+async function discoverAvailabilityAdminUrl(page: Page) {
+  const findLink = async () => {
+    const links = await page.locator("a[href]").evaluateAll((elements) => elements.map((element) => ({
+      href: (element as HTMLAnchorElement).href,
+      text: (element.textContent || "").normalize("NFKC").replace(/\s+/g, "").trim(),
+    })));
+    return links.find((link) => link.text.includes("ご案内状況"))?.href || null;
+  };
+
+  await page.goto(ESTAMA_CAST_EDIT_URL, { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page, "#Name");
+  let url = await findLink();
+  if (url) return url;
+
+  await page.goto("https://estama.jp/admin/", { waitUntil: "domcontentloaded" });
+  await ensureAdminLogin(page);
+  url = await findLink();
+  if (url) return url;
+  throw new Error("エスたま管理画面の「ご案内状況」メニューが見つかりません");
+}
+
+async function readAvailabilityControls(page: Page): Promise<AvailabilityControl[]> {
+  return page.locator("select").evaluateAll((elements) => elements.map((element, index) => {
+    const select = element as HTMLSelectElement;
+    const options = Array.from(select.options).map((option) => (option.textContent || "").trim());
+    let container: HTMLElement | null = select.parentElement;
+    let text = "";
+    for (let depth = 0; container && depth < 8; depth += 1) {
+      text = (container.innerText || "").replace(/\s+/g, " ").trim();
+      if (/\d{1,2}:\d{2}\s*[〜～~\-–—]\s*\d{1,2}:\d{2}/.test(text)) break;
+      container = container.parentElement;
+    }
+    const nameElement = container?.querySelector(
+      'h1, h2, h3, h4, strong, b, a[href*="cast"], a[href*="therapist"]',
+    );
+    const castName = (nameElement?.textContent || "").replace(/\s+/g, " ").trim();
+    return { index, options, text, castName };
+  }));
+}
+
+const compactAvailabilityConfirmation = (value: string) => value
+  .split("\n")
+  .map((line) => line.replace(/\s+/g, " ").trim())
+  .filter((line) => /ご案内状況を表示しました|まで表示|残り\d+分/.test(line))
+  .slice(0, 3)
+  .join(" / ")
+  .slice(0, 500);
+
+export async function refreshEstamaAvailability(
+  connection: Connection,
+  now = new Date(),
+): Promise<EstamaAvailabilityRefreshResult> {
+  if (!connection.browserbase_context_id) {
+    throw new LoginRequiredError("Browserbaseの保存済みログイン情報がありません");
+  }
+
+  const { bb, session } = await createBrowserSession(connection.browserbase_context_id, false, {
+    action: "hourly-availability-refresh",
+    storeId: connection.store_id,
+  });
+  const { browser, page } = await connectSession(session.connectUrl);
+  page.setDefaultTimeout(10_000);
+
+  try {
+    const availabilityUrl = await discoverAvailabilityAdminUrl(page);
+    await page.goto(availabilityUrl, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    await page.waitForTimeout(500);
+
+    const controls = (await readAvailabilityControls(page))
+      .filter((control) => isEstamaAvailabilitySelect(control.options));
+    if (!controls.length) {
+      throw new Error("エスたまのセラピスト別「ご案内状況」欄が見つかりません");
+    }
+
+    const currentMinutes = jstBusinessMinutes(now);
+    const castNames: string[] = [];
+    let activeCount = 0;
+    let clearedCount = 0;
+    let skippedCount = 0;
+
+    for (const control of controls) {
+      const range = parseEstamaShiftRange(control.text);
+      if (!range) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const select = page.locator("select").nth(control.index);
+      const active = isEstamaShiftActive(range, currentMinutes);
+      const targetLabel = active ? "今すぐ" : "未設定";
+      await select.selectOption({ label: targetLabel });
+      if (active) {
+        activeCount += 1;
+        castNames.push(control.castName || `出勤者${activeCount}`);
+      } else {
+        clearedCount += 1;
+      }
+    }
+
+    if (activeCount === 0) {
+      return {
+        availabilityUrl,
+        activeCount,
+        clearedCount,
+        skippedCount,
+        castNames,
+        confirmation: "現在勤務中のセラピストがいないため更新対象なし",
+        validUntil: null,
+        updated: false,
+      };
+    }
+
+    let dialogText = "";
+    page.once("dialog", async (dialog: Dialog) => {
+      dialogText = dialog.message();
+      await dialog.accept();
+    });
+    let submit = page.locator('button, a, input[type="submit"], input[type="button"]').filter({
+      hasText: /今すぐご案内可.*表示/,
+    }).last();
+    if (!await submit.count()) {
+      submit = page.locator(
+        'input[type="submit"][value*="今すぐご案内可"], input[type="button"][value*="今すぐご案内可"]',
+      ).last();
+    }
+    if (!await submit.count()) {
+      throw new Error("エスたまの「今すぐご案内可で表示」ボタンが見つかりません");
+    }
+
+    await clickWithDomFallback(submit, 10_000);
+    await page.waitForTimeout(1_000);
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const confirmation = compactAvailabilityConfirmation(`${dialogText}\n${bodyText}`);
+    const validUntil = `${dialogText}\n${bodyText}`.match(
+      /(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})まで表示/,
+    )?.[1] || null;
+    if (!dialogText.includes("表示しました") && !validUntil) {
+      throw new Error("「今すぐご案内可」の更新完了を画面上で確認できませんでした");
+    }
+
+    return {
+      availabilityUrl,
+      activeCount,
+      clearedCount,
+      skippedCount,
+      castNames: [...new Set(castNames)],
+      confirmation: confirmation || "◎今すぐご案内可で更新完了",
+      validUntil,
+      updated: true,
     };
   } finally {
     await disconnect(browser);
