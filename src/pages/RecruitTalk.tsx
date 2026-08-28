@@ -258,15 +258,26 @@ export default function RecruitTalk() {
 
           <Section>
             <SectionTitle sub="AUTO POSTING">投稿作業を、一度にまとめる</SectionTitle>
-            <img
-              src={simultaneousPostSystemImage}
-              alt="1枚の写真と文章をホームページ・O2・魂セラピストへ同時投稿する艶華の集客支援システム"
-              width={1080}
-              height={1350}
-              loading="lazy"
-              decoding="async"
-              className="h-auto w-full rounded-3xl border border-rose-100 shadow-sm"
-            />
+            <a
+              href={simultaneousPostSystemImage}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="艶華の同時投稿システム画像を原寸で開く"
+              className="block overflow-hidden rounded-3xl border border-rose-100 bg-white shadow-sm transition hover:shadow-md"
+            >
+              <img
+                src={simultaneousPostSystemImage}
+                alt="写真1枚を600×600の正方形に整え、文章と一緒にホームページ・O2・魂セラピストへ同時投稿する艶華の集客支援システム"
+                width={1080}
+                height={1350}
+                loading="lazy"
+                decoding="async"
+                className="h-auto w-full"
+              />
+            </a>
+            <p className="mt-3 text-center text-xs leading-5 text-gray-500">
+              画像をタップすると原寸で確認できます。テスト投稿ではホームページへ掲載されません。
+            </p>
           </Section>
         </>
       )}
