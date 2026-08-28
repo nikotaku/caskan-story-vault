@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { canDeleteFailedCastPost } from "@/lib/cast-post-deletion";
 import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 import { POST_IMAGE_SIZE, prepareSquarePostImage } from "@/lib/post-image";
 
@@ -43,6 +44,7 @@ interface Post {
   image_urls: string[] | null;
   status: string;
   hp_status: string;
+  hp_error: string | null;
   o2_status: string;
   esutama_status: string;
   o2_error: string | null;
@@ -77,13 +79,10 @@ const rpc = (name: string, args: Record<string, unknown>) =>
 const createTestPostBody = () => `【動作確認】\nO2・魂セラピスト連携のテスト投稿です。\n${format(new Date(), "yyyy年M月d日 HH:mm", { locale: ja })}`;
 
 const canDeleteFailedPost = (post: Post) => {
-  if (isEstamaReviewRequired(post.esutama_error)) return false;
-  const hasPublishedTarget = [post.hp_status, post.o2_status, post.esutama_status].includes("posted");
-  const isPosting = [post.o2_status, post.esutama_status].includes("posting");
-  const hasError = post.status === "failed"
-    || [post.o2_status, post.esutama_status].some((status) => ["failed", "skipped"].includes(status))
-    || Boolean(post.o2_error || post.esutama_error);
-  return hasError && !hasPublishedTarget && !isPosting;
+  return canDeleteFailedCastPost({
+    ...post,
+    estamaReviewRequired: isEstamaReviewRequired(post.esutama_error),
+  });
 };
 
 export default function CastPostManagement() {
@@ -307,12 +306,14 @@ export default function CastPostManagement() {
       const uploaded = await uploadImages();
       uploadedPaths = uploaded.paths;
       setUploadingImages(false);
+      const publishToHp = !testMode;
       const { data, error } = await rpc("create_admin_multi_post", {
         p_store_id: storeId,
         p_cast_id: form.castId,
         p_title: form.title || null,
         p_body: body,
         p_image_urls: uploaded.urls.length ? uploaded.urls : null,
+        p_publish_hp: publishToHp,
       });
       if (error || typeof data !== "string") throw new Error(error?.message || "投稿を作成できませんでした");
       postCreated = true;
@@ -321,14 +322,18 @@ export default function CastPostManagement() {
       clearPostQuery();
       setForm({ castId: "", title: "", body: "" });
       clearSelectedImages();
-      toast.success("O2・魂セラピストへ送信中です");
+      toast.success(publishToHp
+        ? "HP写メ日記へ掲載し、O2・魂セラピストへ送信中です"
+        : "O2・魂セラピストへテスト送信中です");
       await load();
       const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
       await load();
       if (results.some((result) => result.status === "rejected")) {
         toast.warning("外部媒体の一部へ送信できませんでした。投稿履歴の状態を確認してください");
       } else {
-        toast.success("O2・魂セラピストへの投稿処理が完了しました");
+        toast.success(publishToHp
+          ? "HP写メ日記・O2・魂セラピストへの投稿が完了しました"
+          : "O2・魂セラピストへのテスト投稿が完了しました");
       }
     } catch (error) {
       let cleanupFailed = false;
@@ -361,10 +366,31 @@ export default function CastPostManagement() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const { data, error } = await rpc("delete_admin_failed_cast_post", { p_post_id: deleteTarget.id });
-      if (error || data !== true) throw new Error(error?.message || "投稿を削除できませんでした");
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("ログインが期限切れです");
+      const response = await fetch("/api/cast-posts/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ postId: deleteTarget.id }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        deleted?: boolean;
+        imageCleanupFailed?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !payload.deleted) {
+        throw new Error(payload.error || "投稿を削除できませんでした");
+      }
       setDeleteTarget(null);
-      toast.success("送信エラーの投稿を削除しました");
+      if (payload.imageCleanupFailed) {
+        toast.warning("エラー履歴とHP写メ日記は削除しましたが、保存画像の削除に失敗しました");
+      } else {
+        toast.success("エラー履歴・HP写メ日記・保存画像を削除しました");
+      }
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "投稿を削除できませんでした");
@@ -372,6 +398,15 @@ export default function CastPostManagement() {
       setDeleting(false);
     }
   };
+
+  const hpStatusRow = (post: Post) => (
+    <div className="flex items-start gap-1.5 text-xs">
+      {STATUS_ICON[post.hp_status] || STATUS_ICON.pending}
+      <span className="font-medium">HP写メ日記</span>
+      <span className="text-muted-foreground">{post.hp_status === "skipped" ? "未掲載" : STATUS_LABEL[post.hp_status] || post.hp_status}</span>
+      {post.hp_error && <span className="text-red-600">{post.hp_error}</span>}
+    </div>
+  );
 
   const statusRow = (post: Post, target: Target, label: string) => {
     const status = target === "o2" ? post.o2_status : post.esutama_status;
@@ -402,7 +437,7 @@ export default function CastPostManagement() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">一括投稿管理</h1>
-              <p className="text-sm text-muted-foreground">{store?.name || "店舗"}のO2・魂セラピストへ同時投稿します</p>
+              <p className="text-sm text-muted-foreground">{store?.name || "店舗"}のHP写メ日記・O2・魂セラピストへ同時掲載します</p>
             </div>
             <Button onClick={openNewPost}><Plus size={16} className="mr-1" />新規投稿</Button>
           </div>
@@ -420,6 +455,7 @@ export default function CastPostManagement() {
                     <div key={cast.id} className="flex items-center justify-between border-b border-dashed py-1.5 text-xs">
                       <span className="truncate font-medium">{cast.name}</span>
                       <span className="flex shrink-0 gap-2">
+                        <Badge>HP</Badge>
                         <Badge variant={sites.has("o2") ? "default" : "outline"}>O2</Badge>
                         <Badge variant={sites.has("esutama") ? "default" : "outline"}>魂</Badge>
                       </span>
@@ -455,7 +491,8 @@ export default function CastPostManagement() {
                       </Button>
                     )}
                   </div>
-                  <div className="grid gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-2">
+                  <div className="grid gap-2 rounded-lg bg-muted/40 p-3 sm:grid-cols-3">
+                    {hpStatusRow(post)}
                     {statusRow(post, "o2", "O2")}
                     {statusRow(post, "esutama", "魂セラピスト")}
                   </div>
@@ -472,7 +509,7 @@ export default function CastPostManagement() {
           onEscapeKeyDown={(event) => { if (submitting || preparingImage) event.preventDefault(); }}
           onInteractOutside={(event) => { if (submitting || preparingImage) event.preventDefault(); }}
         >
-          <DialogHeader><DialogTitle>{testMode ? "O2・魂セラピストへテスト投稿" : "2媒体へ一括投稿"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{testMode ? "O2・魂へテスト投稿" : "HP・O2・魂へ一括投稿"}</DialogTitle></DialogHeader>
           <div className="mt-2 space-y-4">
             <div><Label>セラピスト</Label><Select value={form.castId} onValueChange={(value) => setForm({ ...form, castId: value })} disabled={submitting}><SelectTrigger><SelectValue placeholder="選択してください" /></SelectTrigger><SelectContent>{casts.map((cast) => <SelectItem key={cast.id} value={cast.id}>{cast.name}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>タイトル（任意）</Label><Input maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} disabled={submitting} /></div>
@@ -519,7 +556,11 @@ export default function CastPostManagement() {
                 </div>
               )}
             </div>
-            <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">O2と魂セラピストへ同時送信します。HP写メ日記やその他のSNSには掲載しません。</p>
+            <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+              {testMode
+                ? "テスト投稿はO2と魂セラピストだけへ送信し、公開HPには掲載しません。"
+                : "同じタイトル・本文・600×600画像をHP写メ日記へ掲載し、O2と魂セラピストへ送信します。"}
+            </p>
             <div className="flex gap-2"><Button className="flex-1" onClick={handleSubmit} disabled={submitting || preparingImage}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{uploadingImages ? "画像アップロード中" : testMode ? "テスト投稿" : "一括投稿"}</Button><Button variant="outline" className="flex-1" onClick={() => changeDialogOpen(false)} disabled={submitting || preparingImage}>キャンセル</Button></div>
           </div>
         </DialogContent>
@@ -528,9 +569,9 @@ export default function CastPostManagement() {
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>送信エラーの投稿を削除しますか？</AlertDialogTitle>
+            <AlertDialogTitle>送信エラーの履歴を削除しますか？</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget?.casts?.name}さんの投稿履歴と、関連する再送待ちジョブを削除します。この操作は元に戻せません。
+              {deleteTarget?.casts?.name}さんの管理画面上の投稿履歴、HP写メ日記、関連する再送ジョブと保存画像を削除します。O2・魂セラピストですでに投稿済みの内容は削除されません。この操作は元に戻せません。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

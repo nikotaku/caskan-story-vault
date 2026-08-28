@@ -37,11 +37,15 @@ export default function CastDiary() {
     if (!id) return;
     Promise.all([
       supabase.from("casts").select("name").eq("id", id).eq("store_id", storeId).eq("is_active", true).maybeSingle(),
-      supabase.from("cast_diaries" as any).select("*").eq("cast_id", id).order("display_order", { ascending: true }),
+      supabase
+        .from("cast_diaries")
+        .select("id,title,category,image_url,image_urls,body,posted_at,external_url")
+        .eq("cast_id", id)
+        .order("display_order", { ascending: true }),
     ]).then(([c, d]) => {
       const activeCast = c.data as { name: string } | null;
       setCastName(activeCast?.name ?? "");
-      setDiaries(activeCast ? (((d.data as any[]) ?? []) as Diary[]) : []);
+      setDiaries(activeCast ? ((d.data ?? []) as Diary[]) : []);
       setLoading(false);
       document.title = activeCast
         ? `${activeCast.name} 写メ日記 | ${store?.name ?? ""}`

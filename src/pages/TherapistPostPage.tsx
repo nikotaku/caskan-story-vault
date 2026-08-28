@@ -31,8 +31,10 @@ type Post = {
   title: string | null;
   body: string;
   status: string;
+  hp_status: string;
   o2_status: string;
   esutama_status: string;
+  hp_error: string | null;
   o2_error: string | null;
   esutama_error: string | null;
   created_at: string;
@@ -220,7 +222,7 @@ export default function TherapistPostPage() {
       setForm({ title: "", body: "", confirmed: false });
       clearSelectedImage();
       setShowPost(false);
-      toast.success("O2・魂セラピストへ送信中です");
+      toast.success("HP写メ日記へ掲載し、O2・魂セラピストへ送信中です");
       await fetchPosts();
       const results = await Promise.allSettled([
         publishTarget(payload.postId, "o2"),
@@ -230,7 +232,7 @@ export default function TherapistPostPage() {
       if (results.some((result) => result.status === "rejected")) {
         toast.warning("外部媒体の一部へ送信できませんでした。履歴の状態を確認してください");
       } else {
-        toast.success("2媒体への送信処理が完了しました");
+        toast.success("HP写メ日記・O2・魂セラピストへの投稿が完了しました");
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "投稿に失敗しました";
@@ -316,24 +318,34 @@ export default function TherapistPostPage() {
     );
   };
 
+  const hpStatusRow = (post: Post) => (
+    <div className="flex items-start gap-1.5 text-xs">
+      {STATUS_ICON[post.hp_status] || STATUS_ICON.pending}
+      <span>HP写メ日記</span>
+      <span className="text-muted-foreground">{post.hp_status === "skipped" ? "未掲載" : post.hp_status}</span>
+      {post.hp_error && <span className="text-red-600">{post.hp_error}</span>}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="border-b bg-card/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center gap-3 max-w-2xl">
           <button onClick={() => navigate(`/therapist/${token}`)} className="text-primary flex items-center gap-1 text-sm"><ChevronLeft size={18} />戻る</button>
-          <div className="flex-1"><p className="font-bold">2媒体投稿</p><p className="text-xs text-muted-foreground">O2・魂セラピスト</p></div>
+          <div className="flex-1"><p className="font-bold">同時投稿</p><p className="text-xs text-muted-foreground">HP写メ日記・O2・魂セラピスト</p></div>
           <button aria-label="O2ログイン設定" onClick={() => setShowCreds(true)} className="text-muted-foreground hover:text-foreground"><Settings size={19} /></button>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-4 max-w-2xl space-y-4">
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="rounded border border-green-200 bg-green-50 p-2 text-center text-green-700">HP写メ日記<br />✓ 自動掲載</div>
           <button onClick={() => setShowCreds(true)} className={`rounded border p-2 text-center ${o2Connected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>O2<br />{o2Connected ? "✓ 設定済み" : "未設定"}</button>
           <div className={`rounded border p-2 text-center ${estamaConnected ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>魂セラピスト<br />{estamaConnected ? "✓ 接続済み" : "管理者設定待ち"}</div>
         </div>
 
         <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          O2と魂セラピストへ別々に送信します。通常の送信前エラーは失敗した媒体だけ再送できます。送信結果が「要確認」の場合は重複防止のため再送を停止します。HP写メ日記やその他のSNSには掲載しません。
+          HP写メ日記へ同じ内容を掲載し、O2と魂セラピストへ別々に送信します。通常の送信前エラーは失敗した媒体だけ再送できます。送信結果が「要確認」の場合は重複防止のため再送を停止します。
         </div>
 
         {posts.length === 0 ? <div className="text-center py-12 text-muted-foreground text-sm">投稿がありません</div> : (
@@ -342,6 +354,7 @@ export default function TherapistPostPage() {
               <article key={post.id} className="border rounded-xl p-4 bg-card space-y-3">
                 <div>{post.title && <p className="font-semibold text-sm">{post.title}</p>}<p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">{post.body}</p><p className="text-xs text-muted-foreground mt-1">{format(new Date(post.created_at), "M/d HH:mm", { locale: ja })}</p></div>
                 <div className="border-t pt-3 space-y-2">
+                  {hpStatusRow(post)}
                   {statusRow(post, "o2", "O2")}
                   {statusRow(post, "esutama", "魂セラピスト")}
                 </div>
@@ -359,7 +372,7 @@ export default function TherapistPostPage() {
           onEscapeKeyDown={(event) => { if (submitting || preparingImage) event.preventDefault(); }}
           onInteractOutside={(event) => { if (submitting || preparingImage) event.preventDefault(); }}
         >
-          <DialogHeader><DialogTitle>2媒体へ同時投稿</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>HP・O2・魂へ同時投稿</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div><Label htmlFor="post-title">タイトル（任意・120文字まで）</Label><Input id="post-title" maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
             <div><Label htmlFor="post-body">本文（5000文字まで）</Label><Textarea id="post-body" rows={7} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /><p className="text-right text-xs text-muted-foreground mt-1">{form.body.length}/5000</p></div>
@@ -373,9 +386,9 @@ export default function TherapistPostPage() {
             </div>
             <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
               <input type="checkbox" className="mt-0.5" checked={form.confirmed} onChange={(event) => setForm({ ...form, confirmed: event.target.checked })} />
-              <span>私はセラピスト本人として投稿し、O2を含む各媒体の投稿ルールを確認・順守します。</span>
+              <span>私はセラピスト本人として投稿し、HP写メ日記とO2を含む各媒体の投稿ルールを確認・順守します。</span>
             </label>
-            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading || preparingImage}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{uploading ? "画像アップロード中" : "O2・魂セラピストへ投稿"}</Button>
+            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading || preparingImage}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{uploading ? "画像アップロード中" : "HP・O2・魂へ投稿"}</Button>
           </div>
         </DialogContent>
       </Dialog>
