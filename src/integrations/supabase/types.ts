@@ -6437,6 +6437,10 @@ export type Database = {
         Args: { p_job_id: string; p_result: Json; p_token: string }
         Returns: boolean
       }
+      replace_imported_cast_diaries: {
+        Args: { p_cast_id: string; p_rows: Json }
+        Returns: number
+      }
       save_o2_soul_connection_admin_v1: {
         Args: {
           p_cast_id: string

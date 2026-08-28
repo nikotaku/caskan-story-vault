@@ -399,6 +399,15 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
       await updateOverallStatus(admin, post.id);
       return json(req, { jobId: claimed.id, status: "review_required", error: message }, 500);
     }
+    const publicDiaryUrl = stringValue(result.url);
+    if (publicDiaryUrl) {
+      const { error: diaryLinkError } = await admin.from("cast_diaries")
+        .update({ external_url: publicDiaryUrl })
+        .eq("source_post_id", post.id);
+      if (diaryLinkError) {
+        console.warn(JSON.stringify({ event: "estama_hp_diary_link_failed", postId: post.id, error: diaryLinkError.message }));
+      }
+    }
     await updateOverallStatus(admin, post.id);
     return json(req, { jobId: claimed.id, status: "posted", result });
   }

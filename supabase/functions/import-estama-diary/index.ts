@@ -255,22 +255,17 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // エステ魂から取り込んだ行だけを置き換える。
+    // 既存取込行の削除と新規行の保存をDB内の1トランザクションで置き換える。
     // 同時投稿から作成したHP写メ日記（source_post_idあり）は保持する。
-    const { error: deleteErr } = await sb
-      .from("cast_diaries")
-      .delete()
-      .eq("cast_id", cast_id)
-      .is("source_post_id", null);
-    if (deleteErr) throw new Error("既存データの整理に失敗: " + deleteErr.message);
-    if (savedRows.length) {
-      const { error: insErr } = await sb.from("cast_diaries").insert(savedRows);
-      if (insErr) throw new Error("保存に失敗: " + insErr.message);
-    }
+    const { data: replacedCount, error: replaceError } = await sb.rpc(
+      "replace_imported_cast_diaries",
+      { p_cast_id: cast_id, p_rows: savedRows },
+    );
+    if (replaceError) throw new Error("保存に失敗: " + replaceError.message);
 
     return new Response(JSON.stringify({
       success: true,
-      count: savedRows.length,
+      count: typeof replacedCount === "number" ? replacedCount : savedRows.length,
       linkedExisting,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
