@@ -48,11 +48,12 @@ export async function inspectEstamaDiaryPhotoState(form: Locator): Promise<Estam
 
 export function isEstamaDiaryPhotoReady(state: EstamaDiaryPhotoState) {
   return state.photoDataLength > 0
+    && state.photoDataIsImage
     && state.previewHasSource
     && state.previewVisible
     && state.previewComplete
-    && state.previewWidth > 0
-    && state.previewHeight > 0;
+    && state.previewWidth === 600
+    && state.previewHeight === 600;
 }
 
 const safeStateForLog = (state: EstamaDiaryPhotoState) => ({

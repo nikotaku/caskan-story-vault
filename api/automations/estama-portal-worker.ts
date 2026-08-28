@@ -59,13 +59,8 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!prepared?.browserbaseContextId || !prepared.cast?.name || !prepared.post?.body) {
       throw new Error("魂セラピスト投稿データが不足しています");
     }
-    const diagnosticOnly = req.body?.diagnosticOnly === true;
     const imageUrls = requireSingleDiaryImageUrls(prepared.post.imageUrls);
-    const result = await runPreparedEstamaDiary(prepared, { diagnosticOnly });
-    if (diagnosticOnly) {
-      res.status(200).json({ status: "inspected", result });
-      return;
-    }
+    const result = await runPreparedEstamaDiary(prepared);
     const expectedPhotos = imageUrls.length;
     try {
       if (result.posted !== true) throw new Error("魂セラピストの投稿完了報告がありません");
