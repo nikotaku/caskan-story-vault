@@ -1880,6 +1880,7 @@ async function inspectDiaryPhotoState(form: Locator) {
       }
     };
     return {
+      readyState: document.readyState,
       form: {
         id: element.id || "",
         action: element instanceof HTMLFormElement ? new URL(element.action, window.location.href).pathname : "",
@@ -1898,6 +1899,7 @@ async function inspectDiaryPhotoState(form: Locator) {
         formOwned: input.form === element,
         parentTag: input.parentElement?.tagName || "",
         parentClass: input.parentElement?.className || "",
+        onchange: input.getAttribute("onchange") || "",
       })),
       hiddenInputs: Array.from(element.querySelectorAll<HTMLInputElement>('input[type="hidden"]')).map((input) => ({
         id: input.id || "",
@@ -1926,7 +1928,35 @@ async function inspectDiaryPhotoState(form: Locator) {
         ariaInvalid: item.getAttribute("aria-invalid") || "",
         visible: item.getClientRects().length > 0,
       })),
+      visibleDialogs: Array.from(document.querySelectorAll<HTMLElement>(
+        'dialog, [role="dialog"], [class*="modal" i], [class*="crop" i]',
+      )).filter((item) => item.getClientRects().length > 0).slice(0, 20).map((item) => ({
+        tag: item.tagName,
+        id: item.id || "",
+        className: item.className || "",
+        text: (item.innerText || "").replace(/\s+/g, " ").trim().slice(0, 240),
+      })),
+      scripts: Array.from(document.scripts).map((script) => {
+        if (!script.src) return "inline";
+        try {
+          const url = new URL(script.src, window.location.href);
+          return `${url.protocol}//${url.hostname}${url.pathname}`;
+        } catch {
+          return "other";
+        }
+      }),
     };
+  });
+}
+
+async function replayDiaryPhotoSelection(form: Locator) {
+  return form.evaluate((element) => {
+    const input = element.querySelector<HTMLInputElement>('input[type="file"]#photo-input')
+      || element.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input || !input.files?.length) return false;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
   });
 }
 
@@ -1987,18 +2017,27 @@ export async function runPreparedEstamaDiary(
         requiredWidth: ESTAMA_DIARY_IMAGE_SIZE,
         requiredHeight: ESTAMA_DIARY_IMAGE_SIZE,
       });
-    } finally {
+    } catch (error) {
       if (options.diagnosticOnly) accountPage.off("response", capturePhotoResponse);
+      throw error;
     }
     assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
     await assertFormPhotoCount(diaryForm, imageUrls.length);
     if (options.diagnosticOnly) {
+      const afterInitialSelection = await inspectDiaryPhotoState(diaryForm);
+      const replayedSelectionEvents = await replayDiaryPhotoSelection(diaryForm);
+      await accountPage.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+      await accountPage.waitForTimeout(2_000);
+      const afterReplayedSelection = await inspectDiaryPhotoState(diaryForm);
+      accountPage.off("response", capturePhotoResponse);
       return {
         posted: false,
         uploadedPhotos,
         diagnostic: {
           before: photoDiagnosticBefore,
-          after: await inspectDiaryPhotoState(diaryForm),
+          afterInitialSelection,
+          replayedSelectionEvents,
+          afterReplayedSelection,
           network: photoNetwork,
         },
       };
