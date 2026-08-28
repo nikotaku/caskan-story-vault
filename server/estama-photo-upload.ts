@@ -1,5 +1,5 @@
 import type { Locator, Page } from "playwright-core";
-import { assertImageSize } from "../supabase/functions/post-to-sites/image-size.ts";
+import { assertImageSize } from "../supabase/functions/post-to-sites/image-size.js";
 
 type PhotoFile = {
   name: string;
