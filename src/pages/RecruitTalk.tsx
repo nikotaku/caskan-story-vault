@@ -3,6 +3,7 @@ import benefitPrivateRoomImage from "@/assets/recruit/enka-benefit-private-room.
 import benefitSnsManagementImage from "@/assets/recruit/enka-benefit-sns-management.png";
 import benefitTaxiImage from "@/assets/recruit/enka-benefit-taxi.png";
 import benefitTaxHousingImage from "@/assets/recruit/enka-benefit-tax-housing.png";
+import simultaneousPostSystemImage from "@/assets/recruit/enka-simultaneous-post-system.png";
 import { useStore } from "@/hooks/useStore";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import {
@@ -228,31 +229,46 @@ export default function RecruitTalk() {
 
       {/* ===== 艶華の4つのメリット ===== */}
       {storeId === ENKA_STORE_ID && (
-        <Section className="bg-gradient-to-br from-rose-50 via-pink-50 to-amber-50">
-          <SectionTitle sub="ENKA BENEFITS">艶華で働く4つのメリット</SectionTitle>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {ENKA_BENEFITS.map((benefit) => (
-              <article
-                key={benefit.title}
-                className="overflow-hidden rounded-3xl border border-white/80 bg-white shadow-sm"
-              >
-                <img
-                  src={benefit.image}
-                  alt={benefit.alt}
-                  width={400}
-                  height={400}
-                  loading="lazy"
-                  decoding="async"
-                  className="aspect-square w-full object-cover"
-                />
-                <div className="p-5">
-                  <h3 className="text-lg font-bold text-gray-800">{benefit.title}</h3>
-                  <p className="mt-2 text-sm leading-7 text-gray-600">{benefit.description}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </Section>
+        <>
+          <Section className="bg-gradient-to-br from-rose-50 via-pink-50 to-amber-50">
+            <SectionTitle sub="ENKA BENEFITS">艶華で働く4つのメリット</SectionTitle>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {ENKA_BENEFITS.map((benefit) => (
+                <article
+                  key={benefit.title}
+                  className="overflow-hidden rounded-3xl border border-white/80 bg-white shadow-sm"
+                >
+                  <img
+                    src={benefit.image}
+                    alt={benefit.alt}
+                    width={400}
+                    height={400}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-square w-full object-cover"
+                  />
+                  <div className="p-5">
+                    <h3 className="text-lg font-bold text-gray-800">{benefit.title}</h3>
+                    <p className="mt-2 text-sm leading-7 text-gray-600">{benefit.description}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </Section>
+
+          <Section>
+            <SectionTitle sub="AUTO POSTING">投稿作業を、一度にまとめる</SectionTitle>
+            <img
+              src={simultaneousPostSystemImage}
+              alt="1枚の写真と文章をホームページ・O2・魂セラピストへ同時投稿する艶華の集客支援システム"
+              width={1080}
+              height={1350}
+              loading="lazy"
+              decoding="async"
+              className="h-auto w-full rounded-3xl border border-rose-100 shadow-sm"
+            />
+          </Section>
+        </>
       )}
 
       {/* ===== 働きやすさ ===== */}
