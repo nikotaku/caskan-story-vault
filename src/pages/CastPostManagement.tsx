@@ -131,7 +131,7 @@ export default function CastPostManagement() {
     const [castsResult, postsResult, credentialsResult] = await Promise.all([
       supabase.from("casts").select("id,name").eq("store_id", storeId).eq("is_active", true).order("display_order", { ascending: true }),
       supabase.from("cast_posts").select("*,casts(name)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(100),
-      supabase.from("cast_site_credentials").select("cast_id,site").eq("store_id", storeId).in("site", ["o2", "esutama"]),
+      supabase.rpc("get_site_connection_status_admin", { p_store_id: storeId }),
     ]);
     if (castsResult.error || postsResult.error || credentialsResult.error) {
       toast.error("投稿管理データを取得できませんでした");
