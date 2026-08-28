@@ -1,6 +1,7 @@
 import {
   EstamaSubmissionUncertainError,
   LoginRequiredError,
+  requireSingleDiaryImageUrls,
   runPreparedEstamaDiary,
   SoulActivationRequiredError,
   SoulLoginRequiredError,
@@ -58,10 +59,9 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!prepared?.browserbaseContextId || !prepared.cast?.name || !prepared.post?.body) {
       throw new Error("魂セラピスト投稿データが不足しています");
     }
+    const imageUrls = requireSingleDiaryImageUrls(prepared.post.imageUrls);
     const result = await runPreparedEstamaDiary(prepared);
-    const expectedPhotos = Array.isArray(prepared.post.imageUrls)
-      ? prepared.post.imageUrls.filter((url): url is string => typeof url === "string").length
-      : 0;
+    const expectedPhotos = imageUrls.length;
     try {
       if (result.posted !== true) throw new Error("魂セラピストの投稿完了報告がありません");
       assertUploadedPhotoCount(expectedPhotos, result.uploadedPhotos);

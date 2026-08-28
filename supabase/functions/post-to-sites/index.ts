@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { workerFailureSafety, workerPhotoCount } from "./photo-count.ts";
+import { assertRequiredPostImageSize } from "./image-size.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -58,6 +59,13 @@ const json = (req: Request, value: unknown, status = 200) => new Response(JSON.s
 
 const stringValue = (value: unknown) => typeof value === "string" ? value.trim() : "";
 
+const requireSinglePostImage = (imageUrls: string[] | null) => {
+  if (!Array.isArray(imageUrls) || imageUrls.length !== 1 || !stringValue(imageUrls[0])) {
+    throw new Error("同時投稿には600×600の画像が1枚必要です");
+  }
+  return imageUrls[0];
+};
+
 const sha256 = async (value: string) => {
   const data = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -110,6 +118,7 @@ async function claimEstamaWorker(req: Request, admin: ReturnType<typeof createCl
   if (!cast || !post || !external || external.sync_status !== "synced") {
     return json(req, { error: "先にセラピストをエステ魂へ登録してください" }, 409);
   }
+  requireSinglePostImage(post.image_urls);
   const hasSoulCredential = Boolean(soulCredential?.login_id && soulCredential?.password);
   if (!hasSoulCredential) {
     return json(req, { error: "魂セラピストのID・パスワードが未設定です" }, 409);
@@ -150,6 +159,16 @@ async function dispatchEstamaDiary(req: Request, admin: ReturnType<typeof create
     }, 409);
   }
   if (post.esutama_status === "posting") return json(req, { status: "posting", skipped: true });
+
+  try {
+    const imageUrl = requireSinglePostImage(post.image_urls);
+    await downloadImage(imageUrl, 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await admin.from("cast_posts").update({ esutama_status: "failed", esutama_error: message }).eq("id", post.id);
+    await updateOverallStatus(admin, post.id);
+    return json(req, { status: "failed", error: message, safeToRetry: false }, 422);
+  }
 
   const [{ data: connection }, { data: external }] = await Promise.all([
     admin.from("automation_connections").select("status,browserbase_context_id").eq("store_id", post.store_id).eq("provider", "estama").maybeSingle(),
@@ -397,6 +416,16 @@ serve(async (req) => {
     if (post.o2_status === "posted") return json(req, { success: true, results: { o2: { status: "posted", skipped: true } } });
     if (post.o2_status === "posting") return json(req, { success: true, results: { o2: { status: "posting", skipped: true } } });
 
+    try {
+      const imageUrl = requireSinglePostImage(post.image_urls);
+      await downloadImage(imageUrl, 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await admin.from("cast_posts").update({ o2_status: "failed", o2_error: message }).eq("id", post.id);
+      await updateOverallStatus(admin, post.id);
+      return json(req, { success: false, results: { o2: { status: "failed", error: message } } }, 422);
+    }
+
     const { data: credential } = await admin.from("cast_site_credentials")
       .select("login_id,password")
       .eq("cast_id", post.cast_id)
@@ -593,11 +622,13 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
   if (publishControl?.name) form.set(publishControl.name, publishControl.value || "published");
 
   const fileFields = inputs.filter((field) => (field.type || "").toLowerCase() === "file");
-  const imageUrls = Array.isArray(post.image_urls) ? post.image_urls.slice(0, 3) : [];
-  for (let index = 0; index < imageUrls.length && fileFields.length; index += 1) {
-    const image = await downloadImage(imageUrls[index], index);
-    const fieldName = fileFields[Math.min(index, fileFields.length - 1)].name;
-    form.append(fieldName, image.blob, image.name);
+  const imageUrls = [requireSinglePostImage(post.image_urls)];
+  if (!fileFields.length) throw new Error("O2の画像入力欄が見つかりません。投稿は行っていません");
+  const image = await downloadImage(imageUrls[0], 0);
+  form.append(fileFields[0].name, image.blob, image.name);
+  const attachedFiles = form.getAll(fileFields[0].name).filter((value) => value instanceof Blob);
+  if (attachedFiles.length !== 1) {
+    throw new Error(`O2の送信フォームへ画像を1枚設定できませんでした（設定${attachedFiles.length}枚）。投稿は行っていません`);
   }
 
   let posted = await request(jar, postForm.action, {
@@ -632,7 +663,7 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
   if (!expectedText || !verificationText.includes(expectedText)) {
     throw new Error("O2の投稿一覧で公開完了を確認できませんでした。投稿状態を確認してください");
   }
-  return { status: "posted", url: verification.url || `${O2_BASE}/cast/post/`, images: Math.min(imageUrls.length, fileFields.length) };
+  return { status: "posted", url: verification.url || `${O2_BASE}/cast/post/`, images: 1 };
 }
 
 async function downloadImage(rawUrl: string, index: number) {
@@ -651,6 +682,7 @@ async function downloadImage(rawUrl: string, index: number) {
   if (declaredSize > 10 * 1024 * 1024) throw new Error(`画像${index + 1}が10MBを超えています`);
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > 10 * 1024 * 1024) throw new Error(`画像${index + 1}が10MBを超えています`);
+  assertRequiredPostImageSize(new Uint8Array(buffer), contentType);
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
   return { blob: new Blob([buffer], { type: contentType }), name: `photo-${index + 1}.${extension}` };
 }
