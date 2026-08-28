@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { workerFailureSafety, workerPhotoCount } from "./photo-count.ts";
 import { assertRequiredPostImageSize } from "./image-size.ts";
+import { decodeRequiredPostImageBase64 } from "./image-payload.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -65,6 +66,64 @@ const requireSinglePostImage = (imageUrls: string[] | null) => {
   }
   return imageUrls[0];
 };
+
+async function createTherapistPost(req: Request, admin: ReturnType<typeof createClient>, body: JsonRecord) {
+  const accessToken = stringValue(body.access_token);
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const postBody = typeof body.post_body === "string" ? body.post_body.trim() : "";
+  if (!accessToken || accessToken.length > 256) return json(req, { error: "ポータルトークンが無効です" }, 401);
+  if (!postBody) return json(req, { error: "本文を入力してください" }, 400);
+  if (title.length > 120 || postBody.length > 5000) {
+    return json(req, { error: "タイトル120文字、本文5000文字以内で入力してください" }, 400);
+  }
+
+  let imageBytes: Uint8Array;
+  try {
+    imageBytes = decodeRequiredPostImageBase64(body.image_base64);
+  } catch (error) {
+    return json(req, { error: error instanceof Error ? error.message : "画像を確認できませんでした" }, 400);
+  }
+
+  const { data: cast, error: castError } = await admin.from("casts")
+    .select("id,store_id")
+    .eq("access_token", accessToken)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (castError) throw castError;
+  if (!cast?.id || !cast.store_id) return json(req, { error: "無効またはアーカイブ済みのリンクです" }, 401);
+
+  const path = `posts/${cast.id}/${crypto.randomUUID()}-600x600.jpg`;
+  const { error: uploadError } = await admin.storage.from("cast-photos").upload(path, imageBytes, {
+    cacheControl: "3600",
+    contentType: "image/jpeg",
+    upsert: false,
+  });
+  if (uploadError) throw new Error("画像をアップロードできませんでした");
+
+  let created = false;
+  try {
+    const imageUrl = admin.storage.from("cast-photos").getPublicUrl(path).data.publicUrl;
+    const { data: postId, error: postError } = await admin.rpc("create_therapist_post", {
+      p_token: accessToken,
+      p_title: title || null,
+      p_body: postBody,
+      p_image_urls: [imageUrl],
+    });
+    if (postError || typeof postId !== "string") throw postError || new Error("投稿を作成できませんでした");
+    created = true;
+    return json(req, { postId });
+  } finally {
+    if (!created) {
+      let cleanupError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const result = await admin.storage.from("cast-photos").remove([path]);
+        cleanupError = result.error;
+        if (!result.error) break;
+      }
+      if (cleanupError) console.error(JSON.stringify({ event: "therapist_post_image_cleanup_failed", path }));
+    }
+  }
+}
 
 const sha256 = async (value: string) => {
   const data = new TextEncoder().encode(value);
@@ -397,6 +456,7 @@ serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     if (body.action === "claim-estama-worker") return claimEstamaWorker(req, admin, body);
+    if (body.action === "create-therapist-post") return createTherapistPost(req, admin, body);
 
     const postId = stringValue(body.post_id);
     const accessToken = stringValue(body.access_token);

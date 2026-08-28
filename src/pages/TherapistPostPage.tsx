@@ -163,6 +163,21 @@ export default function TherapistPostPage() {
     return data;
   };
 
+  const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const prefix = "data:image/jpeg;base64,";
+      if (!result.startsWith(prefix)) {
+        reject(new Error("600×600のJPEG画像を読み取れませんでした"));
+        return;
+      }
+      resolve(result.slice(prefix.length));
+    };
+    reader.onerror = () => reject(new Error("画像を読み取れませんでした"));
+    reader.readAsDataURL(file);
+  });
+
   const handlePost = async () => {
     if (!form.body.trim()) {
       toast.error("本文を入力してください");
@@ -184,14 +199,17 @@ export default function TherapistPostPage() {
     setSubmitting(true);
     try {
       setUploading(true);
-      const requestBody = new FormData();
-      requestBody.append("token", token);
-      requestBody.append("title", form.title);
-      requestBody.append("body", form.body);
-      requestBody.append("image", images[0].file, images[0].file.name);
-      const response = await fetch("/api/automations/therapist-post-create", {
+      const imageBase64 = await fileToBase64(images[0].file);
+      const response = await fetch("/api/automations/portal-post", {
         method: "POST",
-        body: requestBody,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-therapist-post",
+          accessToken: token,
+          title: form.title,
+          postBody: form.body,
+          imageBase64,
+        }),
       });
       const payload = await response.json().catch(() => ({})) as { postId?: string; error?: string };
       if (!response.ok || !payload.postId) {
