@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { subDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminStore } from "@/hooks/useAdminStore";
+import { DEFAULT_RESERVATION_INTERVAL_MINUTES } from "@/lib/availability";
 
 interface ShopSettings {
   business_day_start: string;
@@ -9,40 +11,57 @@ interface ShopSettings {
 
 const DEFAULT_SETTINGS: ShopSettings = {
   business_day_start: "10:00",
-  reservation_interval_minutes: 30,
+  reservation_interval_minutes: DEFAULT_RESERVATION_INTERVAL_MINUTES,
 };
 
-let cachedSettings: ShopSettings | null = null;
+const cachedSettingsByStore: Record<string, ShopSettings> = {};
+let lastCachedSettings: ShopSettings | null = null;
 
 /** ページ初期化時（useState lazy init）で使う。キャッシュがあればそこから、なければ暦日ベースの今日を返す */
 export function getBusinessDateFromCache(): Date {
   const now = new Date();
-  if (!cachedSettings) return now;
-  const h = parseInt(cachedSettings.business_day_start.split(":")[0], 10);
+  if (!lastCachedSettings) return now;
+  const h = parseInt(lastCachedSettings.business_day_start.split(":")[0], 10);
   return now.getHours() < h ? subDays(now, 1) : now;
 }
 
 export function useShopSettings() {
-  const [settings, setSettings] = useState<ShopSettings>(cachedSettings ?? DEFAULT_SETTINGS);
-  const [loaded, setLoaded] = useState(cachedSettings !== null);
+  const { storeId, loading: storeLoading } = useAdminStore();
+  const [settings, setSettings] = useState<ShopSettings>(
+    cachedSettingsByStore[storeId] ?? DEFAULT_SETTINGS,
+  );
+  const [loaded, setLoaded] = useState(Boolean(cachedSettingsByStore[storeId]));
 
   useEffect(() => {
-    if (cachedSettings) return;
+    if (storeLoading) return;
+    const cached = cachedSettingsByStore[storeId];
+    if (cached) {
+      setSettings(cached);
+      setLoaded(true);
+      return;
+    }
+    setLoaded(false);
     supabase
       .from("shop_settings" as any)
       .select("business_day_start, reservation_interval_minutes")
+      .eq("store_id", storeId)
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
         const s = data as ShopSettings | null;
         const resolved = s?.business_day_start
-          ? { ...s, reservation_interval_minutes: s.reservation_interval_minutes ?? 30 }
+          ? {
+              ...s,
+              reservation_interval_minutes:
+                s.reservation_interval_minutes ?? DEFAULT_RESERVATION_INTERVAL_MINUTES,
+            }
           : DEFAULT_SETTINGS;
-        cachedSettings = resolved;
+        cachedSettingsByStore[storeId] = resolved;
+        lastCachedSettings = resolved;
         setSettings(resolved);
         setLoaded(true);
       });
-  }, []);
+  }, [storeId, storeLoading]);
 
   // Returns "HH:MM:SS" format for SQL comparisons
   const dayStartTime = settings.business_day_start.length === 5
@@ -56,7 +75,8 @@ export function useShopSettings() {
     return now.getHours() < h ? subDays(now, 1) : now;
   }, [settings.business_day_start]);
 
-  const intervalMinutes = settings.reservation_interval_minutes ?? 30;
+  const intervalMinutes =
+    settings.reservation_interval_minutes ?? DEFAULT_RESERVATION_INTERVAL_MINUTES;
 
   return { settings, loaded, dayStartTime, businessToday, intervalMinutes };
 }

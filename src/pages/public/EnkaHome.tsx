@@ -10,6 +10,11 @@ import { driveImgUrl } from "@/lib/drive";
 import { format } from "date-fns";
 import { Phone, Calendar, ChevronDown, ChevronLeft, ChevronRight, Sparkles, TicketPercent } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DEFAULT_RESERVATION_INTERVAL_MINUTES,
+  findNextAvailableStart,
+  formatAvailabilityTime,
+} from "@/lib/availability";
 
 /**
  * 艶華専用トップページ（デフォルト店舗以外で "/" に表示）。
@@ -139,6 +144,7 @@ export default function EnkaHome() {
   const [failedHeroVideoUrl, setFailedHeroVideoUrl] = useState<string | null>(null);
   const [todayShifts, setTodayShifts] = useState<ShiftRow[]>([]);
   const [reservations, setReservations] = useState<ReservationRow[]>([]);
+  const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_RESERVATION_INTERVAL_MINUTES);
   const [newFaces, setNewFaces] = useState<CastRow[]>([]);
   const [articles, setArticles] = useState<HpArticle[]>([]);
   const [activeDiscounts, setActiveDiscounts] = useState<ActiveDiscount[]>([]);
@@ -169,7 +175,13 @@ export default function EnkaHome() {
         .eq("store_id", storeId)
         .order("start_time"),
       supabase.rpc("get_reservation_slots", { p_date: today, p_cast_id: null }),
-    ]).then(([shiftResult, reservationResult]) => {
+      supabase
+        .from("shop_settings")
+        .select("reservation_interval_minutes")
+        .eq("store_id", storeId)
+        .limit(1)
+        .maybeSingle(),
+    ]).then(([shiftResult, reservationResult, settingsResult]) => {
         const data = shiftResult.data;
         const seen = new Set<string>();
         setTodayShifts(
@@ -185,6 +197,10 @@ export default function EnkaHome() {
             start_time: reservation.start_time,
             duration: reservation.duration,
           })),
+        );
+        setIntervalMinutes(
+          settingsResult.data?.reservation_interval_minutes
+            ?? DEFAULT_RESERVATION_INTERVAL_MINUTES,
         );
       });
 
@@ -228,8 +244,6 @@ export default function EnkaHome() {
     const end = endRaw <= start ? endRaw + 24 * 60 : endRaw;
     const currentRaw = now.getHours() * 60 + now.getMinutes();
     const current = endRaw <= start && currentRaw < endRaw ? currentRaw + 24 * 60 : currentRaw;
-    let cursor = Math.max(start, Math.ceil(current / 30) * 30);
-
     const reservedBlocks = reservations
       .filter((reservation) => reservation.cast_id === shift.cast_id)
       .map((reservation) => {
@@ -238,24 +252,17 @@ export default function EnkaHome() {
         const reservedStart = rawStart < start ? rawStart + 24 * 60 : rawStart;
         return {
           start: reservedStart,
-          end: reservedStart + reservation.duration + 30,
+          duration: reservation.duration,
         };
       });
-
-    while (cursor + 60 <= end) {
-      const conflict = reservedBlocks.find(
-        (block) => cursor < block.end && cursor + 60 > block.start,
-      );
-      if (!conflict) {
-        const normalized = cursor % (24 * 60);
-        const hour = String(Math.floor(normalized / 60)).padStart(2, "0");
-        const minute = String(normalized % 60).padStart(2, "0");
-        return `${hour}:${minute}`;
-      }
-      cursor = Math.ceil(conflict.end / 30) * 30;
-    }
-
-    return null;
+    const availableStart = findNextAvailableStart({
+      shiftStart: start,
+      shiftEnd: end,
+      currentTime: current,
+      reservations: reservedBlocks,
+      intervalMinutes,
+    });
+    return availableStart === null ? null : formatAvailabilityTime(availableStart);
   };
 
   const Heading = ({ en, ja }: { en: string; ja: string }) => (

@@ -9,6 +9,11 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
 import { useStore } from "@/hooks/useStore";
 import { CastTitleBadge, useTitleBadges } from "@/components/public/CastTitleBadge";
+import {
+  DEFAULT_RESERVATION_INTERVAL_MINUTES,
+  findNextAvailableStart,
+  formatAvailabilityTime,
+} from "@/lib/availability";
 
 interface Shift {
   id: string;
@@ -48,6 +53,7 @@ const Schedule = () => {
   const navigate = useNavigate();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_RESERVATION_INTERVAL_MINUTES);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [stripStart, setStripStart] = useState<Date>(startOfDay(new Date()));
@@ -77,7 +83,7 @@ const Schedule = () => {
   const fetchData = async () => {
     try {
       const dateStr = format(selectedDate, "yyyy-MM-dd");
-      const [s, r] = await Promise.all([
+      const [s, r, settings] = await Promise.all([
         supabase
           .from("shifts")
           .select(
@@ -87,6 +93,12 @@ const Schedule = () => {
           .eq("store_id", storeId)
           .order("start_time", { ascending: true }),
         supabase.rpc("get_reservation_slots", { p_date: dateStr, p_cast_id: null }),
+        supabase
+          .from("shop_settings")
+          .select("reservation_interval_minutes")
+          .eq("store_id", storeId)
+          .limit(1)
+          .maybeSingle(),
       ]);
       if (s.error) throw s.error;
       const grouped = (s.data || []).reduce((acc: Record<string, Shift>, sh: any) => {
@@ -101,6 +113,9 @@ const Schedule = () => {
         start_time: x.start_time,
         duration: x.duration,
       })));
+      setIntervalMinutes(
+        settings.data?.reservation_interval_minutes ?? DEFAULT_RESERVATION_INTERVAL_MINUTES,
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -124,8 +139,8 @@ const Schedule = () => {
       format(selectedDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd");
     const [sh, sm] = shift.start_time.split(":").map(Number);
     const [eh, em] = shift.end_time.split(":").map(Number);
-    let cursor = sh * 60 + sm;
     const startMin = sh * 60 + sm;
+    let currentTime = startMin;
     const endRaw = eh * 60 + em;
     // overnight shift: end time is next day (e.g. 13:00〜01:00)
     const end = endRaw <= startMin ? endRaw + 24 * 60 : endRaw;
@@ -135,9 +150,9 @@ const Schedule = () => {
       // NOT when we're simply before the shift start
       const isOvernight = endRaw <= startMin;
       const curAdj = (isOvernight && cur < endRaw) ? cur + 24 * 60 : cur;
-      if (curAdj > cursor) cursor = Math.ceil(curAdj / 30) * 30;
+      currentTime = curAdj;
     }
-    // skip over reserved blocks (60m + 30m buffer)
+    // Skip reservations plus the preparation interval configured for this store.
     const reserved = reservations
       .filter((r) => r.cast_id === shift.cast_id)
       .map((r) => {
@@ -145,21 +160,16 @@ const Schedule = () => {
         const rawStart = h * 60 + m;
         // if reservation start is before shift start, it's past midnight → add 24h
         const start = rawStart < startMin ? rawStart + 24 * 60 : rawStart;
-        return { start, end: start + r.duration + 30 };
+        return { start, duration: r.duration };
       });
-    while (cursor + 60 <= end) {
-      const conflict = reserved.find(
-        (b) => cursor < b.end && cursor + 60 > b.start
-      );
-      if (!conflict) {
-        const totalMin = cursor % (24 * 60);
-        const hh = String(Math.floor(totalMin / 60)).padStart(2, "0");
-        const mm = String(totalMin % 60).padStart(2, "0");
-        return `${hh}:${mm}`;
-      }
-      cursor = conflict.end;
-    }
-    return null;
+    const availableStart = findNextAvailableStart({
+      shiftStart: startMin,
+      shiftEnd: end,
+      currentTime,
+      reservations: reserved,
+      intervalMinutes,
+    });
+    return availableStart === null ? null : formatAvailabilityTime(availableStart);
   };
 
   const handleBook = (castId: string, time: string) => {
