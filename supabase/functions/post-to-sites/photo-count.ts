@@ -17,7 +17,7 @@ export function workerPhotoCount(imageUrls: string[] | null, result: Record<stri
     ? rawUploaded
     : null;
   const posted = result.posted === true;
-  return { expected, uploaded, posted, matches: posted && uploaded === expected };
+  return { expected, uploaded, posted, matches: expected === 1 && posted && uploaded === 1 };
 }
 
 export function workerFailureSafety(

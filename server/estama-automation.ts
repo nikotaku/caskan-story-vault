@@ -42,6 +42,18 @@ export const ESTAMA_SOUL_URL = "https://estama.jp/admin/tamathera/therapist/";
 const ESTAMA_SOUL_WAITING_URL = `${ESTAMA_SOUL_URL}?status=waiting_initial_setup`;
 const ESTAMA_SOUL_LOGIN_URL = "https://estama.jp/tamathera/login/";
 const ESTAMA_SOUL_DIARY_URL = "https://estama.jp/tamathera/diary/";
+const ESTAMA_DIARY_IMAGE_SIZE = 600;
+
+export function requireSingleDiaryImageUrls(value: unknown): [string] {
+  if (!Array.isArray(value) || value.length !== 1) {
+    throw new Error("魂セラピストの写メ日記には600×600の画像が1枚必要です");
+  }
+  const imageUrl = typeof value[0] === "string" ? value[0].trim() : "";
+  if (!imageUrl) {
+    throw new Error("魂セラピストの写メ日記には600×600の画像が1枚必要です");
+  }
+  return [imageUrl];
+}
 
 type Json = Record<string, unknown>;
 type AdminClient = SupabaseClient;
@@ -1738,6 +1750,7 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   if (castError || !cast) throw castError || new Error("セラピストが見つかりません");
   if (!external || external.sync_status !== "synced") throw new Error("先にセラピストをエステ魂へ登録してください");
   if (post.esutama_status === "posted") return { posted: true, skipped: true, reason: "already_posted" };
+  const imageUrls = requireSingleDiaryImageUrls(post.image_urls);
 
   const { data: postingPost, error: postingError } = await admin.from("cast_posts").update({
     esutama_status: "posting",
@@ -1779,13 +1792,14 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   await setField(accountPage, 'textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea', post.body);
   const bodyField = accountPage.locator('textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea').first();
   if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
-  const imageUrls = Array.isArray(post.image_urls) ? post.image_urls.filter((url): url is string => typeof url === "string") : [];
   const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
   if (!await diaryForm.count()) throw new Error("エステ魂の写メ日記投稿フォームが見つかりません");
   const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
-    maxPhotos: 3,
+    maxPhotos: 1,
     strict: true,
     root: diaryForm,
+    requiredWidth: ESTAMA_DIARY_IMAGE_SIZE,
+    requiredHeight: ESTAMA_DIARY_IMAGE_SIZE,
   });
   assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
   await assertFormPhotoCount(diaryForm, imageUrls.length);
@@ -1849,6 +1863,7 @@ export type PreparedEstamaDiary = {
 };
 
 export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
+  const imageUrls = requireSingleDiaryImageUrls(input.post.imageUrls);
   const created = await createBrowserSession(null, false, {
     action: "portal-diary",
     jobId: input.jobId,
@@ -1872,15 +1887,14 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     await setField(accountPage, 'textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea', input.post.body);
     const bodyField = accountPage.locator('textarea[name*="body" i], textarea[name*="content" i], textarea[name*="diary" i], textarea').first();
     if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
-    const imageUrls = Array.isArray(input.post.imageUrls)
-      ? input.post.imageUrls.filter((url): url is string => typeof url === "string")
-      : [];
     const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
     if (!await diaryForm.count()) throw new Error("エステ魂の写メ日記投稿フォームが見つかりません");
     const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
-      maxPhotos: 3,
+      maxPhotos: 1,
       strict: true,
       root: diaryForm,
+      requiredWidth: ESTAMA_DIARY_IMAGE_SIZE,
+      requiredHeight: ESTAMA_DIARY_IMAGE_SIZE,
     });
     assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
     await assertFormPhotoCount(diaryForm, imageUrls.length);

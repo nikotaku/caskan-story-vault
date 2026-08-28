@@ -105,15 +105,75 @@ const createFakePage = ({
   return { calls, inputs, page };
 };
 
-const imageResponse = (contentType = "image/jpeg", body = "image-data") =>
+const imageResponse = (contentType = "image/jpeg", body: BodyInit = "image-data") =>
   new Response(body, {
     headers: {
-      "content-length": String(Buffer.byteLength(body)),
+      "content-length": String(typeof body === "string" ? Buffer.byteLength(body) : (body as Uint8Array).byteLength),
       "content-type": contentType,
     },
   });
 
+const jpegHeader = (width: number, height: number) => new Uint8Array([
+  0xff, 0xd8,
+  0xff, 0xc0, 0x00, 0x0b, 0x08,
+  (height >>> 8) & 0xff, height & 0xff,
+  (width >>> 8) & 0xff, width & 0xff,
+  0x01, 0x01, 0x11, 0x00,
+  0xff, 0xd9,
+]);
+
 const successfulFetch = (async () => imageResponse()) as typeof fetch;
+
+test("日記投稿は600×600の写真1枚を入力欄へ設定できる", async () => {
+  const { calls, page } = createFakePage({ inputs: [createInput(true)] });
+  const squareFetch = (async () => imageResponse("image/jpeg", jpegHeader(600, 600))) as typeof fetch;
+
+  const uploaded = await uploadPhotos(page, [photoUrls[0]], {
+    maxPhotos: 1,
+    strict: true,
+    requiredWidth: 600,
+    requiredHeight: 600,
+    fetchPhoto: squareFetch,
+  });
+
+  assert.equal(uploaded, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].files.length, 1);
+});
+
+for (const [width, height] of [[599, 600], [600, 601]] as const) {
+  test(`日記投稿は${width}×${height}の写真を入力欄へ設定しない`, async () => {
+    const { calls, page } = createFakePage({ inputs: [createInput(true)] });
+    const wrongSizeFetch = (async () => imageResponse("image/jpeg", jpegHeader(width, height))) as typeof fetch;
+
+    await assert.rejects(
+      uploadPhotos(page, [photoUrls[0]], {
+        maxPhotos: 1,
+        strict: true,
+        requiredWidth: 600,
+        requiredHeight: 600,
+        fetchPhoto: wrongSizeFetch,
+      }),
+      new RegExp(`600×600.*現在${width}×${height}`),
+    );
+
+    assert.equal(calls.length, 0);
+  });
+}
+
+test("日記投稿の写真サイズは幅と高さをセットで指定する", async () => {
+  const { page } = createFakePage({ inputs: [createInput(true)] });
+
+  await assert.rejects(
+    uploadPhotos(page, [photoUrls[0]], {
+      maxPhotos: 1,
+      strict: true,
+      requiredWidth: 600,
+      fetchPhoto: successfulFetch,
+    }),
+    /写真サイズは幅と高さを両方指定してください/,
+  );
+});
 
 test("画像なしは写真欄を操作せず0枚で完了する", async () => {
   const { calls, page } = createFakePage({ inputs: [createInput(true)] });
@@ -135,6 +195,27 @@ for (const count of [0, 1, 2, 3]) {
     };
 
     assert.equal(await assertFormPhotoCount(form as never, count), count);
+  });
+}
+
+test("同時投稿フォームは写真が正確に1枚ある場合だけ送信できる", async () => {
+  const form = {
+    async evaluate() { return 1; },
+  };
+
+  assert.equal(await assertFormPhotoCount(form as never, 1), 1);
+});
+
+for (const actualCount of [0, 2, 3]) {
+  test(`同時投稿フォームの写真が${actualCount}枚なら送信を中断する`, async () => {
+    const form = {
+      async evaluate() { return actualCount; },
+    };
+
+    await assert.rejects(
+      assertFormPhotoCount(form as never, 1),
+      new RegExp(`送信フォーム内の写真枚数が一致しません（指定1枚 / 送信${actualCount}枚）`),
+    );
   });
 }
 

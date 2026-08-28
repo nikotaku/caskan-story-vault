@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { isEstamaReviewRequired } from "@/lib/estama-post-status";
+import { POST_IMAGE_SIZE, prepareSquarePostImage } from "@/lib/post-image";
 
 type Post = {
   id: string;
@@ -39,6 +40,7 @@ type Post = {
 
 type Connection = { site: "o2" | "esutama"; configured: boolean };
 type Target = "o2" | "esutama";
+type PendingImage = { id: string; file: File; previewUrl: string };
 
 const STATUS_ICON: Record<string, JSX.Element> = {
   pending: <Clock size={13} className="text-amber-500" />,
@@ -54,18 +56,26 @@ const rpc = (name: string, args: Record<string, unknown>) =>
 export default function TherapistPostPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const [castId, setCastId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [showPost, setShowPost] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [preparingImage, setPreparingImage] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", body: "", confirmed: false });
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<PendingImage[]>([]);
+  const imagesRef = useRef<PendingImage[]>([]);
   const [credential, setCredential] = useState({ email: "", loginId: "", password: "" });
+
+  const clearSelectedImage = useCallback(() => {
+    setImages((current) => {
+      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      return [];
+    });
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     if (!token) return;
@@ -98,48 +108,43 @@ export default function TherapistPostPage() {
         navigate("/");
         return;
       }
-      setCastId(row.id);
       await Promise.all([fetchPosts(), fetchConnections()]);
       if (active) setLoading(false);
     })();
     return () => { active = false; };
   }, [token, navigate, fetchPosts, fetchConnections]);
 
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  useEffect(() => () => {
+    imagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  }, []);
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!files.length || !castId) return;
-    if (images.length + files.length > 3) {
-      toast.error("画像は合計3枚までです");
+    if (!files.length) return;
+    if (images.length || files.length !== 1) {
+      toast.error("画像は1枚だけ選択してください");
       return;
     }
-    const invalid = files.find((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024);
-    if (invalid) {
-      toast.error("画像はJPEG・PNG・WebP、1枚10MB以内にしてください");
-      return;
-    }
-    setUploading(true);
+    setPreparingImage(true);
     try {
-      const uploaded: string[] = [];
-      for (const file of files) {
-        const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-        const path = `posts/${castId}/${crypto.randomUUID()}.${extension}`;
-        const { error } = await supabase.storage.from("cast-photos").upload(path, file, {
-          cacheControl: "3600",
-          contentType: file.type,
-          upsert: false,
-        });
-        if (error) throw error;
-        const { data } = supabase.storage.from("cast-photos").getPublicUrl(path);
-        uploaded.push(data.publicUrl);
-      }
-      setImages((current) => [...current, ...uploaded]);
-      toast.success(`${uploaded.length}枚添付しました`);
+      const file = await prepareSquarePostImage(files[0]);
+      setImages((current) => {
+        current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+        return [{
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+        }];
+      });
     } catch (error) {
-      console.error("Image upload error", error);
-      toast.error("画像のアップロードに失敗しました");
+      toast.error(error instanceof Error ? error.message : "画像を600×600へ変換できませんでした");
     } finally {
-      setUploading(false);
+      setPreparingImage(false);
     }
   };
 
@@ -158,6 +163,21 @@ export default function TherapistPostPage() {
     return data;
   };
 
+  const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const prefix = "data:image/jpeg;base64,";
+      if (!result.startsWith(prefix)) {
+        reject(new Error("600×600のJPEG画像を読み取れませんでした"));
+        return;
+      }
+      resolve(result.slice(prefix.length));
+    };
+    reader.onerror = () => reject(new Error("画像を読み取れませんでした"));
+    reader.readAsDataURL(file);
+  });
+
   const handlePost = async () => {
     if (!form.body.trim()) {
       toast.error("本文を入力してください");
@@ -171,23 +191,41 @@ export default function TherapistPostPage() {
       toast.error("本人投稿と各媒体のルール順守を確認してください");
       return;
     }
+    if (images.length !== 1) {
+      toast.error("600×600に変換した画像を1枚選択してください");
+      return;
+    }
     if (!token) return;
     setSubmitting(true);
     try {
-      const { data, error } = await rpc("create_therapist_post", {
-        p_token: token,
-        p_title: form.title || null,
-        p_body: form.body,
-        p_image_urls: images.length ? images : null,
+      setUploading(true);
+      const imageBase64 = await fileToBase64(images[0].file);
+      const response = await fetch("/api/automations/portal-post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-therapist-post",
+          accessToken: token,
+          title: form.title,
+          postBody: form.body,
+          imageBase64,
+        }),
       });
-      if (error || typeof data !== "string") throw new Error(error?.message || "投稿を作成できませんでした");
+      const payload = await response.json().catch(() => ({})) as { postId?: string; error?: string };
+      if (!response.ok || !payload.postId) {
+        throw new Error(payload.error || "投稿を作成できませんでした");
+      }
+      setUploading(false);
 
       setForm({ title: "", body: "", confirmed: false });
-      setImages([]);
+      clearSelectedImage();
       setShowPost(false);
       toast.success("O2・魂セラピストへ送信中です");
       await fetchPosts();
-      const results = await Promise.allSettled([publishTarget(data, "o2"), publishTarget(data, "esutama")]);
+      const results = await Promise.allSettled([
+        publishTarget(payload.postId, "o2"),
+        publishTarget(payload.postId, "esutama"),
+      ]);
       await fetchPosts();
       if (results.some((result) => result.status === "rejected")) {
         toast.warning("外部媒体の一部へ送信できませんでした。履歴の状態を確認してください");
@@ -195,10 +233,18 @@ export default function TherapistPostPage() {
         toast.success("2媒体への送信処理が完了しました");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "投稿に失敗しました");
+      const message = error instanceof Error ? error.message : "投稿に失敗しました";
+      toast.error(message);
     } finally {
+      setUploading(false);
       setSubmitting(false);
     }
+  };
+
+  const changePostDialogOpen = (open: boolean) => {
+    if (!open && (submitting || preparingImage)) return;
+    setShowPost(open);
+    if (!open) clearSelectedImage();
   };
 
   const retry = async (postId: string, target: Target) => {
@@ -307,24 +353,29 @@ export default function TherapistPostPage() {
 
       <div className="fixed bottom-4 right-4"><Button aria-label="新規投稿" onClick={() => setShowPost(true)} className="rounded-full h-14 w-14 shadow-lg p-0"><Send size={20} /></Button></div>
 
-      <Dialog open={showPost} onOpenChange={setShowPost}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <Dialog open={showPost} onOpenChange={changePostDialogOpen}>
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          onEscapeKeyDown={(event) => { if (submitting || preparingImage) event.preventDefault(); }}
+          onInteractOutside={(event) => { if (submitting || preparingImage) event.preventDefault(); }}
+        >
           <DialogHeader><DialogTitle>2媒体へ同時投稿</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div><Label htmlFor="post-title">タイトル（任意・120文字まで）</Label><Input id="post-title" maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div>
             <div><Label htmlFor="post-body">本文（5000文字まで）</Label><Textarea id="post-body" rows={7} maxLength={5000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /><p className="text-right text-xs text-muted-foreground mt-1">{form.body.length}/5000</p></div>
             <div>
-              <Label>画像（3枚まで・各10MB）</Label>
+              <Label>画像（必須・1枚）</Label>
               <div className="mt-2 space-y-2">
-                {images.length < 3 && <label className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-dashed cursor-pointer text-sm hover:bg-accent">{uploading ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}{uploading ? "アップロード中" : "画像を選択"}<input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={handleImageUpload} disabled={uploading} /></label>}
-                {images.length > 0 && <div className="grid grid-cols-3 gap-2">{images.map((url, index) => <div key={url} className="relative aspect-square rounded-md overflow-hidden border bg-muted"><img src={url} alt={`添付画像${index + 1}`} className="w-full h-full object-cover" /><button type="button" aria-label={`画像${index + 1}を削除`} onClick={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute top-1 right-1 bg-black/65 text-white rounded-full p-1"><X size={12} /></button></div>)}</div>}
+                {images.length < 1 && <label className={`inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm ${preparingImage ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-accent"}`}>{preparingImage ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}{preparingImage ? `${POST_IMAGE_SIZE}×${POST_IMAGE_SIZE}へ変換中` : "画像を選択"}<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} disabled={preparingImage || submitting} /></label>}
+                <p className="text-xs text-muted-foreground">JPEG・PNG・WebP／10MBまで。中央を基準に600×600の正方形へ自動変換します。</p>
+                {images.length > 0 && <div className="max-w-64">{images.map((image) => <div key={image.id} className="relative aspect-square rounded-md overflow-hidden border bg-muted"><img src={image.previewUrl} alt="添付画像" className="w-full h-full object-cover" /><button type="button" aria-label="画像を削除" onClick={clearSelectedImage} className="absolute top-1 right-1 bg-black/65 text-white rounded-full p-1"><X size={12} /></button></div>)}</div>}
               </div>
             </div>
             <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
               <input type="checkbox" className="mt-0.5" checked={form.confirmed} onChange={(event) => setForm({ ...form, confirmed: event.target.checked })} />
               <span>私はセラピスト本人として投稿し、O2を含む各媒体の投稿ルールを確認・順守します。</span>
             </label>
-            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}O2・魂セラピストへ投稿</Button>
+            <Button className="w-full" onClick={handlePost} disabled={submitting || uploading || preparingImage}>{submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}{uploading ? "画像アップロード中" : "O2・魂セラピストへ投稿"}</Button>
           </div>
         </DialogContent>
       </Dialog>

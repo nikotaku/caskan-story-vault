@@ -1,4 +1,5 @@
 import type { Locator, Page } from "playwright-core";
+import { assertImageSize } from "../supabase/functions/post-to-sites/image-size.js";
 
 type PhotoFile = {
   name: string;
@@ -16,6 +17,8 @@ type UploadPhotoOptions = {
   strict?: boolean;
   root?: Locator;
   fetchPhoto?: typeof fetch;
+  requiredWidth?: number;
+  requiredHeight?: number;
 };
 
 function normalizePhotoUrl(raw: string) {
@@ -80,7 +83,13 @@ export async function uploadPhotos(
     strict = false,
     root,
     fetchPhoto = fetch,
+    requiredWidth,
+    requiredHeight,
   } = options;
+  const hasRequiredDimensions = requiredWidth !== undefined || requiredHeight !== undefined;
+  if (hasRequiredDimensions && (requiredWidth === undefined || requiredHeight === undefined)) {
+    throw new Error("写真サイズは幅と高さを両方指定してください");
+  }
   const requestedUrls = urls.slice(0, maxPhotos);
 
   const inputRoot = root || page;
@@ -114,6 +123,9 @@ export async function uploadPhotos(
       if (!contentType.startsWith("image/")) throw new Error("写真URLが画像を返しませんでした");
       const buffer = Buffer.from(await response.arrayBuffer());
       if (buffer.byteLength > 15 * 1024 * 1024) throw new Error("写真が15MBを超えています");
+      if (hasRequiredDimensions) {
+        assertImageSize(buffer, contentType, requiredWidth!, requiredHeight!);
+      }
       prepared.push({
         index,
         file: {

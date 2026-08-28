@@ -5,13 +5,22 @@ import { workerFailureSafety, workerPhotoCount } from "../supabase/functions/pos
 
 const urls = ["one", "two", "three"];
 
-for (const count of [0, 1, 2, 3]) {
-  test(`worker報告が指定${count}枚と一致する場合だけ成功にする`, () => {
+test("worker報告が指定1枚と一致する場合だけ成功にする", () => {
+  assert.deepEqual(workerPhotoCount([urls[0]], { posted: true, uploadedPhotos: 1 }), {
+    expected: 1,
+    uploaded: 1,
+    posted: true,
+    matches: true,
+  });
+});
+
+for (const count of [0, 2, 3]) {
+  test(`worker報告が${count}枚でも同時投稿の成功にしない`, () => {
     assert.deepEqual(workerPhotoCount(count ? urls.slice(0, count) : null, { posted: true, uploadedPhotos: count }), {
       expected: count,
       uploaded: count,
       posted: true,
-      matches: true,
+      matches: false,
     });
   });
 }
