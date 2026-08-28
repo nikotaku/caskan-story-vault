@@ -369,13 +369,13 @@ export default function CastPostManagement() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) throw new Error("ログインが期限切れです");
-      const response = await fetch("/api/cast-posts/delete", {
+      const response = await fetch("/api/automations/admin-portal-post", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ postId: deleteTarget.id }),
+        body: JSON.stringify({ action: "delete-failed-post", postId: deleteTarget.id }),
       });
       const payload = await response.json().catch(() => ({})) as {
         deleted?: boolean;
