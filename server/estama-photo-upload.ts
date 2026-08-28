@@ -54,23 +54,47 @@ export function assertUploadedPhotoCount(requested: number, uploaded: number) {
 }
 
 export async function assertFormPhotoCount(form: Locator, requested: number) {
-  let serialized: number;
+  let inspection: {
+    inputCount: number;
+    selected: number;
+    unnamedSelected: number;
+  };
   try {
-    serialized = await form.evaluate((element) => {
-      if (!(element instanceof HTMLFormElement)) throw new Error("投稿フォームではありません");
-      const data = new FormData(element);
-      return Array.from(data.values()).filter((value) => value instanceof File
-        && value.size > 0
-        && (value.type.startsWith("image/") || /\.(?:avif|gif|jpe?g|png|webp)$/i.test(value.name))).length;
+    inspection = await form.evaluate((element) => {
+      if (element.tagName.toLowerCase() !== "form") throw new Error("投稿フォームではありません");
+      const inputs = Array.from(element.querySelectorAll<HTMLInputElement>('input[type="file"]'));
+      const selectedFiles = inputs.flatMap((input) => {
+        const accept = String(input.accept || "").toLowerCase();
+        const identity = `${input.name || ""} ${input.id || ""}`.toLowerCase();
+        const acceptsImages = !accept
+          || accept === "*/*"
+          || accept.split(",").some((value) => /image\/|\.(?:avif|gif|jpe?g|png|webp)/.test(value.trim()));
+        const otherMedia = /(?:^|[_-])(audio|document|movie|pdf|video)(?:$|[_-])/.test(identity);
+        if (input.disabled || input.matches(":disabled") || !acceptsImages || otherMedia) return [];
+        return Array.from(input.files || [])
+          .filter((file) => file.size > 0
+            && (file.type.startsWith("image/") || /\.(?:avif|gif|jpe?g|png|webp)$/i.test(file.name)))
+          .map(() => ({ unnamed: !input.name }));
+      });
+      return {
+        inputCount: inputs.length,
+        selected: selectedFiles.length,
+        unnamedSelected: selectedFiles.filter((file) => file.unnamed).length,
+      };
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`エステ魂の送信フォーム内の写真枚数を確認できません（${detail}）`);
   }
-  if (serialized !== requested) {
-    throw new Error(`エステ魂の送信フォーム内の写真枚数が一致しません（指定${requested}枚 / 送信${serialized}枚）`);
+  console.log(JSON.stringify({
+    event: "estama_form_photo_count",
+    requested,
+    ...inspection,
+  }));
+  if (inspection.selected !== requested) {
+    throw new Error(`エステ魂の送信フォーム内の写真枚数が一致しません（指定${requested}枚 / 送信${inspection.selected}枚）`);
   }
-  return serialized;
+  return inspection.selected;
 }
 
 export async function uploadPhotos(
