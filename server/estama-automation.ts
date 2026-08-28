@@ -1,6 +1,6 @@
 import Browserbase from "@browserbasehq/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { chromium, type Browser, type Dialog, type Locator, type Page } from "playwright-core";
+import { chromium, type Browser, type Dialog, type Locator, type Page, type Response as PlaywrightResponse } from "playwright-core";
 import { createHash, randomUUID } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
@@ -1813,8 +1813,8 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   const publishedDiaryBaseline = await capturePublishedDiaryBaseline(accountPage, publishedDiaryInput);
   const submittedBody = await bodyField.inputValue();
   const baselineSuccessMessages = await visibleEstamaSuccessMessages(accountPage);
-  // The public baseline fetch can take a few seconds. Re-check the browser's
-  // actual native FormData immediately before the irreversible submit click.
+  // The public baseline fetch can take a few seconds. Re-check the file that is
+  // actually selected in the diary form immediately before the submit click.
   await assertFormPhotoCount(diaryForm, imageUrls.length);
   const submission = await clickSave(accountPage, { diary: true, root: diaryForm });
   if (!submission) throw new EstamaSubmissionUncertainError();
@@ -1862,7 +1862,78 @@ export type PreparedEstamaDiary = {
   };
 };
 
-export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
+type PreparedEstamaDiaryOptions = {
+  diagnosticOnly?: boolean;
+};
+
+async function inspectDiaryPhotoState(form: Locator) {
+  return form.evaluate((element) => {
+    const srcKind = (value: string) => {
+      if (!value) return "empty";
+      if (value.startsWith("blob:")) return "blob";
+      if (value.startsWith("data:")) return "data";
+      try {
+        const url = new URL(value, window.location.href);
+        return `${url.protocol}//${url.hostname}${url.pathname}`;
+      } catch {
+        return "other";
+      }
+    };
+    return {
+      form: {
+        id: element.id || "",
+        action: element instanceof HTMLFormElement ? new URL(element.action, window.location.href).pathname : "",
+        method: element instanceof HTMLFormElement ? element.method : "",
+        enctype: element instanceof HTMLFormElement ? element.enctype : "",
+      },
+      fileInputs: Array.from(element.querySelectorAll<HTMLInputElement>('input[type="file"]')).map((input, index) => ({
+        index,
+        id: input.id || "",
+        name: input.name || "",
+        className: input.className || "",
+        accept: input.accept || "",
+        multiple: input.multiple,
+        disabled: input.matches(":disabled"),
+        fileCount: input.files?.length || 0,
+        formOwned: input.form === element,
+        parentTag: input.parentElement?.tagName || "",
+        parentClass: input.parentElement?.className || "",
+      })),
+      hiddenInputs: Array.from(element.querySelectorAll<HTMLInputElement>('input[type="hidden"]')).map((input) => ({
+        id: input.id || "",
+        name: input.name || "",
+        className: input.className || "",
+        hasValue: Boolean(input.value),
+        valueLength: input.value.length,
+      })),
+      images: Array.from(element.querySelectorAll<HTMLImageElement>("img")).map((image) => ({
+        id: image.id || "",
+        className: image.className || "",
+        alt: image.alt || "",
+        src: srcKind(image.currentSrc || image.src || image.getAttribute("data-src") || ""),
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        visible: image.getClientRects().length > 0,
+        parentClass: image.parentElement?.className || "",
+      })),
+      photoElements: Array.from(element.querySelectorAll<HTMLElement>(
+        '[class*="photo" i], [class*="image" i], [class*="preview" i], [class*="upload" i], [data-preview], [data-upload]',
+      )).slice(0, 40).map((item) => ({
+        tag: item.tagName,
+        id: item.id || "",
+        className: item.className || "",
+        ariaBusy: item.getAttribute("aria-busy") || "",
+        ariaInvalid: item.getAttribute("aria-invalid") || "",
+        visible: item.getClientRects().length > 0,
+      })),
+    };
+  });
+}
+
+export async function runPreparedEstamaDiary(
+  input: PreparedEstamaDiary,
+  options: PreparedEstamaDiaryOptions = {},
+) {
   const imageUrls = requireSingleDiaryImageUrls(input.post.imageUrls);
   const created = await createBrowserSession(null, false, {
     action: "portal-diary",
@@ -1889,15 +1960,49 @@ export async function runPreparedEstamaDiary(input: PreparedEstamaDiary) {
     if (!await bodyField.count()) throw new Error("エステ魂の写メ日記本文欄が見つかりません");
     const diaryForm = bodyField.locator("xpath=ancestor::form[1]");
     if (!await diaryForm.count()) throw new Error("エステ魂の写メ日記投稿フォームが見つかりません");
-    const uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
-      maxPhotos: 1,
-      strict: true,
-      root: diaryForm,
-      requiredWidth: ESTAMA_DIARY_IMAGE_SIZE,
-      requiredHeight: ESTAMA_DIARY_IMAGE_SIZE,
-    });
+    const photoDiagnosticBefore = options.diagnosticOnly ? await inspectDiaryPhotoState(diaryForm) : null;
+    const photoNetwork: Array<Record<string, unknown>> = [];
+    const capturePhotoResponse = (response: PlaywrightResponse) => {
+      try {
+        const url = new URL(response.url());
+        if (!url.hostname.endsWith("estama.jp")) return;
+        photoNetwork.push({
+          host: url.hostname,
+          path: url.pathname,
+          status: response.status(),
+          method: response.request().method(),
+          contentType: response.headers()["content-type"] || "",
+        });
+      } catch {
+        // Diagnostic collection must never change the posting result.
+      }
+    };
+    if (options.diagnosticOnly) accountPage.on("response", capturePhotoResponse);
+    let uploadedPhotos: number;
+    try {
+      uploadedPhotos = await uploadPhotos(accountPage, imageUrls, {
+        maxPhotos: 1,
+        strict: true,
+        root: diaryForm,
+        requiredWidth: ESTAMA_DIARY_IMAGE_SIZE,
+        requiredHeight: ESTAMA_DIARY_IMAGE_SIZE,
+      });
+    } finally {
+      if (options.diagnosticOnly) accountPage.off("response", capturePhotoResponse);
+    }
     assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
     await assertFormPhotoCount(diaryForm, imageUrls.length);
+    if (options.diagnosticOnly) {
+      return {
+        posted: false,
+        uploadedPhotos,
+        diagnostic: {
+          before: photoDiagnosticBefore,
+          after: await inspectDiaryPhotoState(diaryForm),
+          network: photoNetwork,
+        },
+      };
+    }
     const publishedDiaryInput: PublishedDiaryInput = {
       publicProfileUrl: input.cast.publicUrl,
       shopId: input.cast.shopId,

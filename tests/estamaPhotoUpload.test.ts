@@ -9,6 +9,8 @@ type UploadedFile = {
   name: string;
   mimeType: string;
   buffer: Buffer;
+  size?: number;
+  type?: string;
 };
 
 type FakeInput = {
@@ -19,6 +21,7 @@ type FakeInput = {
   multiple: boolean;
   name: string;
   hasAttribute: (name: string) => boolean;
+  matches: (selector: string) => boolean;
 };
 
 type SetInputFilesCall = {
@@ -41,6 +44,9 @@ const createInput = (multiple = false): FakeInput => ({
   name: "photo",
   hasAttribute(name) {
     return name === "multiple" && this.multiple;
+  },
+  matches(selector) {
+    return selector === ":disabled" && this.disabled;
   },
 });
 
@@ -78,9 +84,14 @@ const createFakePage = ({
       return {
         async setInputFiles(value: UploadedFile | UploadedFile[]) {
           const files = Array.isArray(value) ? value : [value];
-          inputs[index].files = retainedFilesPerInput === undefined
+          const retained = retainedFilesPerInput === undefined
             ? files
             : files.slice(0, retainedFilesPerInput);
+          inputs[index].files = retained.map((file) => ({
+            ...file,
+            size: file.buffer.byteLength,
+            type: file.mimeType,
+          }));
           calls.push({ inputIndex: index, files });
           if (addInputAfterSelection && inputs.length < maxDynamicInputs) {
             inputs.push(createInput());
@@ -103,6 +114,19 @@ const createFakePage = ({
   } as unknown as Page;
 
   return { calls, inputs, page };
+};
+
+const createFakeForm = (inputs: FakeInput[], page?: Page) => {
+  const formElement = {
+    tagName: "FORM",
+    querySelectorAll() { return inputs; },
+  };
+  return {
+    ...(page ? { locator: page.locator.bind(page) } : {}),
+    async evaluate(callback: (element: Element) => unknown) {
+      return callback(formElement as unknown as Element);
+    },
+  };
 };
 
 const imageResponse = (contentType = "image/jpeg", body: BodyInit = "image-data") =>
@@ -189,9 +213,9 @@ test("画像なしは写真欄を操作せず0枚で完了する", async () => {
 });
 
 for (const count of [0, 1, 2, 3]) {
-  test(`送信フォームへ指定${count}枚が直列化されることを確認する`, async () => {
+  test(`送信フォームへ指定${count}枚が選択されていることを確認する`, async () => {
     const form = {
-      async evaluate() { return count; },
+      async evaluate() { return { inputCount: 1, selected: count, unnamedSelected: 0 }; },
     };
 
     assert.equal(await assertFormPhotoCount(form as never, count), count);
@@ -200,16 +224,54 @@ for (const count of [0, 1, 2, 3]) {
 
 test("同時投稿フォームは写真が正確に1枚ある場合だけ送信できる", async () => {
   const form = {
-    async evaluate() { return 1; },
+    async evaluate() { return { inputCount: 1, selected: 1, unnamedSelected: 0 }; },
   };
 
   assert.equal(await assertFormPhotoCount(form as never, 1), 1);
 });
 
+test("エステ魂の名前属性がない写真入力欄でも選択済み1枚として確認できる", async () => {
+  const unnamedInput = createInput();
+  unnamedInput.name = "";
+  const fixture = createFakePage({ inputs: [unnamedInput] });
+  const form = createFakeForm(fixture.inputs, fixture.page);
+  const squareFetch = (async () => imageResponse("image/jpeg", jpegHeader(600, 600))) as typeof fetch;
+
+  const uploaded = await uploadPhotos(fixture.page, [photoUrls[0]], {
+    maxPhotos: 1,
+    strict: true,
+    root: form as never,
+    requiredWidth: 600,
+    requiredHeight: 600,
+    fetchPhoto: squareFetch,
+  });
+
+  assert.equal(uploaded, 1);
+  assert.equal(await assertFormPhotoCount(form as never, 1), 1);
+});
+
+for (const scenario of ["空ファイル", "画像以外", "無効な入力欄"] as const) {
+  test(`送信直前の${scenario}は写真1枚として数えない`, async () => {
+    const input = createInput();
+    input.files = scenario === "空ファイル"
+      ? [{ name: "photo.jpg", mimeType: "image/jpeg", type: "image/jpeg", size: 0, buffer: Buffer.alloc(0) }]
+      : [{ name: "note.txt", mimeType: "text/plain", type: "text/plain", size: 4, buffer: Buffer.from("note") }];
+    if (scenario === "無効な入力欄") {
+      input.files = [{ name: "photo.jpg", mimeType: "image/jpeg", type: "image/jpeg", size: 4, buffer: Buffer.from("jpeg") }];
+      input.matches = (selector) => selector === ":disabled";
+    }
+
+    await assert.rejects(
+      assertFormPhotoCount(createFakeForm([input]) as never, 1),
+      /送信フォーム内の写真枚数が一致しません（指定1枚 \/ 送信0枚）/,
+    );
+  });
+}
+
 for (const actualCount of [0, 2, 3]) {
   test(`同時投稿フォームの写真が${actualCount}枚なら送信を中断する`, async () => {
     const form = {
-      async evaluate() { return actualCount; },
+      async evaluate() { return { inputCount: 1, selected: actualCount, unnamedSelected: 0 }; },
     };
 
     await assert.rejects(
@@ -221,7 +283,7 @@ for (const actualCount of [0, 2, 3]) {
 
 test("入力欄に3枚あっても送信フォームが1枚しか含まなければ中断する", async () => {
   const form = {
-    async evaluate() { return 1; },
+    async evaluate() { return { inputCount: 1, selected: 1, unnamedSelected: 0 }; },
   };
 
   await assert.rejects(
