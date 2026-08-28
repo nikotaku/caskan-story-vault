@@ -5963,6 +5963,7 @@ export type Database = {
           p_body: string
           p_cast_id: string
           p_image_urls?: string[]
+          p_publish_hp?: boolean
           p_store_id: string
           p_title: string
         }
@@ -5992,6 +5993,18 @@ export type Database = {
       dispatch_estama_worker_request: {
         Args: { p_payload: Json }
         Returns: number
+      }
+      delete_admin_failed_cast_post: {
+        Args: { p_post_id: string }
+        Returns: boolean
+      }
+      delete_admin_failed_cast_post_with_assets: {
+        Args: { p_post_id: string }
+        Returns: {
+          cast_id: string
+          image_urls: string[]
+          store_id: string
+        }[]
       }
       submit_dispatch_registration: {
         Args: {
@@ -6423,6 +6436,10 @@ export type Database = {
       report_estama_shift_result: {
         Args: { p_job_id: string; p_result: Json; p_token: string }
         Returns: boolean
+      }
+      replace_imported_cast_diaries: {
+        Args: { p_cast_id: string; p_rows: Json }
+        Returns: number
       }
       save_o2_soul_connection_admin_v1: {
         Args: {

@@ -19,7 +19,7 @@ import {
 } from "./estama-appeal.js";
 import {
   assertPublishedPhotoCount,
-  findPublicDiaryPhotoCount,
+  findPublicDiaryPublication,
   matchingPublicDiarySignatures,
   publicDiaryListUrl,
   type PublicDiaryCandidate,
@@ -665,6 +665,7 @@ async function readPublicDiaryCandidates(
             || "",
         }));
         const publishedAt = normalize(text).match(/\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}/)?.[0] || "";
+        const externalUrl = (heading.closest("a[href]") as HTMLAnchorElement | null)?.href || "";
         values.push({
           title: heading.textContent || "",
           text,
@@ -672,6 +673,7 @@ async function readPublicDiaryCandidates(
           photos,
           headingCount,
           publishedAt,
+          externalUrl,
         });
         break;
       }
@@ -710,18 +712,29 @@ async function verifyPublishedEstamaDiary(
   const { listUrl } = baseline;
 
   const timeoutAt = Date.now() + 35_000;
-  let lastMatch = { found: false, photoCount: null as number | null };
+  let lastMatch = { found: false, photoCount: null as number | null, externalUrl: null as string | null };
   let lastError = "";
   while (Date.now() < timeoutAt) {
     try {
       const candidates = await readPublicDiaryCandidates(page, listUrl, input);
-      lastMatch = findPublicDiaryPhotoCount(candidates, {
+      lastMatch = findPublicDiaryPublication(candidates, {
         title: input.title,
         body: input.body,
         externalId: input.externalId,
       }, baseline.signatures);
       if (lastMatch.found && lastMatch.photoCount === input.expectedPhotos) {
         assertPublishedPhotoCount(input.expectedPhotos, lastMatch.photoCount);
+        if (lastMatch.externalUrl) {
+          try {
+            const publishedUrl = new URL(lastMatch.externalUrl, listUrl);
+            if (
+              publishedUrl.protocol === "https:"
+              && /^(?:[a-z0-9-]+\.)*estama\.jp$/i.test(publishedUrl.hostname)
+            ) return publishedUrl.toString();
+          } catch {
+            // 個別URLを検証できない場合は、検証済みの一覧URLを保持する。
+          }
+        }
         return listUrl;
       }
       lastError = "";
@@ -1842,6 +1855,12 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   }).eq("id", postId).eq("esutama_status", "posting").select("id").maybeSingle();
   if (postedError || !postedPost) {
     throw new EstamaSubmissionUncertainError(`魂セラピストへの投稿後、管理画面の状態を保存できませんでした（${postedError?.message || "保存対象の状態が送信中ではありませんでした"}）`);
+  }
+  const { error: diaryLinkError } = await admin.from("cast_diaries")
+    .update({ external_url: publicDiaryUrl })
+    .eq("source_post_id", postId);
+  if (diaryLinkError) {
+    console.warn(JSON.stringify({ event: "estama_hp_diary_link_failed", postId, error: diaryLinkError.message }));
   }
   await updatePostOverallStatus(admin, postId);
   return { posted: true, uploadedPhotos, url: publicDiaryUrl };

@@ -36,6 +36,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/cast-posts/delete",
+      "destination": "/api/automations/admin-portal-post?action=delete-failed-post"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
     },

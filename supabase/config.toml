@@ -18,6 +18,9 @@ verify_jwt = true
 [functions.import-estama-profile]
 verify_jwt = true
 
+[functions.import-estama-diary]
+verify_jwt = true
+
 [functions.sync-estama-reviews]
 verify_jwt = true
 

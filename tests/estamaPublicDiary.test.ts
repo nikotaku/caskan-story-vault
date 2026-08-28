@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   assertPublishedPhotoCount,
   findPublicDiaryPhotoCount,
+  findPublicDiaryPublication,
   matchingPublicDiarySignatures,
   publicDiaryListUrl,
   type PublicDiaryCandidate,
@@ -81,6 +82,16 @@ test("投稿前から存在する同一日記だけでは新規投稿の成功�
   const baseline = matchingPublicDiarySignatures([existing], input);
   assert.deepEqual(findPublicDiaryPhotoCount([existing], input, baseline), { found: false, photoCount: null });
   assert.deepEqual(findPublicDiaryPhotoCount([existing, existing], input, baseline), { found: true, photoCount: 1 });
+});
+
+test("新しく公開された日記の個別URLを投稿結果として返す", () => {
+  const externalUrl = "https://estama.jp/shop/51445/blog/12345/";
+  const publication = findPublicDiaryPublication([candidate(1, { externalUrl })], {
+    title: "動作確認",
+    body: "画像1枚の公開確認をします",
+    externalId: "928862",
+  });
+  assert.deepEqual(publication, { found: true, photoCount: 1, externalUrl });
 });
 
 test("プロフィール画像や別CDNの画像は日記写真に数えない", () => {

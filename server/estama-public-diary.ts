@@ -5,11 +5,16 @@ export type PublicDiaryCandidate = {
   photos: Array<{ alt: string; src: string }>;
   headingCount: number;
   publishedAt: string;
+  externalUrl?: string;
 };
 
 export type PublicDiaryMatch = {
   found: boolean;
   photoCount: number | null;
+};
+
+export type PublicDiaryPublication = PublicDiaryMatch & {
+  externalUrl: string | null;
 };
 
 const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/g, " ").trim();
@@ -83,6 +88,15 @@ export function findPublicDiaryPhotoCount(
   input: { title: string; body: string; externalId?: string | null },
   baselineSignatures: string[] = [],
 ): PublicDiaryMatch {
+  const publication = findPublicDiaryPublication(candidates, input, baselineSignatures);
+  return { found: publication.found, photoCount: publication.photoCount };
+}
+
+export function findPublicDiaryPublication(
+  candidates: PublicDiaryCandidate[],
+  input: { title: string; body: string; externalId?: string | null },
+  baselineSignatures: string[] = [],
+): PublicDiaryPublication {
   const expectedTitle = normalize(input.title);
   const matching = matchingEntries(candidates, input);
   const baselineCounts = baselineSignatures.reduce<Record<string, number>>((counts, signature) => {
@@ -95,9 +109,9 @@ export function findPublicDiaryPhotoCount(
     observedCounts[signature] = (observedCounts[signature] || 0) + 1;
     return observedCounts[signature] > (baselineCounts[signature] || 0);
   });
-  if (!entry) return { found: false, photoCount: null };
+  if (!entry) return { found: false, photoCount: null, externalUrl: null };
   const photoCount = diaryPhotoUrls(entry, expectedTitle).length;
-  return { found: true, photoCount };
+  return { found: true, photoCount, externalUrl: entry.externalUrl || null };
 }
 
 export function matchingPublicDiarySignatures(
