@@ -41,6 +41,11 @@ import { useAdminStore } from "@/hooks/useAdminStore";
 import { PaymentReminderPopup } from "@/components/PaymentReminderPopup";
 import { loadReceptionEndGuide, shareReceptionEndContent } from "@/lib/receptionEndShare";
 import { ENKA_STORE_ID } from "@/lib/storeSwitch";
+import {
+  DEFAULT_RESERVATION_INTERVAL_MINUTES,
+  findNextAvailableStart,
+  formatAvailabilityTime,
+} from "@/lib/availability";
 
 interface Cast {
   id: string;
@@ -375,7 +380,7 @@ export default function Schedule() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const { user, loading: authLoading, isAdmin } = useAuth();
-  const [intervalMinutes, setIntervalMinutes] = useState(30);
+  const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_RESERVATION_INTERVAL_MINUTES);
   const [dayStartTime, setDayStartTime] = useState("10:00:00");
   const [storeDayStartLoaded, setStoreDayStartLoaded] = useState(false);
   const navigate = useNavigate();
@@ -492,7 +497,9 @@ export default function Schedule() {
           ? `${configuredStart}:00`
           : configuredStart;
         setDayStartTime(normalizedStart);
-        setIntervalMinutes(data?.reservation_interval_minutes ?? 30);
+        setIntervalMinutes(
+          data?.reservation_interval_minutes ?? DEFAULT_RESERVATION_INTERVAL_MINUTES,
+        );
 
         const [startHour, startMinute] = normalizedStart.split(":").map(Number);
         const now = new Date();
@@ -755,7 +762,6 @@ export default function Schedule() {
   const earliestSlots = useMemo(() => {
     const DUR = 60;           // 最短案内の目安コース時間
     const INTERVAL = intervalMinutes; // 予約後のインターバル（店舗設定）
-    const ceil10 = (m: number) => Math.ceil(m / 10) * 10;
     const nowD = new Date();
     const rawNow = nowD.getHours() * 60 + nowD.getMinutes();
     const nowExt = nowD.getHours() < 6 ? rawNow + 1440 : rawNow;
@@ -775,32 +781,35 @@ export default function Schedule() {
         .filter((r) => r.cast_id === cast.id && r.status !== "cancelled")
         .map((r) => {
           const st = timeToMinutes(r.start_time);
-          return { st, en: st + r.duration + getExtMinutes(r.options, optionRates) + INTERVAL };
+          return {
+            start: st,
+            duration: r.duration + getExtMinutes(r.options, optionRates),
+          };
         })
-        .sort((a, b) => a.st - b.st);
+        .sort((a, b) => a.start - b.start);
 
       for (const sh of castShifts) {
-        let cand = ceil10(Math.max(sh.st, todaySel ? nowExt : sh.st));
-        let moved = true;
-        while (moved) {
-          moved = false;
-          for (const r of resv) {
-            if (cand + DUR > r.st && cand < r.en) {
-              cand = ceil10(r.en);
-              moved = true;
-            }
-          }
-        }
-        if (cand + DUR <= sh.en) {
+        const cand = findNextAvailableStart({
+          shiftStart: sh.st,
+          shiftEnd: sh.en,
+          currentTime: todaySel ? nowExt : sh.st,
+          reservations: resv,
+          intervalMinutes: INTERVAL,
+          minimumDuration: DUR,
+        });
+        if (cand !== null) {
           const isNow = todaySel && cand <= nowExt + 10;
-          const h = Math.floor(cand / 60);
-          const mm = String(cand % 60).padStart(2, "0");
-          return { castId: cast.id, name: cast.name, label: isNow ? "今すぐOK" : `${h}:${mm}〜`, now: isNow };
+          return {
+            castId: cast.id,
+            name: cast.name,
+            label: isNow ? "今すぐOK" : `${formatAvailabilityTime(cand)}〜`,
+            now: isNow,
+          };
         }
       }
       return { castId: cast.id, name: cast.name, label: "受付終了", now: false };
     });
-  }, [castRows, shifts, reservations, selectedDate, intervalMinutes]);
+  }, [castRows, shifts, reservations, selectedDate, intervalMinutes, optionRates]);
 
   const hours = Array.from({ length: TIME_END - TIME_START }, (_, i) => TIME_START + i);
 

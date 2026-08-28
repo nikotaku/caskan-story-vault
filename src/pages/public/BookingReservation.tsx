@@ -18,6 +18,7 @@ import { z } from "zod";
 import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { useStore } from "@/hooks/useStore";
 import { useStoreContact } from "@/hooks/useStoreContact";
+import { DEFAULT_RESERVATION_INTERVAL_MINUTES } from "@/lib/availability";
 
 interface Cast {
   id: string;
@@ -179,7 +180,7 @@ const BookingReservation = () => {
   const [referralSource, setReferralSource] = useState<string>("");
   const [referralOther, setReferralOther] = useState<string>("");
   const [paymentSettings, setPaymentSettings] = useState<PaymentSetting[]>([]);
-  const [intervalMinutes, setIntervalMinutes] = useState(30);
+  const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_RESERVATION_INTERVAL_MINUTES);
 
   useEffect(() => {
     document.title = "艶華 - WEB予約";
@@ -191,10 +192,18 @@ const BookingReservation = () => {
 
   useEffect(() => {
     fetchBanners();
-    supabase.rpc("get_reservation_interval" as any).then(({ data }) => {
-      if (typeof data === "number") setIntervalMinutes(data);
-    });
-  }, []);
+    supabase
+      .from("shop_settings")
+      .select("reservation_interval_minutes")
+      .eq("store_id", storeId)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        setIntervalMinutes(
+          data?.reservation_interval_minutes ?? DEFAULT_RESERVATION_INTERVAL_MINUTES,
+        );
+      });
+  }, [storeId]);
 
   // 料金・オプションは店舗が確定してから取得（店舗混在を防ぐ）
   useEffect(() => {
@@ -277,7 +286,7 @@ const BookingReservation = () => {
     if (selectedDate && selectedCastId && shifts.length > 0) {
       calculateAvailableTimeSlots();
     }
-  }, [shifts, reservations, duration, selectedDate, selectedCastId]);
+  }, [shifts, reservations, duration, selectedDate, selectedCastId, intervalMinutes]);
 
   // 指名タイプごとの料金を算出（指名なし=none / ネット指名 / 本指名）
   const computePrice = (nomType: string) => {

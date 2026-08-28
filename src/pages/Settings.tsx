@@ -15,6 +15,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BannerManagement } from "@/components/BannerManagement";
 import { PaymentReminderSettings } from "@/components/PaymentReminderSettings";
 import { getWebhookUrl, saveWebhookUrl } from "@/lib/sheetWebhook";
+import { useAdminStore } from "@/hooks/useAdminStore";
+import { DEFAULT_RESERVATION_INTERVAL_MINUTES } from "@/lib/availability";
 
 function SheetWebhookSettings() {
   const { toast } = useToast();
@@ -73,6 +75,7 @@ export default function Settings() {
 
   const { toast } = useToast();
   const { user, loading: authLoading, isAdmin } = useAuth();
+  const { store: adminStore, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,16 +85,17 @@ export default function Settings() {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (user) {
+    if (user && adminStore?.id) {
       fetchSettings();
     }
-  }, [user]);
+  }, [user, adminStore?.id]);
 
   const fetchSettings = async () => {
     try {
       const { data, error } = await supabase
         .from('shop_settings')
         .select('*')
+        .eq('store_id', adminStore!.id)
         .limit(1)
         .maybeSingle();
 
@@ -135,7 +139,8 @@ export default function Settings() {
           shop_address: settings.shop_address,
           business_hours: settings.business_hours,
           business_day_start: settings.business_day_start,
-          reservation_interval_minutes: settings.reservation_interval_minutes ?? 30,
+          reservation_interval_minutes:
+            settings.reservation_interval_minutes ?? DEFAULT_RESERVATION_INTERVAL_MINUTES,
           description: settings.description,
           logo_url: settings.logo_url,
           line_reminder_enabled: settings.line_reminder_enabled ?? true,
@@ -162,7 +167,7 @@ export default function Settings() {
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || storeLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">読み込み中...</div>
@@ -297,7 +302,10 @@ export default function Settings() {
                       type="number"
                       min="0"
                       step="5"
-                      value={settings.reservation_interval_minutes ?? 30}
+                      value={
+                        settings.reservation_interval_minutes
+                          ?? DEFAULT_RESERVATION_INTERVAL_MINUTES
+                      }
                       onChange={(e) => setSettings({...settings, reservation_interval_minutes: Number(e.target.value) || 0})}
                       disabled={!isAdmin}
                     />

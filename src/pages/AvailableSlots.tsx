@@ -17,6 +17,7 @@ import { format, addDays, startOfDay } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { isAvailabilitySlotOpen } from "@/lib/availability";
 
 interface Shift {
   id: string;
@@ -48,7 +49,7 @@ export default function AvailableSlots() {
   const [casts, setCasts] = useState<{ id: string; name: string }[]>([]);
 
   const { user, loading: authLoading } = useAuth();
-  const { loaded: settingsLoaded, businessToday } = useShopSettings();
+  const { loaded: settingsLoaded, businessToday, intervalMinutes } = useShopSettings();
   useEffect(() => {
     if (settingsLoaded) setSelectedDate(businessToday);
   }, [settingsLoaded]); // eslint-disable-line
@@ -131,16 +132,27 @@ export default function AvailableSlots() {
     const shiftStart = shiftStartHour * 60 + shiftStartMin;
 
     const [shiftEndHour, shiftEndMin] = shift.end_time.split(":").map(Number);
-    const shiftEnd = shiftEndHour * 60 + shiftEndMin;
+    const shiftEndRaw = shiftEndHour * 60 + shiftEndMin;
+    const shiftEnd = shiftEndRaw <= shiftStart ? shiftEndRaw + 24 * 60 : shiftEndRaw;
 
-    if (slotTime < shiftStart || slotTime + 60 > shiftEnd) return false;
+    const castReservations = reservations
+      .filter((reservation) => reservation.cast_id === castId)
+      .map((reservation) => {
+        const [resHour, resMin] = reservation.start_time.split(":").map(Number);
+        const rawStart = resHour * 60 + resMin;
+        return {
+          start: rawStart < shiftStart ? rawStart + 24 * 60 : rawStart,
+          duration: reservation.duration,
+        };
+      });
 
-    return !reservations.some((res) => {
-      if (res.cast_id !== castId) return false;
-      const [resHour, resMin] = res.start_time.split(":").map(Number);
-      const resStart = resHour * 60 + resMin;
-      const resEnd = resStart + res.duration;
-      return slotTime < resEnd && slotTime + 60 > resStart;
+    return isAvailabilitySlotOpen({
+      slotStart: slotTime,
+      duration: 60,
+      shiftStart,
+      shiftEnd,
+      reservations: castReservations,
+      intervalMinutes,
     });
   };
 
