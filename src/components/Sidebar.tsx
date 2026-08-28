@@ -151,7 +151,6 @@ const menuItems: MenuItem[] = [
         groupLabel: "設定",
         items: [
           { href: "/system/page-content", label: "料金ページ文言" },
-          { href: "/shop", label: "設定" },
         ],
       },
     ],

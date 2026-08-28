@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Trash2 } from "lucide-react";
@@ -28,23 +29,32 @@ export default function SystemReferralRewards() {
   const [formData, setFormData] = useState({ name: "", amount: 0, note: "" });
 
   const { user, loading: authLoading } = useAuth();
+  const { storeId, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const fetchRewards = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("referral_rewards")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("name");
+    if (error) {
+      toast({ variant: "destructive", title: "エラー", description: "広告費の取得に失敗しました" });
+    } else {
+      setRewards(data || []);
+    }
+    setLoading(false);
+  }, [storeId, toast]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (user) fetchRewards();
-  }, [user]);
-
-  const fetchRewards = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from("referral_rewards").select("*").order("name");
-    if (!error) setRewards(data || []);
-    setLoading(false);
-  };
+    if (user && !storeLoading) fetchRewards();
+  }, [user, storeLoading, fetchRewards]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +63,7 @@ export default function SystemReferralRewards() {
         name: formData.name,
         amount: formData.amount,
         note: formData.note || null,
+        store_id: storeId,
       }]);
       if (error) throw error;
       setFormData({ name: "", amount: 0, note: "" });
@@ -66,7 +77,11 @@ export default function SystemReferralRewards() {
   const handleDelete = async (id: string) => {
     if (!confirm("削除しますか？")) return;
     try {
-      const { error } = await supabase.from("referral_rewards").delete().eq("id", id);
+      const { error } = await supabase
+        .from("referral_rewards")
+        .delete()
+        .eq("id", id)
+        .eq("store_id", storeId);
       if (error) throw error;
       fetchRewards();
     } catch (error) {
