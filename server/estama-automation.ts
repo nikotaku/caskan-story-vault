@@ -1945,6 +1945,23 @@ async function inspectDiaryPhotoState(form: Locator) {
           return "other";
         }
       }),
+      photoScriptSnippets: Array.from(document.scripts).flatMap((script) => {
+        const source = script.textContent || "";
+        const match = source.search(/photo[_-](?:data|input|preview)|new\s+Cropper|cropper/i);
+        if (match < 0) return [];
+        return [source.slice(Math.max(0, match - 600), match + 3_000)];
+      }).slice(0, 10),
+      visibleControls: Array.from(document.querySelectorAll<HTMLElement>(
+        'button, a, [role="button"], input[type="button"], input[type="submit"]',
+      )).filter((item) => item.getClientRects().length > 0).slice(0, 80).map((item) => ({
+        tag: item.tagName,
+        id: item.id || "",
+        type: item instanceof HTMLButtonElement || item instanceof HTMLInputElement ? item.type : "",
+        className: item.className || "",
+        text: (item.innerText || (item instanceof HTMLInputElement ? item.value : ""))
+          .replace(/\s+/g, " ").trim().slice(0, 160),
+        ariaLabel: item.getAttribute("aria-label") || "",
+      })),
     };
   });
 }
