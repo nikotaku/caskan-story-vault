@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import simultaneousPostSystemImage from "@/assets/recruit/enka-simultaneous-post-system.png";
 import {
   ArrowLeft, MapPin, Clock, Train, ShieldCheck,
   Home, IdCard, Camera, AlertTriangle, Sparkles, Check, ChevronDown,
-  Footprints, Tablet, type LucideIcon,
+  Footprints, Tablet, Share2, type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -146,6 +147,30 @@ export default function InterviewGuide() {
             料金・報酬の詳細は、面談時に個別にご案内します。
           </p>
         </Card>
+      </Section>
+
+      {/* 集客・投稿サポート */}
+      <Section icon={Share2} title="集客・投稿サポート" sub="投稿作業を、1回に" tone="rose" wide>
+        <a
+          href={simultaneousPostSystemImage}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="艶華の同時投稿システム画像を原寸で開く"
+          className="block overflow-hidden rounded-2xl border border-rose-100 bg-white shadow-sm transition hover:shadow-md"
+        >
+          <img
+            src={simultaneousPostSystemImage}
+            alt="写真1枚を600×600の正方形に整え、文章と一緒にホームページ・O2・魂セラピストへ同時投稿する艶華の集客支援システム"
+            width={1080}
+            height={1350}
+            loading="lazy"
+            decoding="async"
+            className="h-auto w-full object-contain"
+          />
+        </a>
+        <p className="mt-2 text-center text-xs leading-5 text-gray-500">
+          画像をタップすると原寸で確認できます。テスト投稿ではホームページへ掲載されません。
+        </p>
       </Section>
 
       {/* ルーム環境 */}
