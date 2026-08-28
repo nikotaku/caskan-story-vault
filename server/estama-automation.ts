@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { assertFormPhotoCount, assertUploadedPhotoCount, uploadPhotos } from "./estama-photo-upload.js";
+import { assertEstamaDiaryPhotoReady, completeEstamaDiaryPhotoCrop } from "./estama-diary-photo.js";
 import {
   isEstamaAvailabilitySelect,
   isEstamaShiftActive,
@@ -1803,6 +1804,8 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   });
   assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
   await assertFormPhotoCount(diaryForm, imageUrls.length);
+  await completeEstamaDiaryPhotoCrop(accountPage, diaryForm);
+  await assertEstamaDiaryPhotoReady(diaryForm);
   const publishedDiaryInput: PublishedDiaryInput = {
     publicProfileUrl: external.public_profile_url,
     externalId: external.external_cast_id,
@@ -1813,9 +1816,9 @@ async function postEstamaDiary(admin: AdminClient, page: Page, job: AutomationJo
   const publishedDiaryBaseline = await capturePublishedDiaryBaseline(accountPage, publishedDiaryInput);
   const submittedBody = await bodyField.inputValue();
   const baselineSuccessMessages = await visibleEstamaSuccessMessages(accountPage);
-  // The public baseline fetch can take a few seconds. Re-check the file that is
-  // actually selected in the diary form immediately before the submit click.
-  await assertFormPhotoCount(diaryForm, imageUrls.length);
+  // The public baseline fetch can take a few seconds. Re-check the image payload
+  // that the URL-encoded diary form will actually submit immediately before click.
+  await assertEstamaDiaryPhotoReady(diaryForm);
   const submission = await clickSave(accountPage, { diary: true, root: diaryForm });
   if (!submission) throw new EstamaSubmissionUncertainError();
   await verifyEstamaDiarySubmission(
@@ -1966,17 +1969,6 @@ async function inspectDiaryPhotoState(form: Locator) {
   });
 }
 
-async function replayDiaryPhotoSelection(form: Locator) {
-  return form.evaluate((element) => {
-    const input = element.querySelector<HTMLInputElement>('input[type="file"]#photo-input')
-      || element.querySelector<HTMLInputElement>('input[type="file"]');
-    if (!input || !input.files?.length) return false;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-    return true;
-  });
-}
-
 export async function runPreparedEstamaDiary(
   input: PreparedEstamaDiary,
   options: PreparedEstamaDiaryOptions = {},
@@ -2040,12 +2032,11 @@ export async function runPreparedEstamaDiary(
     }
     assertUploadedPhotoCount(imageUrls.length, uploadedPhotos);
     await assertFormPhotoCount(diaryForm, imageUrls.length);
+    const afterInitialSelection = options.diagnosticOnly ? await inspectDiaryPhotoState(diaryForm) : null;
+    await completeEstamaDiaryPhotoCrop(accountPage, diaryForm);
+    await assertEstamaDiaryPhotoReady(diaryForm);
     if (options.diagnosticOnly) {
-      const afterInitialSelection = await inspectDiaryPhotoState(diaryForm);
-      const replayedSelectionEvents = await replayDiaryPhotoSelection(diaryForm);
-      await accountPage.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
-      await accountPage.waitForTimeout(2_000);
-      const afterReplayedSelection = await inspectDiaryPhotoState(diaryForm);
+      const afterCropCompleted = await inspectDiaryPhotoState(diaryForm);
       accountPage.off("response", capturePhotoResponse);
       return {
         posted: false,
@@ -2053,8 +2044,7 @@ export async function runPreparedEstamaDiary(
         diagnostic: {
           before: photoDiagnosticBefore,
           afterInitialSelection,
-          replayedSelectionEvents,
-          afterReplayedSelection,
+          afterCropCompleted,
           network: photoNetwork,
         },
       };
@@ -2070,7 +2060,7 @@ export async function runPreparedEstamaDiary(
     const publishedDiaryBaseline = await capturePublishedDiaryBaseline(accountPage, publishedDiaryInput);
     const submittedBody = await bodyField.inputValue();
     const baselineSuccessMessages = await visibleEstamaSuccessMessages(accountPage);
-    await assertFormPhotoCount(diaryForm, imageUrls.length);
+    await assertEstamaDiaryPhotoReady(diaryForm);
     const submission = await clickSave(accountPage, { diary: true, root: diaryForm });
     if (!submission) throw new EstamaSubmissionUncertainError();
     await verifyEstamaDiarySubmission(
