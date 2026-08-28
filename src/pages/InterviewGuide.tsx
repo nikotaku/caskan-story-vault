@@ -160,7 +160,7 @@ export default function InterviewGuide() {
         >
           <img
             src={simultaneousPostSystemImage}
-            alt="1枚の写真と文章をホームページ・O2・魂セラピストへ同時投稿する艶華の集客支援システム"
+            alt="写真1枚を600×600の正方形に整え、文章と一緒にホームページ・O2・魂セラピストへ同時投稿する艶華の集客支援システム"
             width={1080}
             height={1350}
             loading="lazy"
@@ -168,7 +168,9 @@ export default function InterviewGuide() {
             className="h-auto w-full object-contain"
           />
         </a>
-        <p className="mt-2 text-center text-xs text-gray-400">画像をタップすると原寸で確認できます</p>
+        <p className="mt-2 text-center text-xs leading-5 text-gray-500">
+          画像をタップすると原寸で確認できます。テスト投稿ではホームページへ掲載されません。
+        </p>
       </Section>
 
       {/* ルーム環境 */}
