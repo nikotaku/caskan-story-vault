@@ -54,11 +54,10 @@ interface DummyShift {
 }
 
 const ROOMS = ["インルーム", "ラスルーム"];
-const DUMMY_CAST_NAMES = ["蒼井かずは", "華咲れみ", "萩原ゆの"] as const;
+const DUMMY_CAST_NAMES = ["蒼井かずは", "華咲れみ"] as const;
 const DUMMY_SHIFT_PATTERNS: Record<(typeof DUMMY_CAST_NAMES)[number], Record<number, [string, string]>> = {
   蒼井かずは: { 1: ["12:00", "20:00"], 3: ["14:00", "22:00"], 6: ["12:00", "23:00"] },
   華咲れみ: { 0: ["12:00", "20:00"], 2: ["13:00", "21:00"], 4: ["15:00", "23:00"] },
-  萩原ゆの: { 0: ["13:00", "21:00"], 5: ["15:00", "23:00"], 6: ["14:00", "23:00"] },
 };
 const DUMMY_PALETTE = [
   { chip: "bg-sky-100 dark:bg-sky-900/30", text: "text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },

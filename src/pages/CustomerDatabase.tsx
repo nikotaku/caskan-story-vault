@@ -21,6 +21,7 @@ import { GoogleSheetPanel } from "@/components/GoogleSheetPanel";
 import { mapCustomerRows, batchInsert } from "@/lib/importMappers";
 import { CustomerPreferencesTab } from "@/components/customers/CustomerPreferencesTab";
 import { CustomerSalesTab } from "@/components/customers/CustomerSalesTab";
+import { NewsletterCampaignsTab } from "@/components/customers/NewsletterCampaignsTab";
 import { getCustomerRank } from "@/lib/customerRank";
 import { getCustomerInsights } from "@/lib/customerInsights";
 
@@ -39,6 +40,7 @@ interface CustomerRow {
   tags: string[] | null;
   notes: string | null;
   is_banned: boolean | null;
+  newsletter_opt_in: boolean;
 }
 
 interface CustomerCrmMetric {
@@ -57,6 +59,8 @@ interface CustomerCrmMetric {
 const DEFAULT_PROPERTIES: Property[] = [
   { id: "name", name: "名前", type: "text", width: 140 },
   { id: "phone", name: "電話番号", type: "phone", width: 140, readOnly: true, allowOnCreate: true },
+  { id: "email", name: "メールアドレス", type: "email", width: 220 },
+  { id: "newsletter_opt_in", name: "メルマガ配信", type: "checkbox", width: 110 },
   {
     id: "phone_status",
     name: "電話番号確認",
@@ -134,14 +138,14 @@ const SORT_OPTIONS: DatabaseSortOption[] = [
   { label: "フォロー優先度（高い順）", field: "sales_priority_score", dir: "desc" },
 ];
 
-const EDITABLE_FIELDS = new Set(["name", "email", "tags", "notes"]);
+const EDITABLE_FIELDS = new Set(["name", "email", "newsletter_opt_in", "tags", "notes"]);
 
 async function fetchAllCustomers(storeId: string): Promise<CustomerRow[]> {
   const rows: CustomerRow[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("customers")
-      .select("id, name, phone, email, visit_count, total_spent, last_visited, last_cast_id, tags, notes, is_banned")
+      .select("id, name, phone, email, visit_count, total_spent, last_visited, last_cast_id, tags, notes, is_banned, newsletter_opt_in")
       .eq("store_id", storeId)
       .order("last_visited", { ascending: false, nullsFirst: false })
       .order("id", { ascending: true })
@@ -219,6 +223,7 @@ function mapToRecord(
     tags: row.tags,
     notes: row.notes,
     is_banned: row.is_banned,
+    newsletter_opt_in: row.newsletter_opt_in,
   };
 }
 
@@ -234,7 +239,7 @@ export default function CustomerDatabase() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const activeTab = ["preferences", "sales", "sheet"].includes(tabParam || "") ? tabParam! : "db";
+  const activeTab = ["preferences", "sales", "newsletter", "sheet"].includes(tabParam || "") ? tabParam! : "db";
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -306,6 +311,7 @@ export default function CustomerDatabase() {
     const tags = Array.isArray(data.tags)
       ? data.tags.filter((tag): tag is string => typeof tag === "string")
       : null;
+    const newsletterOptIn = data.newsletter_opt_in === true;
     if (!name || !phone) {
       toast.error("名前と電話番号を入力してください");
       return;
@@ -321,6 +327,7 @@ export default function CustomerDatabase() {
         notes,
         tags,
         email,
+        newsletter_opt_in: newsletterOptIn,
         store_id: storeId,
       }]);
       if (error) throw error;
@@ -353,7 +360,9 @@ export default function CustomerDatabase() {
     try {
       const updateValue = field === "tags"
         ? (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : null)
-        : (typeof value === "string" ? value : null);
+        : field === "newsletter_opt_in"
+          ? value === true
+          : (typeof value === "string" ? value : null);
       const { error } = await supabase
         .from("customers")
         .update({ [field]: updateValue })
@@ -408,6 +417,7 @@ export default function CustomerDatabase() {
             <TabsTrigger value="db">データベース</TabsTrigger>
             <TabsTrigger value="preferences">好み</TabsTrigger>
             <TabsTrigger value="sales">営業</TabsTrigger>
+            <TabsTrigger value="newsletter">メルマガ</TabsTrigger>
             <TabsTrigger value="sheet" className="gap-1.5">
               <Table2 size={13} />Googleスプレッドシート
             </TabsTrigger>
@@ -417,6 +427,9 @@ export default function CustomerDatabase() {
           </TabsContent>
           <TabsContent value="sales" className="flex-1 overflow-hidden mt-0">
             <CustomerSalesTab />
+          </TabsContent>
+          <TabsContent value="newsletter" className="flex-1 overflow-hidden mt-0">
+            <NewsletterCampaignsTab />
           </TabsContent>
           <TabsContent value="sheet" className="mt-0">
             <GoogleSheetPanel

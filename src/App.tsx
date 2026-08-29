@@ -146,6 +146,7 @@ import SurveysAdmin from "./pages/SurveysAdmin";
 import ReviewsAdmin from "./pages/ReviewsAdmin";
 import Campaigns from "./pages/public/Campaigns";
 import DispatchRegistration from "./pages/public/DispatchRegistration";
+import NewsletterUnsubscribe from "./pages/public/NewsletterUnsubscribe";
 import DispatchRegistrationAdmin from "./pages/DispatchRegistrationAdmin";
 import EstamaSyncHistory from "./pages/EstamaSyncHistory";
 import { PublicSeo } from "@/components/public/PublicSeo";
@@ -184,6 +185,7 @@ const App = () => {
           <Route path="/r/:castKey" element={<CastBooking />} />
           <Route path="/haru" element={<Navigate to="/r/4b2fc0c8" replace />} />
           <Route path="/voice" element={<Voice />} />
+          <Route path="/newsletter/unsubscribe" element={<NewsletterUnsubscribe />} />
           <Route path="/dispatch-registration/:token" element={<DispatchRegistration />} />
           
           {/* Admin/Staff Pages */}

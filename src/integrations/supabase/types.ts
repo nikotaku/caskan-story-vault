@@ -2037,6 +2037,8 @@ export type Database = {
           last_visited: string | null
           name: string
           notes: string | null
+          newsletter_opt_in: boolean
+          newsletter_opt_out_token: string
           phone: string
           status: string
           store_id: string
@@ -2056,6 +2058,8 @@ export type Database = {
           last_visited?: string | null
           name: string
           notes?: string | null
+          newsletter_opt_in?: boolean
+          newsletter_opt_out_token?: string
           phone: string
           status?: string
           store_id?: string
@@ -2075,6 +2079,8 @@ export type Database = {
           last_visited?: string | null
           name?: string
           notes?: string | null
+          newsletter_opt_in?: boolean
+          newsletter_opt_out_token?: string
           phone?: string
           status?: string
           store_id?: string
@@ -3807,6 +3813,116 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_campaigns: {
+        Row: {
+          body_text: string
+          created_at: string
+          created_by: string | null
+          failed_count: number
+          id: string
+          recipient_count: number
+          sent_at: string | null
+          sent_count: number
+          status: string
+          store_id: string
+          subject: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_text: string
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          recipient_count?: number
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+          store_id: string
+          subject: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_text?: string
+          created_at?: string
+          created_by?: string | null
+          failed_count?: number
+          id?: string
+          recipient_count?: number
+          sent_at?: string | null
+          sent_count?: number
+          status?: string
+          store_id?: string
+          subject?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_campaigns_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_deliveries: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          customer_id: string | null
+          error_message: string | null
+          id: string
+          provider_message_id: string | null
+          recipient_email: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          customer_id?: string | null
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          recipient_email: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          customer_id?: string | null
+          error_message?: string | null
+          id?: string
+          provider_message_id?: string | null
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "newsletter_deliveries_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "newsletter_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "newsletter_deliveries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]

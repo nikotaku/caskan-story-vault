@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
 import {
   Inbox,
   CalendarRange,
@@ -12,6 +13,8 @@ import {
   MinusCircle,
   Gift,
   ClipboardList,
+  TrendingUp,
+  UsersRound,
 } from "lucide-react";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -20,12 +23,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+
+interface ReservationSummaryRow {
+  price: number | null;
+  status: string;
+  reservation_date: string;
+}
 
 interface SummaryData {
   monthlySales: number;
   monthlyCount: number;
   pendingCount: number;
+  averageCustomerSpend: number;
+  previousAverageCustomerSpend: number | null;
+  averageCustomerSpendChange: number | null;
 }
 
 export default function SalesDashboard() {
@@ -34,6 +46,9 @@ export default function SalesDashboard() {
     monthlySales: 0,
     monthlyCount: 0,
     pendingCount: 0,
+    averageCustomerSpend: 0,
+    previousAverageCustomerSpend: null,
+    averageCustomerSpendChange: null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +57,7 @@ export default function SalesDashboard() {
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
-  }, [user, authLoading]);
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     if (user) fetchSummary();
@@ -51,23 +66,50 @@ export default function SalesDashboard() {
   const fetchSummary = async () => {
     setLoading(true);
 
-    const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
-    const monthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
+    const currentMonth = new Date();
+    const previousMonth = subMonths(currentMonth, 1);
+    const monthStart = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+    const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+    const previousMonthStart = format(startOfMonth(previousMonth), "yyyy-MM-dd");
+    const previousMonthEnd = format(endOfMonth(previousMonth), "yyyy-MM-dd");
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("reservations")
       .select("price, status, reservation_date")
-      .gte("reservation_date", monthStart)
+      .gte("reservation_date", previousMonthStart)
       .lte("reservation_date", monthEnd);
 
-    const rows = (data as any[]) ?? [];
-    const active = rows.filter((r: any) => r.status !== "cancelled");
+    if (error) {
+      console.error("売上ダッシュボードの集計取得に失敗しました:", error);
+      setLoading(false);
+      return;
+    }
 
-    const monthlySales = active.reduce((sum: number, r: any) => sum + (r.price || 0), 0);
+    const rows = (data || []) as ReservationSummaryRow[];
+    const currentRows = rows.filter((row) => row.reservation_date >= monthStart && row.reservation_date <= monthEnd);
+    const previousRows = rows.filter((row) => row.reservation_date >= previousMonthStart && row.reservation_date <= previousMonthEnd);
+    const active = currentRows.filter((row) => row.status !== "cancelled");
+    const previousActive = previousRows.filter((row) => row.status !== "cancelled");
+
+    const monthlySales = active.reduce((sum, row) => sum + (row.price || 0), 0);
     const monthlyCount = active.length;
-    const pendingCount = rows.filter((r: any) => r.status === "pending").length;
+    const previousSales = previousActive.reduce((sum, row) => sum + (row.price || 0), 0);
+    const previousCount = previousActive.length;
+    const averageCustomerSpend = monthlyCount > 0 ? Math.round(monthlySales / monthlyCount) : 0;
+    const previousAverageCustomerSpend = previousCount > 0 ? Math.round(previousSales / previousCount) : null;
+    const averageCustomerSpendChange = previousAverageCustomerSpend && previousAverageCustomerSpend > 0
+      ? ((averageCustomerSpend - previousAverageCustomerSpend) / previousAverageCustomerSpend) * 100
+      : null;
+    const pendingCount = currentRows.filter((row) => row.status === "pending").length;
 
-    setSummary({ monthlySales, monthlyCount, pendingCount });
+    setSummary({
+      monthlySales,
+      monthlyCount,
+      pendingCount,
+      averageCustomerSpend,
+      previousAverageCustomerSpend,
+      averageCustomerSpendChange,
+    });
     setLoading(false);
   };
 
@@ -77,7 +119,7 @@ export default function SalesDashboard() {
 
   const moduleGroups: {
     title: string;
-    modules: { href: string; label: string; icon: any; description: string }[];
+    modules: { href: string; label: string; icon: LucideIcon; description: string }[];
   }[] = [
     {
       title: "売上",
@@ -91,6 +133,7 @@ export default function SalesDashboard() {
         { href: "/sales/monthly-target", label: "月別売上目標", icon: Target, description: "月別の売上目標設定" },
         { href: "/sales/daily-target", label: "日別売上目標", icon: CalendarClock, description: "日別の売上目標設定" },
         { href: "/sales/expense-input", label: "経費入力", icon: ReceiptText, description: "経費の入力" },
+        { href: "/sales/price-analysis", label: "単価分析", icon: TrendingUp, description: "サービス別の単価と売上構成" },
       ],
     },
     {
@@ -116,7 +159,7 @@ export default function SalesDashboard() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">今月の売上合計</CardTitle>
@@ -137,18 +180,39 @@ export default function SalesDashboard() {
               </CardContent>
             </Card>
 
-            <Card className={summary.pendingCount > 0 ? "border-amber-400" : ""}>
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">確認待ち件数</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">平均客単価</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className={`text-3xl font-bold ${summary.pendingCount > 0 ? "text-amber-500" : ""}`}>
-                  {summary.pendingCount}
+                <p className="text-2xl font-bold">¥{summary.averageCustomerSpend.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">有効予約 {summary.monthlyCount.toLocaleString()}件の平均</p>
+              </CardContent>
+            </Card>
+
+            <Card className={summary.pendingCount > 0 ? "border-amber-400" : ""}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">客単価の前月比</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className={`text-2xl font-bold ${summary.averageCustomerSpendChange !== null && summary.averageCustomerSpendChange < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                  {summary.averageCustomerSpendChange === null ? "—" : `${summary.averageCustomerSpendChange >= 0 ? "+" : ""}${summary.averageCustomerSpendChange.toFixed(1)}%`}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">件</p>
+                <p className="text-xs text-muted-foreground mt-1">{summary.previousAverageCustomerSpend === null ? "前月の有効予約なし" : `前月 ¥${summary.previousAverageCustomerSpend.toLocaleString()}`}</p>
               </CardContent>
             </Card>
           </div>
+
+          <Card className="border-primary/20 bg-primary/[0.03]">
+            <CardContent className="flex items-start gap-3 p-4">
+              <UsersRound className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <p className="font-semibold text-sm">平均客単価分析</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">今月の有効予約あたりの売上を前月と比較しています。詳細ではサービス別の単価と売上構成を確認できます。</p>
+              </div>
+              <Link to="/sales/price-analysis" className="ml-auto shrink-0"><Button variant="outline" size="sm">詳細を見る</Button></Link>
+            </CardContent>
+          </Card>
 
           {/* Pending shortcut */}
           {summary.pendingCount > 0 && (
