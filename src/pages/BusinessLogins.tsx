@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isValidEmail } from "@/lib/email";
 
 interface Login {
   id: string;
@@ -137,6 +138,10 @@ export default function BusinessLogins() {
   const handleSave = async () => {
     if (!form.service_name.trim()) {
       toast({ title: "エラー", description: "サービス名を入力してください", variant: "destructive" });
+      return;
+    }
+    if (form.registered_email.trim() && !isValidEmail(form.registered_email)) {
+      toast({ title: "エラー", description: "登録メールアドレスの形式が正しくありません（例: example@email.jp）", variant: "destructive" });
       return;
     }
     const payload = {

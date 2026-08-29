@@ -11,6 +11,7 @@ import {
 } from "@/components/database/NotionDatabaseView";
 import type { Property, DatabaseRecord } from "@/components/database/types";
 import { toast } from "sonner";
+import { isValidEmail } from "@/lib/email";
 import { postToSheet } from "@/lib/sheetWebhook";
 import { ImportModal } from "@/components/ImportModal";
 import { FileUp, Table2 } from "lucide-react";
@@ -309,6 +310,10 @@ export default function CustomerDatabase() {
       toast.error("名前と電話番号を入力してください");
       return;
     }
+    if (email?.trim() && !isValidEmail(email)) {
+      toast.error("メールアドレスの形式が正しくありません（例: example@email.com）");
+      return;
+    }
     try {
       const { error } = await supabase.from("customers").insert([{
         name,
@@ -339,6 +344,10 @@ export default function CustomerDatabase() {
   const handleUpdate = async (id: string, field: string, value: unknown) => {
     if (!EDITABLE_FIELDS.has(field)) {
       toast.error("この項目は来店履歴から自動計算されます");
+      return;
+    }
+    if (field === "email" && typeof value === "string" && value.trim() && !isValidEmail(value)) {
+      toast.error("メールアドレスの形式が正しくありません（例: example@email.com）");
       return;
     }
     try {

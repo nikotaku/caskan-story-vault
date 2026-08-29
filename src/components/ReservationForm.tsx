@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
+import { isValidEmail } from "@/lib/email";
 import { supabase } from "@/integrations/supabase/client";
 import {
   calcPaymentFee,
@@ -157,6 +158,7 @@ export function ReservationForm({
   const [ngCastId, setNgCastId] = useState("");
   const [ngReason, setNgReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSetting[]>([]);
   const [paymentSettingsLoaded, setPaymentSettingsLoaded] = useState(false);
   const [paymentSettingsLoadFailed, setPaymentSettingsLoadFailed] = useState(false);
@@ -517,6 +519,10 @@ export function ReservationForm({
       !paymentSettingsLoaded &&
       formData.payment_details?.some((detail) => detail.method !== "cash" && detail.amount > 0)
     ) {
+      return;
+    }
+    if (formData.customer_email.trim() && !isValidEmail(formData.customer_email)) {
+      setEmailError("メールアドレスの形式が正しくありません（例: example@email.com）");
       return;
     }
     await savePreferences();
@@ -1207,8 +1213,19 @@ export function ReservationForm({
           type="email"
           placeholder="example@email.com"
           value={formData.customer_email}
-          onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
+          onChange={(e) => {
+            setFormData({ ...formData, customer_email: e.target.value });
+            setEmailError(null);
+          }}
+          onBlur={() => {
+            const value = formData.customer_email.trim();
+            setEmailError(value && !isValidEmail(value)
+              ? "メールアドレスの形式が正しくありません（例: example@email.com）"
+              : null);
+          }}
+          aria-invalid={Boolean(emailError)}
         />
+        {emailError && <p className="text-xs text-destructive">{emailError}</p>}
       </div>
 
       {/* 17. 備考 */}

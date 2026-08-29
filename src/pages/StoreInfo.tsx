@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
+import { isValidEmail } from "@/lib/email";
 import { useAdminStore } from "@/hooks/useAdminStore";
 
 interface StoreInfoData {
@@ -82,6 +83,10 @@ export default function StoreInfo() {
   const handleSave = async () => {
     if (!formData.name.trim()) {
       toast.error("店舗名を入力してください");
+      return;
+    }
+    if (formData.email.trim() && !isValidEmail(formData.email)) {
+      toast.error("メールアドレスの形式が正しくありません（例: info@example.jp）");
       return;
     }
     setSaving(true);

@@ -1145,6 +1145,45 @@ export type Database = {
           },
         ]
       }
+      cast_test_post_completions: {
+        Row: {
+          cast_id: string
+          store_id: string
+          site: string
+          completed_at: string
+          completed_by: string | null
+        }
+        Insert: {
+          cast_id: string
+          store_id: string
+          site: string
+          completed_at?: string
+          completed_by?: string | null
+        }
+        Update: {
+          cast_id?: string
+          store_id?: string
+          site?: string
+          completed_at?: string
+          completed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cast_test_post_completions_cast_id_fkey"
+            columns: ["cast_id"]
+            isOneToOne: false
+            referencedRelation: "casts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cast_test_post_completions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cast_title_badges: {
         Row: {
           created_at: string
