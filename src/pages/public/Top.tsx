@@ -120,6 +120,48 @@ const NewsContent = ({ content }: { content: string }) => {
   );
 };
 
+// ===== トップバナー：一ノ瀬ひなた スライド =====
+const HERO_SLIDES = [
+  {
+    img: "/hinata-1.jpg",
+    pos: "50% 32%",
+    tag: "NEW FACE",
+    titleA: "圧倒的な、",
+    titleB: "透明感。",
+    desc: "一ノ瀬 ひなた ─ 電撃入店。\n柔らかな笑顔と、洗練されたスタイル。\n出会った瞬間、心が解けていく。",
+    cta: "ひなたに会いに行く →",
+  },
+  {
+    img: "/hinata-2.jpg",
+    pos: "50% 30%",
+    tag: "STYLE",
+    titleA: "その佇まい、",
+    titleB: "まさに逸材。",
+    desc: "モデル顔負けのプロポーション。\n長い手脚から繰り出される施術は、\n一度知ったら戻れない心地よさ。",
+    cta: "空き状況を見る →",
+  },
+  {
+    img: "/hinata-3.jpg",
+    pos: "50% 30%",
+    tag: "TECHNIQUE",
+    titleA: "距離の近さに、",
+    titleB: "戸惑うほど。",
+    desc: "丁寧で、大胆で、あたたかい。\n至近距離で紡がれるひとときは、\n日常を忘れる特別な時間になる。",
+    cta: "今すぐご予約 →",
+  },
+  {
+    img: "/hinata-4.jpg",
+    pos: "50% 30%",
+    tag: "LIMITED",
+    titleA: "新人期間だけの、",
+    titleB: "特別な出会い。",
+    desc: "一ノ瀬 ひなた ─ ご予約受付中。\n新人セラピストは今だけの輝き。\nこの出会いを、お見逃しなく。",
+    cta: "ご予約・空き状況 →",
+  },
+];
+
+const HERO_INTERVAL = 5200;
+
 const Top = () => {
   const { store } = useStore();
   const storeName = store?.name ?? "艶華";
@@ -129,9 +171,18 @@ const Top = () => {
   const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
   const [coursesOpen, setCoursesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [heroIdx, setHeroIdx] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
   const navigate = useNavigate();
   const { storeId, loading: storeLoading } = useStore();
   usePageTracking();
+
+  // スライド自動送り（ホバー中は一時停止）
+  useEffect(() => {
+    if (heroPaused) return;
+    const t = setInterval(() => setHeroIdx((i) => (i + 1) % HERO_SLIDES.length), HERO_INTERVAL);
+    return () => clearInterval(t);
+  }, [heroPaused]);
 
   const storeSns = STORE_SNS_DEFS
     .map((d) => ({ ...d, url: snsContent[d.key] || "" }))
@@ -199,17 +250,40 @@ const Top = () => {
 
       {/* ===== ヒーロー / 理念 / コース ===== */}
       <div className="zrtop">
-        {/* 1枚目：ヒーロー */}
-        <section className="hero">
-          <div className="mono">ZR</div>
-          <div className="inner">
-            <div className="overline goldtext"><span className="dia" />{brandEn} ｜ {storeName}</div>
-            <h1>また、<span className="goldtext">あの人</span>に<br />会いに。</h1>
-            <p className="concept">至極のおもてなしは、人がつくる。<br />あなたを覚えている、ただ一人のセラピストへ。</p>
-            <div className="cta-row">
-              <Link className="btn btn-gold goldfill" to={reserveHref()}>ご予約・空き状況 →</Link>
-              <Link className="btn btn-line" to="/casts">セラピスト一覧</Link>
+        {/* 1枚目：ヒーロー（一ノ瀬ひなた スライドバナー・固定サイズ） */}
+        <section
+          className="hero hero-slide"
+          onMouseEnter={() => setHeroPaused(true)}
+          onMouseLeave={() => setHeroPaused(false)}
+        >
+          {HERO_SLIDES.map((s, i) => (
+            <div key={s.img} className={`slide${i === heroIdx ? " active" : ""}`}>
+              <img className="photo" src={s.img} alt={`一ノ瀬ひなた バナー${i + 1}`} style={{ objectPosition: s.pos }} />
+              <div className="shade" />
+              <div className="inner">
+                <div className="overline goldtext"><span className="dia" />{brandEn} ｜ {storeName} ─ {s.tag}</div>
+                <h1>{s.titleA}<span className="goldtext">{s.titleB}</span></h1>
+                <p className="concept">{s.desc.split("\n").map((line, li) => (<span key={li}>{line}{li < s.desc.split("\n").length - 1 && <br />}</span>))}</p>
+                <div className="cta-row">
+                  <Link className="btn btn-gold goldfill" to={reserveHref()}>{s.cta}</Link>
+                  <Link className="btn btn-line" to="/casts">セラピスト一覧</Link>
+                </div>
+              </div>
             </div>
+          ))}
+          <div className="cast-badge">
+            <span className="cb-label">THERAPIST</span>
+            <span className="cb-name goldtext">一ノ瀬 ひなた</span>
+          </div>
+          <div className="dots">
+            {HERO_SLIDES.map((_, i) => (
+              <button
+                key={i}
+                aria-label={`スライド${i + 1}`}
+                className={`dot${i === heroIdx ? " active" : ""}`}
+                onClick={() => setHeroIdx(i)}
+              />
+            ))}
           </div>
           <div className="loc">仙台・宮城のメンズエステ</div>
         </section>
