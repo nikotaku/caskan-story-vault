@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isValidEmail } from "@/lib/email";
 import { useSortable } from "@/hooks/useSortable";
 import { useDragReorder } from "@/hooks/useDragReorder";
 import { SortableTh } from "@/components/SortableTh";
@@ -107,6 +108,10 @@ export default function BusinessVendors() {
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast({ title: "エラー", description: "業者名を入力してください", variant: "destructive" });
+      return;
+    }
+    if (form.email.trim() && !isValidEmail(form.email)) {
+      toast({ title: "エラー", description: "メールアドレスの形式が正しくありません（例: example@email.jp）", variant: "destructive" });
       return;
     }
     const payload = {

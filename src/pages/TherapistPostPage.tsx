@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { isValidEmail } from "@/lib/email";
 import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 import { POST_IMAGE_SIZE, prepareSquarePostImage } from "@/lib/post-image";
 
@@ -268,8 +269,8 @@ export default function TherapistPostPage() {
       return;
     }
     const email = credential.email.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error("O2・魂セラピストで使う登録メールアドレスを確認してください");
+    if (!email || !isValidEmail(email)) {
+      toast.error("O2・魂セラピストで使う登録メールアドレスの形式が正しくありません（例: therapist@example.jp）");
       return;
     }
     setSubmitting(true);

@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BannerManagement } from "@/components/BannerManagement";
 import { PaymentReminderSettings } from "@/components/PaymentReminderSettings";
 import { getWebhookUrl, saveWebhookUrl } from "@/lib/sheetWebhook";
+import { isValidEmail } from "@/lib/email";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { DEFAULT_RESERVATION_INTERVAL_MINUTES } from "@/lib/availability";
 
@@ -126,8 +127,15 @@ export default function Settings() {
       return;
     }
 
-    if (!settings) return;
-
+        if (!settings) return;
+    if (settings.shop_email?.trim() && !isValidEmail(settings.shop_email)) {
+      toast({
+        title: "入力エラー",
+        description: "メールアドレスの形式が正しくありません（例: info@example.jp）",
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const { error } = await supabase

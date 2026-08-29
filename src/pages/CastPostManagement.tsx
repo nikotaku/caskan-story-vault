@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CheckCircle, ChevronDown, ChevronUp, Clock, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, ShieldAlert, Trash2, X, XCircle } from "lucide-react";
+import { Check, CheckCircle, ChevronDown, ChevronUp, Clock, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, ShieldAlert, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -31,6 +31,9 @@ import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 import { POST_IMAGE_SIZE, prepareSquarePostImage } from "@/lib/post-image";
 
 interface Cast { id: string; name: string; }
+
+// テスト投稿が完了した媒体（O2・魂セラピスト）のチェックマーク状態
+type TestCompletionMap = Record<string, Partial<Record<Target, string>>>;
 interface PendingImage {
   id: string;
   file: File;
@@ -93,6 +96,8 @@ export default function CastPostManagement() {
   const [casts, setCasts] = useState<Cast[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [credentials, setCredentials] = useState<Record<string, Set<string>>>({});
+  const [testCompletions, setTestCompletions] = useState<TestCompletionMap>({});
+  const [togglingCompletion, setTogglingCompletion] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(() => Boolean(requestedCastId));
   const [testMode, setTestMode] = useState(requestedTestMode);
@@ -128,12 +133,13 @@ export default function CastPostManagement() {
   const load = useCallback(async () => {
     if (!user || storeLoading) return;
     setLoading(true);
-    const [castsResult, postsResult, credentialsResult] = await Promise.all([
+    const [castsResult, postsResult, credentialsResult, completionsResult] = await Promise.all([
       supabase.from("casts").select("id,name").eq("store_id", storeId).eq("is_active", true).order("display_order", { ascending: true }),
       supabase.from("cast_posts").select("*,casts(name)").eq("store_id", storeId).order("created_at", { ascending: false }).limit(100),
       supabase.rpc("get_site_connection_status_admin", { p_store_id: storeId }),
+      supabase.from("cast_test_post_completions").select("cast_id,site,completed_at").eq("store_id", storeId),
     ]);
-    if (castsResult.error || postsResult.error || credentialsResult.error) {
+    if (castsResult.error || postsResult.error || credentialsResult.error || completionsResult.error) {
       toast.error("投稿管理データを取得できませんでした");
     }
     setCasts((castsResult.data || []) as Cast[]);
@@ -143,6 +149,13 @@ export default function CastPostManagement() {
       (next[credential.cast_id] ??= new Set()).add(credential.site);
     });
     setCredentials(next);
+    const nextCompletions: TestCompletionMap = {};
+    ((completionsResult.data || []) as { cast_id: string; site: string; completed_at: string }[]).forEach((completion) => {
+      if (completion.site === "o2" || completion.site === "esutama") {
+        (nextCompletions[completion.cast_id] ??= {})[completion.site] = completion.completed_at;
+      }
+    });
+    setTestCompletions(nextCompletions);
     setLoading(false);
   }, [storeId, storeLoading, user]);
 
@@ -399,6 +412,69 @@ export default function CastPostManagement() {
     }
   };
 
+  const toggleTestCompletion = async (castId: string, target: Target) => {
+    const key = `${castId}:${target}`;
+    if (togglingCompletion === key) return;
+    const nextCompleted = !testCompletions[castId]?.[target];
+    setTogglingCompletion(key);
+    // 楽観的に表示を更新し、失敗時はロールバックする
+    setTestCompletions((current) => {
+      const next: TestCompletionMap = { ...current, [castId]: { ...current[castId] } };
+      if (nextCompleted) {
+        next[castId][target] = new Date().toISOString();
+      } else {
+        delete next[castId][target];
+      }
+      return next;
+    });
+    const { error } = await rpc("set_cast_test_post_completion", {
+      p_store_id: storeId,
+      p_cast_id: castId,
+      p_site: target,
+      p_completed: nextCompleted,
+    });
+    if (error) {
+      setTestCompletions((current) => {
+        const next: TestCompletionMap = { ...current, [castId]: { ...current[castId] } };
+        if (nextCompleted) {
+          delete next[castId][target];
+        } else {
+          next[castId][target] = new Date().toISOString();
+        }
+        return next;
+      });
+      toast.error(error.message || "テスト完了の状態を更新できませんでした");
+    } else {
+      toast.success(nextCompleted
+        ? `${target === "o2" ? "O2" : "魂セラピスト"}のテスト完了にチェックを付けました`
+        : `${target === "o2" ? "O2" : "魂セラピスト"}のテスト完了チェックを外しました`);
+    }
+    setTogglingCompletion(null);
+  };
+
+  const connectionBadge = (castId: string, target: Target, label: string) => {
+    const sites = credentials[castId] || new Set<string>();
+    const configured = sites.has(target);
+    const completed = Boolean(testCompletions[castId]?.[target]);
+    const key = `${castId}:${target}`;
+    const busy = togglingCompletion === key;
+    return (
+      <button
+        type="button"
+        title={completed ? `${label}のテスト完了チェックを外す` : `${label}のテスト投稿が完了したらチェックを付ける`}
+        aria-pressed={completed}
+        disabled={busy}
+        onClick={() => void toggleTestCompletion(castId, target)}
+        className="inline-flex items-center gap-0.5 rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      >
+        <Badge variant={configured ? "default" : "outline"}>{label}</Badge>
+        {busy
+          ? <Loader2 size={12} className="animate-spin text-muted-foreground" />
+          : completed && <Check size={13} strokeWidth={3.5} className="text-green-600" aria-label="テスト完了" />}
+      </button>
+    );
+  };
+
   const hpStatusRow = (post: Post) => (
     <div className="flex items-start gap-1.5 text-xs">
       {STATUS_ICON[post.hp_status] || STATUS_ICON.pending}
@@ -449,20 +525,22 @@ export default function CastPostManagement() {
             </button>
             {showConnections && (
               <div className="grid gap-x-6 border-t px-4 py-3 sm:grid-cols-2">
-                {casts.map((cast) => {
-                  const sites = credentials[cast.id] || new Set<string>();
-                  return (
-                    <div key={cast.id} className="flex items-center justify-between border-b border-dashed py-1.5 text-xs">
-                      <span className="truncate font-medium">{cast.name}</span>
-                      <span className="flex shrink-0 gap-2">
-                        <Badge>HP</Badge>
-                        <Badge variant={sites.has("o2") ? "default" : "outline"}>O2</Badge>
-                        <Badge variant={sites.has("esutama") ? "default" : "outline"}>魂</Badge>
-                      </span>
-                    </div>
-                  );
-                })}
+                {casts.map((cast) => (
+                  <div key={cast.id} className="flex items-center justify-between border-b border-dashed py-1.5 text-xs">
+                    <span className="truncate font-medium">{cast.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge>HP</Badge>
+                      {connectionBadge(cast.id, "o2", "O2")}
+                      {connectionBadge(cast.id, "esutama", "魂")}
+                    </span>
+                  </div>
+                ))}
               </div>
+            )}
+            {showConnections && (
+              <p className="border-t px-4 py-2 text-[11px] text-muted-foreground">
+                O2・魂のバッジをタップすると、テスト投稿が完了した媒体にチェックマーク（✓）を付け外しできます。
+              </p>
             )}
           </div>
 

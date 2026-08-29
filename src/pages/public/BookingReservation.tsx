@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { isValidEmail } from "@/lib/email";
 import { calcPaymentFee, findPaymentSetting, PaymentSetting } from "@/lib/paymentFee";
 import { z } from "zod";
 import { PublicNavigation } from "@/components/public/PublicNavigation";
@@ -115,7 +116,7 @@ const reservationSchema = z.object({
   customer_name: z.string().trim().min(1, "お名前を入力してください").max(100, "お名前は100文字以内で入力してください").regex(/^[\p{L}\p{N}\s\-\.]+$/u, "お名前に使用できない文字が含まれています"),
   customer_furigana: z.string().trim().min(1, "フリガナを入力してください").max(100, "フリガナは100文字以内で入力してください").regex(/^[\p{L}\p{N}\s\-\.]+$/u, "フリガナに使用できない文字が含まれています"),
   customer_phone: z.string().trim().min(10, "電話番号を入力してください").max(20, "電話番号は20文字以内で入力してください").regex(/^[0-9\-\(\)\+\s]+$/, "電話番号の形式が正しくありません"),
-  customer_email: z.string().trim().email("有効なメールアドレスを入力してください").max(255, "メールアドレスは255文字以内で入力してください"),
+  customer_email: z.string().trim().max(255, "メールアドレスは255文字以内で入力してください").refine(isValidEmail, "有効なメールアドレスを入力してください（例: example@email.jp）"),
   notes: z.string().max(1000, "備考は1000文字以内で入力してください").refine(val => !val || !/<[^>]*>/g.test(val), "HTMLタグは使用できません").optional(),
 });
 

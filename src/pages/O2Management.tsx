@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isValidEmail } from "@/lib/email";
 
 type O2Row = {
   cast_id: string;
@@ -421,8 +422,12 @@ export default function O2Management() {
     if (!editing || !isEditingCredentials || savingRef.current) return;
     const o2Email = editForm.o2Email.trim();
     const o2LoginId = normalizeO2Id(editForm.o2LoginId);
-    if (o2LoginId && (!o2Email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o2Email))) {
-      toast.error("O2の登録メールアドレスを確認してください");
+    if (o2Email && !isValidEmail(o2Email)) {
+      toast.error("O2の登録メールアドレスの形式が正しくありません（例: therapist@example.jp）");
+      return;
+    }
+    if (o2LoginId && !o2Email) {
+      toast.error("O2の登録メールアドレスを入力してください");
       return;
     }
     if (o2LoginId && !/^[A-Za-z0-9_]+$/.test(o2LoginId)) {

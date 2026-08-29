@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { isValidEmail } from "@/lib/email";
 import { toast } from "sonner";
 import { Plus, Eye, EyeOff, ExternalLink, Pencil, Trash2, X, Check, Copy, KeyRound } from "lucide-react";
 
@@ -97,6 +98,10 @@ export default function PasswordDatabase() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error("名称を入力してください"); return; }
+    if (form.email.trim() && !isValidEmail(form.email)) {
+      toast.error("メールアドレスの形式が正しくありません（例: example@email.jp）");
+      return;
+    }
     setSaving(true);
     const payload = {
       name: form.name.trim(),

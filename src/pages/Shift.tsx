@@ -23,6 +23,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { isValidEmail } from "@/lib/email";
 import { useStore } from "@/hooks/useStore";
 import { runQueuedEstamaAutomation } from "@/lib/estamaAutomation";
 
@@ -483,6 +484,15 @@ const Shift = () => {
       toast({
         title: "入力エラー",
         description: "必須項目を入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (reservationFormData.customer_email?.trim() && !isValidEmail(reservationFormData.customer_email)) {
+      toast({
+        title: "入力エラー",
+        description: "メールアドレスの形式が正しくありません（例: example@email.com）",
         variant: "destructive",
       });
       return;
