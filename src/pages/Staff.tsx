@@ -461,29 +461,6 @@ export default function Staff() {
     }
   };
 
-  // エステ魂プロフィールURLから写メ日記を取り込む
-  const [importingDiary, setImportingDiary] = useState(false);
-  const handleImportDiary = async () => {
-    if (!editingCast) return;
-    if (!editingCast.estama_profile_url) {
-      toast({ title: "エステ魂プロフィールURLを入力してください", variant: "destructive" });
-      return;
-    }
-    setImportingDiary(true);
-    try {
-      // 先にURLを保存（未保存でも取り込めるようにDBを更新）
-      await supabase.from("casts").update({ estama_profile_url: editingCast.estama_profile_url }).eq("id", editingCast.id);
-      const { data, error } = await supabase.functions.invoke("import-estama-diary", { body: { cast_id: editingCast.id } });
-      if (error || (data as any)?.error) {
-        toast({ title: "取り込みに失敗しました", description: (data as any)?.error ?? error?.message, variant: "destructive" });
-      } else {
-        toast({ title: `写メ日記を${(data as any)?.count ?? 0}件取り込みました` });
-      }
-    } finally {
-      setImportingDiary(false);
-    }
-  };
-
   // セラピスト登録・SNS準備のチェック状況を一覧から即切り替え。
   const toggleChecklist = async (castId: string, field: CastChecklistField, next: boolean) => {
     setCasts(prev => prev.map(c => c.id === castId ? { ...c, [field]: next } : c));
@@ -754,49 +731,6 @@ export default function Staff() {
   const updateMgmtProp = (i: number, field: "key" | "value", val: string) =>
     setMgmtProps((p) => p.map((x, idx) => (idx === i ? { ...x, [field]: val } : x)));
   const removeMgmtProp = (i: number) => setMgmtProps((p) => p.filter((_, idx) => idx !== i));
-
-  // 02アカウントの案内文をコピー（パスワードは管理画面から共有しない）
-  const handleCopyO2Account = (cast: Cast) => {
-    const text = [
-      `【${cast.name} 02アカウント】`,
-      "■管理画面URL",
-      cast.o2_login_url || "https://m-sns.net/cast/login/",
-      "■登録メールアドレス",
-      cast.o2_login_email || "（未登録）",
-      "■ID",
-      cast.o2_login_id || "（未登録）",
-      "■パスワード",
-      "セラピスト本人がO2接続設定へ直接入力してください（共有禁止）",
-    ].join("\n");
-    navigator.clipboard.writeText(text).then(
-      () => toast({ title: "コピーしました", description: "02アカウント情報をクリップボードにコピーしました" }),
-      () => toast({ title: "コピーに失敗しました", variant: "destructive" }),
-    );
-  };
-
-  // ブログ・SNS情報の共有文面をクリップボードへコピー（空欄の項目は省略）
-  const handleCopySns = (cast: Cast) => {
-    const xUrl = cast.x_account
-      ? `https://x.com/${cast.x_account.replace(/^@/, "")}（${cast.x_account.startsWith("@") ? cast.x_account : `@${cast.x_account}`}）`
-      : null;
-    const lines = [
-      `【${cast.name} ブログ・SNS】`,
-      cast.blog_url ? `■外部ブログ(02)\n${cast.blog_url}` : null,
-      xUrl ? `■X (Twitter)\n${xUrl}` : null,
-      cast.skebiy_url ? `■Skebiy\n${cast.skebiy_url}` : null,
-      cast.instagram_url ? `■Instagram\n${cast.instagram_url}` : null,
-      cast.line_url ? `■LINE\n${cast.line_url}` : null,
-      cast.litlink_url ? `■リットリンク\n${cast.litlink_url}` : null,
-    ].filter(Boolean);
-    if (lines.length <= 1) {
-      toast({ title: "コピーする項目がありません", description: "ブログ・SNSが未入力です", variant: "destructive" });
-      return;
-    }
-    navigator.clipboard.writeText(lines.join("\n")).then(
-      () => toast({ title: "コピーしました", description: "ブログ・SNS情報をクリップボードにコピーしました" }),
-      () => toast({ title: "コピーに失敗しました", variant: "destructive" }),
-    );
-  };
 
   const handleUpdateCast = async () => {
     if (!isAdmin || !editingCast) {
@@ -1870,38 +1804,7 @@ export default function Staff() {
                         </Select>
                       </div>
 
-                      {/* ブログ・SNS */}
-                      <div className="border rounded-lg p-4 space-y-3">
-                        <Label className="font-semibold">ブログ・SNS</Label>
-                        <div>
-                          <Label htmlFor="add-blog">外部ブログ(02)</Label>
-                          <div className="flex items-center gap-0 mt-1">
-                            <span className="text-xs text-muted-foreground bg-muted rounded-l px-2 h-9 flex items-center border border-r-0 whitespace-nowrap">https://m-sns.net/profile/</span>
-                            <Input
-                              id="add-blog"
-                              placeholder="@username"
-                              value={(formData.blog_url || "").replace("https://m-sns.net/profile/", "")}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setFormData({...formData, blog_url: val ? `https://m-sns.net/profile/${val}` : ""});
-                              }}
-                              className="rounded-l-none"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="add-x">X (Twitter)</Label>
-                          <Input id="add-x" placeholder="@username" value={formData.x_account} onChange={(e) => setFormData({...formData, x_account: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label htmlFor="add-skebiy">Skebiy</Label>
-                          <Input id="add-skebiy" placeholder="https://..." value={formData.skebiy_url} onChange={(e) => setFormData({...formData, skebiy_url: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label htmlFor="add-instagram">Instagram</Label>
-                          <Input id="add-instagram" placeholder="https://..." value={formData.instagram_url} onChange={(e) => setFormData({...formData, instagram_url: e.target.value})} />
-                        </div>
-                      </div>
+                      {/* ブログ・SNS・エステ魂写メ日記・02アカウント案内は別メニュー(SNS連携管理等)に統合済みのため、新規登録画面には表示しない */}
 
                       <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4 space-y-3">
                         <label className="flex cursor-pointer items-start gap-3">
@@ -2345,65 +2248,7 @@ export default function Staff() {
                         </Select>
                       </div>
 
-                      {/* ブログ・SNS */}
-                      <div className="border rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="font-semibold">ブログ・SNS</Label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleCopySns(editingCast)}
-                          >
-                            📋 コピペ用にコピー
-                          </Button>
-                        </div>
-                        <div>
-                          <Label htmlFor="e-blog">外部ブログ(02)</Label>
-                          <div className="flex items-center gap-0 mt-1">
-                            <span className="text-xs text-muted-foreground bg-muted rounded-l px-2 h-9 flex items-center border border-r-0 whitespace-nowrap">https://m-sns.net/profile/</span>
-                            <Input
-                              id="e-blog"
-                              placeholder="@username"
-                              value={(editingCast.blog_url || "").replace("https://m-sns.net/profile/", "")}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingCast({...editingCast, blog_url: val ? `https://m-sns.net/profile/${val}` : ""});
-                              }}
-                              className="rounded-l-none"
-                            />
-                          </div>
-                          <div className="mt-1 flex items-center gap-2">
-                            <Input placeholder="ブログアイコン画像URL（任意）" value={blogIconUrl} onChange={(e) => setBlogIconUrl(e.target.value)} className="h-7 text-xs" />
-                            {blogIconUrl && <img src={blogIconUrl} alt="preview" className="w-6 h-6 rounded object-contain shrink-0 border" />}
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="e-x">X (Twitter)</Label>
-                          <Input id="e-x" placeholder="@username" value={editingCast.x_account || ""} onChange={(e) => setEditingCast({...editingCast, x_account: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label htmlFor="e-skebiy">Skebiy</Label>
-                          <Input id="e-skebiy" placeholder="https://..." value={editingCast.skebiy_url || ""} onChange={(e) => setEditingCast({...editingCast, skebiy_url: e.target.value})} />
-                          <div className="mt-1 flex items-center gap-2">
-                            <Input placeholder="Skebiyアイコン画像URL（任意）" value={skebiyIconUrl} onChange={(e) => setSkebiyIconUrl(e.target.value)} className="h-7 text-xs" />
-                            {skebiyIconUrl && <img src={skebiyIconUrl} alt="preview" className="w-6 h-6 rounded object-contain shrink-0 border" />}
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="e-instagram">Instagram</Label>
-                          <Input id="e-instagram" placeholder="https://..." value={editingCast.instagram_url || ""} onChange={(e) => setEditingCast({...editingCast, instagram_url: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label htmlFor="e-line-url">LINE URL</Label>
-                          <Input id="e-line-url" placeholder="https://lin.ee/..." value={editingCast.line_url || ""} onChange={(e) => setEditingCast({...editingCast, line_url: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label htmlFor="e-litlink">リットリンク URL</Label>
-                          <Input id="e-litlink" placeholder="https://lit.link/..." value={editingCast.litlink_url || ""} onChange={(e) => setEditingCast({...editingCast, litlink_url: e.target.value})} />
-                        </div>
-                      </div>
+                      {/* ブログ・SNSは別メニュー(SNS連携管理)に統合済みのため、この画面には表示しない */}
 
                       {/* セラピストレベル */}
                       <div className="border rounded-lg p-4 space-y-3">
@@ -2498,53 +2343,7 @@ export default function Staff() {
                         </Button>
                       </div>
 
-                      <div>
-                        <Label>口コミ（O2）URL</Label>
-                        <Input placeholder="https://..." value={editingCast.o2_url || ""} onChange={(e) => setEditingCast({...editingCast, o2_url: e.target.value})} />
-                      </div>
-
-                      {/* エステ魂 写メ日記 取り込み */}
-                      <div className="border rounded-lg p-4 space-y-2">
-                        <Label className="font-semibold">エステ魂 写メ日記</Label>
-                        <p className="text-xs text-muted-foreground">
-                          エステ魂のプロフィールページURLを設定して取り込むと、HPの「写メ日記を見る」に写真と本文が表示されます。
-                        </p>
-                        <Input
-                          placeholder="https://estama.jp/shop/●●/cast/●●/"
-                          value={editingCast.estama_profile_url || ""}
-                          onChange={(e) => setEditingCast({ ...editingCast, estama_profile_url: e.target.value })}
-                        />
-                        <Button type="button" variant="outline" size="sm" onClick={handleImportDiary} disabled={importingDiary}>
-                          {importingDiary ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Camera className="h-3.5 w-3.5 mr-1.5" />}
-                          {importingDiary ? "取り込み中..." : "写メ日記を取り込む"}
-                        </Button>
-                      </div>
-
-                      {/* 02アカウントの登録案内 */}
-                      <div className="border rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="font-semibold">02アカウント案内</Label>
-                          <Button type="button" variant="outline" size="sm" onClick={() => handleCopyO2Account(editingCast)}>
-                            <Copy className="h-3.5 w-3.5 mr-1.5" />共有用にコピー
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          ID・パスワード・公開プロフィールURLの登録はSNS連携管理から行います。ここでは本人へ渡す登録案内を管理します。
-                        </p>
-                        <div>
-                          <Label className="text-xs">管理画面URL</Label>
-                          <Input className="mt-1" placeholder="https://m-sns.net/cast/login/" value={editingCast.o2_login_url ?? "https://m-sns.net/cast/login/"} onChange={(e) => setEditingCast({...editingCast, o2_login_url: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label className="text-xs">登録メールアドレス</Label>
-                          <Input className="mt-1" placeholder="info@example.com" value={editingCast.o2_login_email || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_email: e.target.value})} />
-                        </div>
-                        <div>
-                          <Label className="text-xs">ID</Label>
-                          <Input className="mt-1" placeholder="hana_sendai" value={editingCast.o2_login_id || ""} onChange={(e) => setEditingCast({...editingCast, o2_login_id: e.target.value})} />
-                        </div>
-                        <a href="/marketing/o2" className="inline-flex text-xs text-primary hover:underline">SNS連携管理を開く</a>
-                      </div>
+                      {/* 口コミ(O2)URL・エステ魂写メ日記・02アカウント案内は別メニュー(SNS連携管理等)に統合済みのため、この画面には表示しない */}
 
                       <div className="border rounded-lg p-4 space-y-3">
                         <Label className="font-semibold">管理情報</Label>
