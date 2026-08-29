@@ -2,12 +2,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { PublicFooter } from "@/components/public/PublicFooter";
+import { NewsletterSignupForm } from "@/components/public/NewsletterSignupForm";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
 import { WeeklyScheduleWidget } from "@/components/public/WeeklyScheduleWidget";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useStore } from "@/hooks/useStore";
-import { ExternalLink, Menu } from "lucide-react";
+import { ExternalLink, Mail, Menu } from "lucide-react";
 import { format } from "date-fns";
 import "@/styles/zrtop.css";
 
@@ -165,7 +166,7 @@ const HERO_INTERVAL = 5200;
 const Top = () => {
   const { store } = useStore();
   const storeName = store?.name ?? "艶華";
-  const brandEn = (store?.settings as any)?.brand_en ?? "ZR";
+  const brandEn = (store?.settings as Record<string, unknown> | undefined)?.brand_en as string ?? "ZR";
   const [snsContent, setSnsContent] = useState<Record<string, string>>({});
   const [articles, setArticles] = useState<HpArticle[]>([]);
   const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
@@ -421,6 +422,17 @@ const Top = () => {
           </div>
         </section>
       )}
+
+      {/* ===== メルマガ登録 ===== */}
+      <section className="py-10 md:py-16" style={{ background: "var(--pub-light-bg,#fdf8f5)" }}>
+        <div className="container mx-auto max-w-2xl px-3 md:px-6">
+          <SectionTitle en="NEWSLETTER" jp="メルマガ登録" />
+          <p className="text-sm mt-4 text-center" style={{ color: "var(--pub-light-text,#7a706c)" }}>
+            お得な情報や最新の出勤情報をメールでお届けします。
+          </p>
+          <NewsletterSignupForm storeId={storeId} />
+        </div>
+      </section>
 
       {/* ===== 店舗公式SNS ===== */}
       <section

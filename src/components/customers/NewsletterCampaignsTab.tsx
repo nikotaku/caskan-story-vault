@@ -34,6 +34,14 @@ interface Campaign {
   sent_at: string | null;
 }
 
+interface NewsletterMember {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+  newsletter_opt_in: boolean;
+}
+
 const STATUS_LABELS: Record<CampaignStatus, string> = {
   draft: "下書き",
   sending: "送信中",
@@ -64,6 +72,7 @@ function formatDateTime(value: string | null) {
 export function NewsletterCampaignsTab() {
   const { storeId, loading: storeLoading } = useAdminStore();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [members, setMembers] = useState<NewsletterMember[]>([]);
   const [eligibleRecipients, setEligibleRecipients] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,7 +84,7 @@ export function NewsletterCampaignsTab() {
     if (storeLoading || !storeId) return;
     setLoading(true);
     try {
-      const [campaignResult, recipientResult] = await Promise.all([
+      const [campaignResult, memberResult] = await Promise.all([
         supabase
           .from("newsletter_campaigns")
           .select("id, title, subject, recipient_count, sent_count, failed_count, status, created_at, sent_at")
@@ -84,20 +93,23 @@ export function NewsletterCampaignsTab() {
           .limit(50),
         supabase
           .from("customers")
-          .select("id, email")
+          .select("id, name, email, created_at, newsletter_opt_in")
           .eq("store_id", storeId)
           .eq("newsletter_opt_in", true)
           .or("is_banned.is.null,is_banned.eq.false")
           .not("email", "is", null)
+          .order("created_at", { ascending: false })
           .limit(2_000),
       ]);
       if (campaignResult.error) throw campaignResult.error;
-      if (recipientResult.error) throw recipientResult.error;
+      if (memberResult.error) throw memberResult.error;
 
       setCampaigns((campaignResult.data || []) as Campaign[]);
+      const memberList = (memberResult.data || []) as NewsletterMember[];
+      setMembers(memberList);
       const uniqueEmails = new Set(
-        (recipientResult.data || [])
-          .map((customer) => String(customer.email || "").trim().toLowerCase())
+        memberList
+          .map((member) => String(member.email || "").trim().toLowerCase())
           .filter(isValidEmail),
       );
       setEligibleRecipients(uniqueEmails.size);
@@ -191,6 +203,23 @@ export function NewsletterCampaignsTab() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />登録メンバー一覧</CardTitle>
+          <CardDescription>メルマガに登録しているメンバーの一覧です。配信停止したメンバーは自動で除外されます。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? <p className="py-6 text-center text-sm text-muted-foreground">読み込み中...</p> : members.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">まだメルマガ登録者はいません。</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead className="border-b text-left text-xs text-muted-foreground"><tr><th className="px-2 py-3 font-medium">名前</th><th className="px-2 py-3 font-medium">メールアドレス</th><th className="px-2 py-3 font-medium">登録日時</th></tr></thead>
+                <tbody>{members.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="px-2 py-3 font-medium">{member.name}</td><td className="px-2 py-3">{member.email}</td><td className="px-2 py-3 text-xs text-muted-foreground">{formatDateTime(member.created_at)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
