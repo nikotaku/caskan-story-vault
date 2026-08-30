@@ -26,6 +26,7 @@ type O2Row = {
   o2_login_email: string | null;
   x_profile_url: string | null;
   x_credential_configured: boolean;
+  x_password_configured: boolean;
   x_login_id: string | null;
   estama_profile_url: string | null;
   estama_credential_configured: boolean;
@@ -45,6 +46,7 @@ type EditForm = {
   o2Password: string;
   xLoginId: string;
   xPassword: string;
+  deleteXPassword: boolean;
   estamaLoginId: string;
   estamaPassword: string;
   estamaProfileUrl: string;
@@ -77,6 +79,7 @@ const EMPTY_EDIT_FORM: EditForm = {
   o2Password: "",
   xLoginId: "",
   xPassword: "",
+  deleteXPassword: false,
   estamaLoginId: "",
   estamaPassword: "",
   estamaProfileUrl: "",
@@ -116,6 +119,7 @@ const createEditForm = (row: O2Row): EditForm => ({
   o2Password: "",
   xLoginId: row.x_login_id || normalizeXId(row.x_profile_url || ""),
   xPassword: "",
+  deleteXPassword: false,
   estamaLoginId: row.estama_login_id || "",
   estamaPassword: "",
   estamaProfileUrl: row.estama_profile_url || "",
@@ -238,7 +242,7 @@ export default function O2Management() {
     if (!user || storeLoading) return;
     setLoading(true);
     const [{ data, error }, { data: activeCasts, error: activeCastsError }] = await Promise.all([
-      rpc("get_sns_connection_overview_v6", { p_store_id: storeId }),
+      rpc("get_sns_connection_overview_v7", { p_store_id: storeId }),
       supabase.from("casts").select("id").eq("store_id", storeId).eq("is_active", true),
     ]);
     if (error) toast.error(error.message);
@@ -291,7 +295,7 @@ export default function O2Management() {
     const requestId = settingsRequestId.current + 1;
     settingsRequestId.current = requestId;
     setOpeningCastId(row.cast_id);
-    const { data, error } = await rpc("get_sns_connection_overview_v6", { p_store_id: storeId });
+    const { data, error } = await rpc("get_sns_connection_overview_v7", { p_store_id: storeId });
 
     if (settingsRequestId.current !== requestId) return;
     setOpeningCastId(null);
@@ -334,7 +338,7 @@ export default function O2Management() {
     const requestId = settingsRequestId.current + 1;
     settingsRequestId.current = requestId;
     setRefreshingSettings(true);
-    const { data, error } = await rpc("get_sns_connection_overview_v6", { p_store_id: storeId });
+    const { data, error } = await rpc("get_sns_connection_overview_v7", { p_store_id: storeId });
 
     if (settingsRequestId.current !== requestId) return;
     setRefreshingSettings(false);
@@ -451,8 +455,8 @@ export default function O2Management() {
       toast.error("XのIDを入力してください");
       return;
     }
-    if (!editing.x_credential_configured && xLoginId && !editForm.xPassword) {
-      toast.error("Xの初回設定ではパスワードも入力してください");
+    if (editForm.deleteXPassword && editForm.xPassword) {
+      toast.error("Xのパスワードは変更か削除のどちらか一方を選んでください");
       return;
     }
     const estamaLoginId = editForm.estamaLoginId.trim();
@@ -472,7 +476,7 @@ export default function O2Management() {
     savingRef.current = true;
     setSaving(true);
     try {
-      const { error } = await rpc("save_sns_connection_admin_v6", {
+      const { error } = await rpc("save_sns_connection_admin_v7", {
         p_store_id: storeId,
         p_cast_id: editing.cast_id,
         p_o2_created: editForm.created,
@@ -482,6 +486,7 @@ export default function O2Management() {
         p_password: editForm.o2Password || null,
         p_x_login_id: xLoginId || null,
         p_x_password: editForm.xPassword || null,
+        p_delete_x_password: editForm.deleteXPassword,
         p_estama_login_id: estamaLoginId || null,
         p_estama_password: editForm.estamaPassword || null,
         p_estama_profile_url: estamaProfileUrl || null,
@@ -630,32 +635,47 @@ export default function O2Management() {
             </section>
 
             <section className="space-y-3 rounded-xl border border-slate-300 bg-slate-50 p-4">
-              <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">X</h3>{editing?.x_credential_configured && <Badge className={connectionBadgeClass.x}>設定済み</Badge>}</div>
+              <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">X</h3>{editing?.x_credential_configured && <Badge className={connectionBadgeClass.x}>ID設定済み</Badge>}</div>
               <div><Label htmlFor="x-login-id">ID</Label><Input id="x-login-id" readOnly={fieldsReadOnly} className={fieldsReadOnly ? "bg-white/70" : "bg-white"} autoComplete="off" placeholder="例: enka_asami" value={editForm.xLoginId} onChange={(event) => setEditForm({ ...editForm, xLoginId: event.target.value })} /></div>
               <div>
-                <Label htmlFor="x-password">パスワード</Label>
+                <Label htmlFor="x-password">パスワード（任意メモ）</Label>
                 <PasswordControl
                   id="x-password"
                   label="X"
-                  configured={Boolean(editing?.x_credential_configured)}
-                  disabled={saving}
+                  configured={Boolean(editing?.x_password_configured)}
+                  disabled={saving || editForm.deleteXPassword}
                   editing={isEditingCredentials}
                   loading={loadingPassword === "x"}
                   newPassword={editForm.xPassword}
-                  onChange={(value) => setEditForm({ ...editForm, xPassword: value })}
+                  onChange={(value) => setEditForm({ ...editForm, xPassword: value, deleteXPassword: false })}
                   onToggle={() => void togglePassword("x")}
                   placeholder="Xのパスワード"
                   revealedPassword={revealedPasswords.x}
                   visible={showXPassword}
                 />
-                {editing?.x_credential_configured && (
+                {editing?.x_password_configured && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {isEditingCredentials ? "新しいパスワードを入力した場合のみ変更します。" : "目のボタンを押すと保存済みのパスワードを確認できます。"}
                   </p>
                 )}
+                {isEditingCredentials && editing?.x_password_configured && (
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={editForm.deleteXPassword}
+                      disabled={saving}
+                      onChange={(event) => setEditForm({
+                        ...editForm,
+                        deleteXPassword: event.target.checked,
+                        xPassword: event.target.checked ? "" : editForm.xPassword,
+                      })}
+                    />
+                    保存済みのXパスワードを削除する
+                  </label>
+                )}
               </div>
               <div><Label htmlFor="x-profile-url">公開URL（自動生成）</Label><Input id="x-profile-url" readOnly value={buildXProfileUrl(editForm.xLoginId)} placeholder="IDを入力すると自動生成されます" className="bg-white/70" /></div>
-              <p className="rounded-lg bg-white/80 p-3 text-xs text-slate-600">XのID・パスワードは保管用です。投稿フォームからXへの投稿連携は行いません。</p>
+              <p className="rounded-lg bg-white/80 p-3 text-xs text-slate-600">XはIDだけで保存できます。パスワードは任意のメモで、投稿フォームからXへの投稿連携には使用しません。</p>
             </section>
 
             <section className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4">
@@ -691,7 +711,7 @@ export default function O2Management() {
               <div><Label htmlFor="estama-profile-url">プロフィールURL</Label><Input id="estama-profile-url" readOnly={fieldsReadOnly} className={fieldsReadOnly ? "bg-white/70" : "bg-white"} type="url" placeholder="https://estama.jp/shop/..." value={editForm.estamaProfileUrl} onChange={(event) => setEditForm({ ...editForm, estamaProfileUrl: event.target.value })} /><p className="mt-1 text-xs text-muted-foreground">公開側のセラピストカードと詳細ページへ自動反映されます。</p></div>
             </section>
 
-            <p className="text-xs text-muted-foreground">O2・X・魂セラピストのIDとパスワードは別々に保存されます。投稿フォームの連携先はO2と魂セラピストのみです。</p>
+            <p className="text-xs text-muted-foreground">O2・X・魂セラピストの情報は別々に保存されます。Xのパスワードは任意で、投稿フォームの連携先はO2と魂セラピストのみです。</p>
             {isEditingCredentials && (
               <div className="flex gap-2">
                 {savedSettings && <Button type="button" className="flex-1" variant="outline" onClick={cancelEdit} disabled={saving}>編集をやめる</Button>}

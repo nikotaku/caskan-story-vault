@@ -23,8 +23,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { isCastPostReviewRequired } from "@/lib/cast-post-status";
 import { isValidEmail } from "@/lib/email";
-import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 import { POST_IMAGE_SIZE, prepareSquarePostImage } from "@/lib/post-image";
 
 type Post = {
@@ -302,7 +302,7 @@ export default function TherapistPostPage() {
     const status = target === "o2" ? post.o2_status : post.esutama_status;
     const error = target === "o2" ? post.o2_error : post.esutama_error;
     const retryKey = `${post.id}:${target}`;
-    const reviewRequired = target === "esutama" && isEstamaReviewRequired(error);
+    const reviewRequired = isCastPostReviewRequired(error);
     return (
       <div className="flex items-start justify-between gap-2 text-xs">
         <div className="min-w-0">

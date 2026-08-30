@@ -3,6 +3,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { workerFailureSafety, workerPhotoCount } from "./photo-count.ts";
 import { assertRequiredPostImageSize } from "./image-size.ts";
 import { decodeRequiredPostImageBase64 } from "./image-payload.ts";
+import {
+  decodeO2Html,
+  extractO2PostReferences,
+  inspectO2PostDetail,
+  newO2PostReferences,
+  o2PostReferenceFromUrl,
+  type O2PostReference,
+} from "./o2-verification.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -27,6 +35,9 @@ type PostRecord = {
   body: string;
   image_urls: string[] | null;
   o2_status: string;
+  o2_error: string | null;
+  o2_post_id: string | null;
+  o2_post_url: string | null;
   esutama_status: string;
   esutama_error: string | null;
   o2_attempts: number;
@@ -42,6 +53,18 @@ type AutomationJob = {
   max_attempts: number;
   payload: JsonRecord | null;
 };
+
+class O2ReviewRequiredError extends Error {
+  postId: string | null;
+  postUrl: string | null;
+
+  constructor(detail: string, reference?: O2PostReference | null) {
+    super(`${REVIEW_REQUIRED_PREFIX}${detail}。O2側を確認するまで再送できません`);
+    this.name = "O2ReviewRequiredError";
+    this.postId = reference?.id || null;
+    this.postUrl = reference?.url || null;
+  }
+}
 
 const corsHeaders = (req: Request) => {
   const origin = req.headers.get("origin") || "";
@@ -473,7 +496,7 @@ serve(async (req) => {
     if (!postId || !accessToken) return json(req, { error: "投稿IDとポータルトークンが必要です" }, 400);
     if (!['o2', 'esutama'].includes(target)) return json(req, { error: "送信先が正しくありません" }, 400);
     const { data: post, error: postError } = await admin.from("cast_posts")
-      .select("id,cast_id,store_id,title,body,image_urls,o2_status,esutama_status,o2_error,esutama_error,o2_attempts,esutama_attempts")
+      .select("id,cast_id,store_id,title,body,image_urls,o2_status,esutama_status,o2_error,esutama_error,o2_attempts,esutama_attempts,o2_post_id,o2_post_url")
       .eq("id", postId)
       .maybeSingle<PostRecord>();
     if (postError) throw postError;
@@ -484,6 +507,12 @@ serve(async (req) => {
     if (target === "esutama") return dispatchEstamaDiary(req, admin, post);
     if (post.o2_status === "posted") return json(req, { success: true, results: { o2: { status: "posted", skipped: true } } });
     if (post.o2_status === "posting") return json(req, { success: true, results: { o2: { status: "posting", skipped: true } } });
+    if (stringValue(post.o2_error).startsWith(REVIEW_REQUIRED_PREFIX)) {
+      return json(req, {
+        success: false,
+        results: { o2: { status: "review_required", error: post.o2_error, url: post.o2_post_url } },
+      }, 409);
+    }
 
     try {
       const imageUrl = requireSinglePostImage(post.image_urls);
@@ -517,14 +546,39 @@ serve(async (req) => {
 
     try {
       const result = await postToO2(credential.login_id, credential.password, post);
-      await admin.from("cast_posts").update({ o2_status: "posted", o2_error: null }).eq("id", post.id);
+      const { error: persistenceError } = await admin.from("cast_posts").update({
+        o2_status: "posted",
+        o2_error: null,
+        o2_post_id: result.postId,
+        o2_post_url: result.url,
+      }).eq("id", post.id);
+      if (persistenceError) {
+        throw new O2ReviewRequiredError("O2への公開後、管理画面へ投稿結果を保存できませんでした", {
+          id: result.postId,
+          url: result.url,
+        });
+      }
       await updateOverallStatus(admin, post.id);
       return json(req, { success: true, results: { o2: result } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await admin.from("cast_posts").update({ o2_status: "failed", o2_error: message }).eq("id", post.id);
+      const reviewRequired = message.startsWith(REVIEW_REQUIRED_PREFIX);
+      const reference = error instanceof O2ReviewRequiredError
+        ? { o2_post_id: error.postId, o2_post_url: error.postUrl }
+        : {};
+      const { error: persistenceError } = await admin.from("cast_posts").update({
+        o2_status: "failed",
+        o2_error: message,
+        ...reference,
+      }).eq("id", post.id);
+      if (persistenceError) {
+        console.error(JSON.stringify({ event: "o2_post_result_persistence_failed", post_id: post.id, review_required: reviewRequired }));
+      }
       await updateOverallStatus(admin, post.id);
-      return json(req, { success: false, results: { o2: { status: "failed", error: message } } }, 422);
+      return json(req, {
+        success: false,
+        results: { o2: { status: reviewRequired ? "review_required" : "failed", error: message } },
+      }, reviewRequired ? 409 : 422);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -544,12 +598,7 @@ async function updateOverallStatus(admin: ReturnType<typeof createClient>, postI
   }).eq("id", postId);
 }
 
-const decodeHtml = (value: string) => value
-  .replaceAll("&amp;", "&")
-  .replaceAll("&quot;", '"')
-  .replaceAll("&#039;", "'")
-  .replaceAll("&lt;", "<")
-  .replaceAll("&gt;", ">");
+const decodeHtml = decodeO2Html;
 
 const attributes = (html: string) => {
   const result: Record<string, string> = {};
@@ -631,6 +680,22 @@ const findO2PostForm = (html: string, baseUrl: string) => formsFrom(html, baseUr
     controls.some((field) => field.name === "status" && field.value === "published");
 });
 
+const isO2LoginPage = (html: string) => /name=["'](?:username|password)["']/i.test(html) && /ログイン/.test(html);
+
+async function loadO2PostList(jar: CookieJar, referer: string) {
+  let response = await request(jar, `${O2_BASE}/cast/post/`, { headers: { Referer: referer } });
+  response = await follow(jar, response, `${O2_BASE}/cast/post/`);
+  const html = await response.text();
+  if (response.status >= 400) throw new Error(`O2の投稿一覧を取得できません（HTTP ${response.status}）`);
+  if (isO2LoginPage(html)) throw new Error("O2のログイン有効期限が切れました。投稿は行っていません");
+  return {
+    url: response.url || `${O2_BASE}/cast/post/`,
+    references: extractO2PostReferences(html, response.url || `${O2_BASE}/cast/post/`),
+  };
+}
+
+const waitForO2 = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 async function postToO2(loginId: string, password: string, post: PostRecord) {
   const jar = new CookieJar();
   const loginPage = await request(jar, O2_LOGIN);
@@ -700,15 +765,26 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
     throw new Error(`O2の送信フォームへ画像を1枚設定できませんでした（設定${attachedFiles.length}枚）。投稿は行っていません`);
   }
 
-  let posted = await request(jar, postForm.action, {
-    method: postForm.method === "GET" ? "POST" : postForm.method,
-    headers: { Referer: currentUrl },
-    body: form,
-  });
-  posted = await follow(jar, posted, postForm.action);
+  const beforeSubmission = await loadO2PostList(jar, currentUrl);
+  const previousPostIds = new Set(beforeSubmission.references.map((reference) => reference.id));
+
+  let posted: Response;
+  try {
+    posted = await request(jar, postForm.action, {
+      method: postForm.method === "GET" ? "POST" : postForm.method,
+      headers: { Referer: currentUrl },
+      body: form,
+    });
+    posted = await follow(jar, posted, postForm.action);
+  } catch {
+    throw new O2ReviewRequiredError("O2へ送信しましたが、応答を受け取れず掲載結果を確認できませんでした");
+  }
   const responseHtml = await posted.text();
-  if (posted.status >= 400) throw new Error(`O2投稿エラー（HTTP ${posted.status}）`);
-  if (/name=["'](?:username|password)["']/i.test(responseHtml) && /ログイン/.test(responseHtml)) {
+  if (posted.status >= 500) {
+    throw new O2ReviewRequiredError(`O2へ送信後にサーバーエラーが返り、掲載結果を確認できませんでした（HTTP ${posted.status}）`);
+  }
+  if (posted.status >= 400) throw new Error(`O2投稿エラー（HTTP ${posted.status}）。投稿は完了していません`);
+  if (isO2LoginPage(responseHtml)) {
     throw new Error("O2のログイン有効期限が切れました。投稿は完了していません");
   }
   const errors = [...responseHtml.matchAll(/<(?:div|p|li)[^>]+class=["'][^"']*(?:error|danger|invalid)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|p|li)>/gi)]
@@ -719,20 +795,51 @@ async function postToO2(loginId: string, password: string, post: PostRecord) {
   if (/\/cast\/post\/create\/?(?:\?|$)/i.test(responseUrl) && formsFrom(responseHtml, responseUrl).some((form) => /<textarea\b/i.test(form.html))) {
     throw new Error("O2が投稿を受け付けませんでした。入力項目の仕様変更を確認してください");
   }
-  let verification = await request(jar, `${O2_BASE}/cast/post/`, { headers: { Referer: responseUrl } });
-  verification = await follow(jar, verification, `${O2_BASE}/cast/post/`);
-  const verificationHtml = await verification.text();
-  const verificationText = decodeHtml(verificationHtml)
-    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const expectedText = post.body.replace(/\s+/g, " ").trim();
-  if (!expectedText || !verificationText.includes(expectedText)) {
-    throw new Error("O2の投稿一覧で公開完了を確認できませんでした。投稿状態を確認してください");
+
+  const directReference = o2PostReferenceFromUrl(responseUrl, O2_BASE);
+  const responseReferences = extractO2PostReferences(responseHtml, responseUrl);
+  let latestCandidate: O2PostReference | null = null;
+  let latestEvidence = { bodyMatched: false, imageMatched: false };
+
+  try {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) await waitForO2(attempt === 1 ? 600 : 1_000);
+      const afterSubmission = await loadO2PostList(jar, responseUrl);
+      const candidates = newO2PostReferences(previousPostIds, [
+        directReference ? [directReference] : [],
+        responseReferences,
+        afterSubmission.references,
+      ]);
+
+      for (const candidate of candidates) {
+        latestCandidate = candidate;
+        let detail = await request(jar, candidate.url, { headers: { Referer: afterSubmission.url } });
+        detail = await follow(jar, detail, candidate.url);
+        const detailHtml = await detail.text();
+        if (detail.status >= 400 || isO2LoginPage(detailHtml)) continue;
+        const evidence = inspectO2PostDetail(detailHtml, post.body);
+        latestEvidence = {
+          bodyMatched: latestEvidence.bodyMatched || evidence.bodyMatched,
+          imageMatched: latestEvidence.imageMatched || evidence.imageMatched,
+        };
+        if (evidence.bodyMatched && evidence.imageMatched) {
+          return { status: "posted", postId: candidate.id, url: candidate.url, images: 1 };
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof O2ReviewRequiredError) throw error;
+    throw new O2ReviewRequiredError("O2への送信後、投稿詳細の取得に失敗し掲載結果を確認できませんでした", latestCandidate);
   }
-  return { status: "posted", url: verification.url || `${O2_BASE}/cast/post/`, images: 1 };
+
+  if (!latestCandidate) {
+    throw new O2ReviewRequiredError("O2への送信後、新しい投稿IDを取得できず掲載結果を確認できませんでした");
+  }
+  const missing = [
+    !latestEvidence.bodyMatched ? "本文" : "",
+    !latestEvidence.imageMatched ? "画像" : "",
+  ].filter(Boolean).join("・");
+  throw new O2ReviewRequiredError(`O2の投稿ID ${latestCandidate.id} を取得しましたが、詳細ページで${missing || "公開内容"}を確認できませんでした`, latestCandidate);
 }
 
 async function downloadImage(rawUrl: string, index: number) {

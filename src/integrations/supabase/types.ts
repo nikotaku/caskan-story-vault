@@ -953,6 +953,8 @@ export type Database = {
           last_attempt_at: string | null
           o2_attempts: number
           o2_error: string | null
+          o2_post_id: string | null
+          o2_post_url: string | null
           o2_status: string | null
           posted_at: string | null
           ranking_error: string | null
@@ -975,6 +977,8 @@ export type Database = {
           last_attempt_at?: string | null
           o2_attempts?: number
           o2_error?: string | null
+          o2_post_id?: string | null
+          o2_post_url?: string | null
           o2_status?: string | null
           posted_at?: string | null
           ranking_error?: string | null
@@ -997,6 +1001,8 @@ export type Database = {
           last_attempt_at?: string | null
           o2_attempts?: number
           o2_error?: string | null
+          o2_post_id?: string | null
+          o2_post_url?: string | null
           o2_status?: string | null
           posted_at?: string | null
           ranking_error?: string | null

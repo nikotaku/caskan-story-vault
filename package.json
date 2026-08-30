@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "test:estama": "node --experimental-strip-types --test tests/estama*.test.ts",
+    "test:o2": "node --experimental-strip-types --test tests/o2*.test.ts",
     "test:payment": "node --experimental-strip-types --test tests/paymentFee.test.ts",
     "test:public-copy": "node --experimental-strip-types --test tests/publicCourseNames.test.ts",
     "test:referral-rewards": "node --experimental-strip-types --test tests/referralRewards.test.ts",
