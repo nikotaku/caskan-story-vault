@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Check, CheckCircle, ChevronDown, ChevronUp, Clock, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, ShieldAlert, Trash2, X, XCircle } from "lucide-react";
+import { Check, CheckCircle, ChevronDown, ChevronUp, Clock, ExternalLink, ImagePlus, Link2, Loader2, Plus, RefreshCw, Send, ShieldAlert, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { Sidebar } from "@/components/Sidebar";
@@ -27,6 +27,7 @@ import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { canDeleteFailedCastPost } from "@/lib/cast-post-deletion";
+import { isCastPostReviewRequired } from "@/lib/cast-post-status";
 import { isEstamaReviewRequired } from "@/lib/estama-post-status";
 import { POST_IMAGE_SIZE, prepareSquarePostImage } from "@/lib/post-image";
 
@@ -51,6 +52,7 @@ interface Post {
   o2_status: string;
   esutama_status: string;
   o2_error: string | null;
+  o2_post_url: string | null;
   esutama_error: string | null;
   created_at: string;
   casts: { name: string };
@@ -84,6 +86,7 @@ const createTestPostBody = () => `【動作確認】\nO2・魂セラピスト連
 const canDeleteFailedPost = (post: Post) => {
   return canDeleteFailedCastPost({
     ...post,
+    o2ReviewRequired: isCastPostReviewRequired(post.o2_error),
     estamaReviewRequired: isEstamaReviewRequired(post.esutama_error),
   });
 };
@@ -488,12 +491,17 @@ export default function CastPostManagement() {
     const status = target === "o2" ? post.o2_status : post.esutama_status;
     const error = target === "o2" ? post.o2_error : post.esutama_error;
     const key = `${post.id}:${target}`;
-    const reviewRequired = target === "esutama" && isEstamaReviewRequired(error);
+    const reviewRequired = isCastPostReviewRequired(error);
     return (
       <div className="flex items-start justify-between gap-3 text-xs">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">{reviewRequired ? <ShieldAlert size={13} className="text-amber-600" /> : STATUS_ICON[status] || STATUS_ICON.pending}<span className="font-medium">{label}</span><span className="text-muted-foreground">{reviewRequired ? "要確認（再送停止）" : STATUS_LABEL[status] || status}</span></div>
           {error && <p className={`mt-1 break-words ${reviewRequired ? "text-amber-700" : "text-red-600"}`}>{error}</p>}
+          {target === "o2" && post.o2_post_url && (
+            <a className="mt-1 inline-flex items-center text-primary" href={post.o2_post_url} target="_blank" rel="noreferrer">
+              O2投稿を確認<ExternalLink size={11} className="ml-1" />
+            </a>
+          )}
         </div>
         {!reviewRequired && ["pending", "failed", "skipped"].includes(status) && (
           <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={() => retry(post.id, target)} disabled={retrying === key}>

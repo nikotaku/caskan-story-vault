@@ -10,6 +10,7 @@ const basePost = {
   esutama_status: "pending",
   o2_error: null,
   esutama_error: null,
+  o2ReviewRequired: false,
   estamaReviewRequired: false,
 };
 
@@ -29,6 +30,12 @@ test("HP掲載済み相当の投稿でも外部媒体エラーがあれば履歴
 });
 
 test("結果不明または送信中の投稿は履歴を削除できない", () => {
+  assert.equal(canDeleteFailedCastPost({
+    ...basePost,
+    o2_status: "failed",
+    o2_error: "【要確認・再送停止】O2の掲載状態を確認できません",
+    o2ReviewRequired: true,
+  }), false);
   assert.equal(canDeleteFailedCastPost({
     ...basePost,
     esutama_error: "【要確認・再送停止】掲載状態を確認できません",

@@ -1,4 +1,9 @@
-export const ESTAMA_REVIEW_REQUIRED_PREFIX = "【要確認・再送停止】";
+import {
+  CAST_POST_REVIEW_REQUIRED_PREFIX,
+  isCastPostReviewRequired,
+} from "./cast-post-status.ts";
+
+export const ESTAMA_REVIEW_REQUIRED_PREFIX = CAST_POST_REVIEW_REQUIRED_PREFIX;
 
 export const isEstamaReviewRequired = (error: string | null | undefined) =>
-  Boolean(error?.startsWith(ESTAMA_REVIEW_REQUIRED_PREFIX));
+  isCastPostReviewRequired(error);
