@@ -38,55 +38,54 @@ export function useAuth() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    let active = true;
+    let sessionRequestId = 0;
 
-        if (session?.user) {
-          setTimeout(async () => {
-            const [adminResult, { data: profileData }] = await Promise.all([
-              checkIsAdmin(session.user.id),
-              supabase
-                .from("profiles")
-                .select("display_name")
-                .eq("user_id", session.user.id)
-                .maybeSingle(),
-            ]);
-            setIsAdmin(adminResult);
-            setDisplayName(profileData?.display_name || session.user.email || null);
-          }, 0);
-        } else {
-          setIsAdmin(false);
-        }
+    const resolveSession = (nextSession: Session | null) => {
+      const requestId = ++sessionRequestId;
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
 
+      if (!nextSession?.user) {
+        setIsAdmin(false);
+        setDisplayName(null);
         setLoading(false);
+        return;
       }
+
+      // 管理者権限の確認が終わるまでは認証処理中として扱う。
+      // isAdmin の初期値 false を見て、管理画面からログインへ戻される競合を防ぐ。
+      setLoading(true);
+      setTimeout(async () => {
+        const [adminResult, { data: profileData }] = await Promise.all([
+          checkIsAdmin(nextSession.user.id),
+          supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("user_id", nextSession.user.id)
+            .maybeSingle(),
+        ]);
+
+        if (!active || requestId !== sessionRequestId) return;
+        setIsAdmin(adminResult);
+        setDisplayName(profileData?.display_name || nextSession.user.email || null);
+        setLoading(false);
+      }, 0);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => resolveSession(nextSession)
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        setTimeout(async () => {
-          const [adminResult, { data: profileData }] = await Promise.all([
-            checkIsAdmin(session.user.id),
-            supabase
-              .from("profiles")
-              .select("display_name")
-              .eq("user_id", session.user.id)
-              .maybeSingle(),
-          ]);
-          setIsAdmin(adminResult);
-          setDisplayName(profileData?.display_name || session.user.email || null);
-        }, 0);
-      }
-
-      setLoading(false);
+    void supabase.auth.getSession().then(({ data: { session: nextSession } }) => {
+      if (active) resolveSession(nextSession);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      sessionRequestId += 1;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
