@@ -13,7 +13,8 @@
 Vercelの Production / Preview / Development に以下のサーバー専用環境変数を設定する。
 
 - `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`（推奨。VercelのSupabase連携が自動設定）
+  または `SUPABASE_SERVICE_ROLE_KEY`（旧形式）
 - `BROWSERBASE_API_KEY`
 - `BROWSERBASE_PROJECT_ID`
 - `CRON_SECRET`
