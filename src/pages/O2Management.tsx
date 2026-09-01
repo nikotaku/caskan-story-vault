@@ -13,6 +13,7 @@ import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { isValidEmail } from "@/lib/email";
+import { hasSavedXId, normalizeXId } from "@/lib/sns-connection-status";
 
 type O2Row = {
   cast_id: string;
@@ -96,18 +97,18 @@ const buildO2ProfileUrl = (value: string) => {
   return id ? `https://m-sns.net/profile/@${id}` : "";
 };
 
-const normalizeXId = (value: string) => value
-  .trim()
-  .replace(/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\//i, "")
-  .replace(/^@/, "")
-  .split(/[/?#]/, 1)[0];
-
 const buildXProfileUrl = (value: string) => {
   const id = normalizeXId(value);
   return id ? `https://x.com/${id}` : "";
 };
 
 const isSoulConfigured = (row: O2Row) => row.estama_credential_configured;
+
+const isXConfigured = (row: O2Row) => hasSavedXId({
+  credentialConfigured: row.x_credential_configured,
+  loginId: row.x_login_id,
+  profileUrl: row.x_profile_url,
+});
 
 const hasSavedSettings = (row: O2Row) => Boolean(row.settings_updated_at);
 
@@ -257,7 +258,7 @@ export default function O2Management() {
   const summary = useMemo(() => ({
     total: rows.length,
     credentials: rows.filter((row) => row.credential_configured).length,
-    xCredentials: rows.filter((row) => row.x_credential_configured).length,
+    xCredentials: rows.filter(isXConfigured).length,
     soulConfigured: rows.filter(isSoulConfigured).length,
     created: rows.filter((row) => row.o2_created).length,
     linked: rows.filter((row) => row.o2_linkage_requested).length,
@@ -541,7 +542,7 @@ export default function O2Management() {
             {loading ? <div className="rounded-xl border bg-card py-16 text-center"><Loader2 className="inline-block animate-spin text-primary" /></div> : rows.length === 0 ? <div className="rounded-xl border bg-card py-12 text-center text-muted-foreground">セラピストがいません</div> : rows.map((row) => (
               <div key={row.cast_id} className="rounded-xl border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">{row.photo ? <img src={row.photo} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="h-11 w-11 rounded-full bg-muted" />}<div className="min-w-0"><p className="font-medium truncate">{row.cast_name}</p><div className="mt-1 flex flex-wrap gap-1"><Badge className={`${connectionBadgeClass.o2} ${row.credential_configured ? "" : "opacity-45"}`}>O2</Badge><Badge className={`${connectionBadgeClass.x} ${row.x_credential_configured ? "" : "opacity-35"}`}>X</Badge><Badge className={`${connectionBadgeClass.soul} ${isSoulConfigured(row) ? "" : "opacity-45"}`}>魂セラピスト</Badge></div></div></div>
+                  <div className="flex min-w-0 items-center gap-2">{row.photo ? <img src={row.photo} alt="" className="h-11 w-11 rounded-full object-cover" /> : <div className="h-11 w-11 rounded-full bg-muted" />}<div className="min-w-0"><p className="font-medium truncate">{row.cast_name}</p><div className="mt-1 flex flex-wrap gap-1"><Badge className={`${connectionBadgeClass.o2} ${row.credential_configured ? "" : "opacity-45"}`}>O2</Badge><Badge className={`${connectionBadgeClass.x} ${isXConfigured(row) ? "" : "opacity-35"}`}>X</Badge><Badge className={`${connectionBadgeClass.soul} ${isSoulConfigured(row) ? "" : "opacity-45"}`}>魂セラピスト</Badge></div></div></div>
                   <Button size="sm" variant="outline" onClick={() => void openEdit(row)} disabled={openingCastId === row.cast_id}>
                     {openingCastId === row.cast_id ? <Loader2 size={13} className="mr-1 animate-spin" /> : hasSavedSettings(row) ? <Eye size={13} className="mr-1" /> : <Pencil size={13} className="mr-1" />}
                     {hasSavedSettings(row) ? "確認" : "設定"}
@@ -568,7 +569,7 @@ export default function O2Management() {
                   {loading ? <tr><td colSpan={7} className="py-16 text-center"><Loader2 className="inline-block animate-spin text-primary" /></td></tr> : rows.length === 0 ? <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">セラピストがいません</td></tr> : rows.map((row) => (
                     <tr key={row.cast_id} className="align-top">
                       <td className="px-4 py-3"><div className="flex items-center gap-2">{row.photo ? <img src={row.photo} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="h-9 w-9 rounded-full bg-muted" />}<span className="font-medium">{row.cast_name}</span></div></td>
-                      <td className="px-3 py-3"><div className="flex flex-wrap gap-1"><Badge className={`${connectionBadgeClass.o2} ${row.credential_configured ? "" : "opacity-45"}`}>O2</Badge><Badge className={`${connectionBadgeClass.x} ${row.x_credential_configured ? "" : "opacity-35"}`}>X</Badge><Badge className={`${connectionBadgeClass.soul} ${isSoulConfigured(row) ? "" : "opacity-45"}`}>魂セラピスト</Badge></div></td>
+                      <td className="px-3 py-3"><div className="flex flex-wrap gap-1"><Badge className={`${connectionBadgeClass.o2} ${row.credential_configured ? "" : "opacity-45"}`}>O2</Badge><Badge className={`${connectionBadgeClass.x} ${isXConfigured(row) ? "" : "opacity-35"}`}>X</Badge><Badge className={`${connectionBadgeClass.soul} ${isSoulConfigured(row) ? "" : "opacity-45"}`}>魂セラピスト</Badge></div></td>
                       <td className="px-3 py-3">{row.o2_created ? <span className="text-green-700">✓ 作成済み</span> : <span className="text-muted-foreground">未作成</span>}</td>
                       <td className="px-3 py-3">{row.o2_linkage_requested ? <span className="text-green-700">✓ 申請済み</span> : <span className="text-muted-foreground">未申請</span>}</td>
                       <td className="px-3 py-3"><span>{statusLabel[row.last_o2_status || ""] || "投稿なし"}</span>{row.last_posted_at && <p className="text-[11px] text-muted-foreground mt-1">{new Date(row.last_posted_at).toLocaleString("ja-JP")}</p>}</td>
@@ -635,7 +636,7 @@ export default function O2Management() {
             </section>
 
             <section className="space-y-3 rounded-xl border border-slate-300 bg-slate-50 p-4">
-              <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">X</h3>{editing?.x_credential_configured && <Badge className={connectionBadgeClass.x}>ID設定済み</Badge>}</div>
+              <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-900">X</h3>{editing && isXConfigured(editing) && <Badge className={connectionBadgeClass.x}>ID設定済み</Badge>}</div>
               <div><Label htmlFor="x-login-id">ID</Label><Input id="x-login-id" readOnly={fieldsReadOnly} className={fieldsReadOnly ? "bg-white/70" : "bg-white"} autoComplete="off" placeholder="例: enka_asami" value={editForm.xLoginId} onChange={(event) => setEditForm({ ...editForm, xLoginId: event.target.value })} /></div>
               <div>
                 <Label htmlFor="x-password">パスワード（任意メモ）</Label>
