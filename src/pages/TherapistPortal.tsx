@@ -387,7 +387,7 @@ export default function TherapistPortal() {
   }, [view, year, month, cast]);
 
   useEffect(() => {
-    supabase.from("rooms").select("id, name, address, entry_flow, key_info, key_number, entry_photos").eq("is_active", true).order("name")
+    supabase.from("rooms").select("id, name, address, entry_flow, key_info, key_number, entry_photos").eq("is_active", true).in("name", ["華月", "艶月"]).order("name")
       .then(({ data }) => { if (data) setRooms(data as Room[]); });
   }, []);
 
