@@ -315,6 +315,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                   ) : (
                     <Link
                       to={item.href || "#"}
+                      onClick={onClose}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-md transition-colors",
                         isCurrentPath ? "text-primary bg-primary/10" : "text-foreground hover:bg-muted/50"
@@ -338,6 +339,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                             )}
                             <Link
                               to={child.href}
+                              onClick={onClose}
                               className={cn(
                                 "block px-3 py-1.5 text-xs rounded-md transition-colors",
                                 isChildCurrentPath
@@ -384,6 +386,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                                     <Link
                                       key={leaf.href}
                                       to={leaf.href}
+                                      onClick={onClose}
                                       className={cn(
                                         "block px-3 py-1.5 text-xs rounded-md transition-colors",
                                         isLeafActive
