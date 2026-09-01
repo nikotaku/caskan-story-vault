@@ -33,7 +33,7 @@ begin
 
   -- A request dispatched just before the quiet window may arrive late. Do not
   -- let that delayed worker overlap the hourly :40 availability refresh.
-  if extract(minute from now()) between 35 and 42 then
+  if extract(minute from now()) between 27 and 42 then
     update public.estama_sync_tokens
     set used_at = now()
     where token_hash = v_token_hash;
@@ -187,21 +187,6 @@ begin
           > now() - interval '7 minutes'
     );
 
-  if exists (
-    select 1
-    from private.estama_context_leases as lease
-    where lease.operation in ('hourly-availability-refresh', 'profile-worker')
-      and lease.expires_at > now()
-  ) then
-    return null;
-  end if;
-
-  -- Reserve the hourly :40 availability slot. A profile worker can run for up
-  -- to five minutes, so do not start one close enough to overlap that slot.
-  if extract(minute from now()) between 35 and 42 then
-    return null;
-  end if;
-
   update public.automation_jobs
   set status = 'queued',
       available_at = now(),
@@ -211,6 +196,22 @@ begin
     and job_type = 'estama_register_cast'
     and status = 'running'
     and started_at < now() - interval '7 minutes';
+
+  if exists (
+    select 1
+    from private.estama_context_leases as lease
+    where lease.operation in ('hourly-availability-refresh', 'profile-worker')
+      and lease.expires_at > now()
+  ) then
+    return null;
+  end if;
+
+  -- Reserve the hourly :40 availability slot. A five-minute worker can claim
+  -- its final queued job just before termination; leave its seven-minute
+  -- stale-job recovery plus one full cron tick before :40.
+  if extract(minute from now()) between 27 and 42 then
+    return null;
+  end if;
 
   if exists (
     select 1
