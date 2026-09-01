@@ -29,10 +29,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     return;
   }
 
+  let admin: ReturnType<typeof getAdminClient> | null = null;
+  let token = "";
+  let claimed = false;
   try {
-    const admin = getAdminClient();
-    const token = stringValue(req.body?.token);
-    if (!await claimToken(admin, token)) {
+    token = stringValue(req.body?.token);
+    admin = getAdminClient();
+    claimed = await claimToken(admin, token);
+    if (!claimed) {
       res.status(401).json({ error: "プロフィール同期トークンが無効または使用済みです" });
       return;
     }
@@ -43,6 +47,25 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     });
     res.status(200).json({ ok: true, processed: results.length, results });
   } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({ event: "estama_profile_worker_failed", error: message }));
+    res.status(500).json({ error: message });
+  } finally {
+    if (admin && claimed && token) {
+      try {
+        const { error } = await admin.rpc("release_estama_profile_worker_lease", { p_token: token });
+        if (error) {
+          console.error(JSON.stringify({
+            event: "estama_profile_worker_lease_release_failed",
+            error: error.message,
+          }));
+        }
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "estama_profile_worker_lease_release_failed",
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    }
   }
 }
