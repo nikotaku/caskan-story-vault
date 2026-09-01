@@ -13,6 +13,7 @@
     "test:payment": "node --experimental-strip-types --test tests/paymentFee.test.ts",
     "test:public-copy": "node --experimental-strip-types --test tests/publicCourseNames.test.ts",
     "test:booking-promotion": "node --experimental-strip-types --test tests/castBookingPromotion.test.ts",
+    "test:booking-time": "node --experimental-strip-types --test tests/bookingSlotTime.test.ts",
     "test:referral-rewards": "node --experimental-strip-types --test tests/referralRewards.test.ts",
     "preview": "vite preview"
   },
