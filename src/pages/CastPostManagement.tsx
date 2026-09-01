@@ -527,10 +527,27 @@ export default function CastPostManagement() {
           </div>
 
           <div className="rounded-lg border bg-card">
-            <button className="flex w-full items-center justify-between px-4 py-3" onClick={() => setShowConnections((value) => !value)}>
-              <span className="flex items-center gap-2 text-sm font-semibold"><Link2 size={16} className="text-primary" />媒体連携ステータス</span>
-              {showConnections ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
+            <div className="flex items-center gap-2 px-4 py-3">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center justify-between py-0.5 text-left"
+                onClick={() => setShowConnections((value) => !value)}
+                aria-expanded={showConnections}
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold"><Link2 size={16} className="text-primary" />媒体連携ステータス</span>
+                {showConnections ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 gap-1 px-2 text-xs"
+                onClick={() => navigate("/marketing/o2")}
+              >
+                SNS連携管理へ
+                <ExternalLink size={12} />
+              </Button>
+            </div>
             {showConnections && (
               <div className="grid gap-x-6 border-t px-4 py-3 sm:grid-cols-2">
                 {casts.map((cast) => (
