@@ -109,8 +109,8 @@ const LinkedParagraph = ({ text }: { text: string }) => {
 
 const ENKA_EVENT_HERO_VIDEO = {
   enabled: true,
-  url: "https://enka-w-videos.saito-crow.chatgpt.site/videos/teaser.mp4",
-  poster_url: "https://enka-w-videos.saito-crow.chatgpt.site/posters/teaser.jpg",
+  url: "https://kayama-noa-video.saito-crow.chatgpt.site/kayama-noa-banner.mp4",
+  poster_url: "https://kayama-noa-video.saito-crow.chatgpt.site/og.png",
 } as const;
 
 export default function EnkaHome() {
@@ -327,7 +327,7 @@ export default function EnkaHome() {
             src={heroVideoUrl}
             poster={heroVideoPosterUrl || undefined}
             className="h-full w-full object-contain"
-            aria-label={`${storeName} 8月13日から15日のイベント動画広告`}
+            aria-label={`${storeName} 香山のあ紹介動画広告`}
             autoPlay
             muted
             loop
