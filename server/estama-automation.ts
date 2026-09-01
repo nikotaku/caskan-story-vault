@@ -196,7 +196,15 @@ export const createAdminClient = (serviceRoleKey: string) =>
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-export const getAdminClient = () => createAdminClient(requiredEnv("SUPABASE_SERVICE_ROLE_KEY"));
+const supabaseAdminKey = () => {
+  const value = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!value) {
+    throw new Error("SUPABASE_SECRET_KEY または SUPABASE_SERVICE_ROLE_KEY がVercelに設定されていません");
+  }
+  return value;
+};
+
+export const getAdminClient = () => createAdminClient(supabaseAdminKey());
 
 const getAuthenticatedClient = (token: string) =>
   createClient(supabaseUrl(), supabasePublishableKey(), {
