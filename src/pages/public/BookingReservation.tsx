@@ -20,6 +20,11 @@ import { PublicNavigation } from "@/components/public/PublicNavigation";
 import { useStore } from "@/hooks/useStore";
 import { useStoreContact } from "@/hooks/useStoreContact";
 import { DEFAULT_RESERVATION_INTERVAL_MINUTES } from "@/lib/availability";
+import {
+  getTokyoMinutesOfDay,
+  isPastBookingSlot,
+  reconcileBookingStartTime,
+} from "@/lib/bookingSlotTime";
 
 interface Cast {
   id: string;
@@ -158,7 +163,7 @@ const BookingReservation = () => {
       const parsed = new Date(`${d}T00:00:00`);
       if (!isNaN(parsed.getTime())) return parsed;
     }
-    return new Date();
+    return new Date(`${tokyoToday()}T00:00:00`);
   });
   // ?castId / ?time はキャスト一覧の取得完了後に適用する（日付変更でリセットされるため）
   const pendingParams = useRef<{ castId: string | null; time: string | null }>({
@@ -182,9 +187,34 @@ const BookingReservation = () => {
   const [referralOther, setReferralOther] = useState<string>("");
   const [paymentSettings, setPaymentSettings] = useState<PaymentSetting[]>([]);
   const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_RESERVATION_INTERVAL_MINUTES);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
   useEffect(() => {
     document.title = "艶華 - WEB予約";
+  }, []);
+
+  // 当日枠を開いたままでも、分が変わるたびに過去の時間を一覧から取り除く。
+  useEffect(() => {
+    let intervalId: number | undefined;
+    const refreshCurrentTime = () => setCurrentTime(new Date());
+    const millisecondsToNextMinute = 60_000 - (Date.now() % 60_000) + 50;
+    const timeoutId = window.setTimeout(() => {
+      refreshCurrentTime();
+      intervalId = window.setInterval(refreshCurrentTime, 60_000);
+    }, millisecondsToNextMinute);
+
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshCurrentTime();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshCurrentTime);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshCurrentTime);
+    };
   }, []);
 
   const { toast } = useToast();
@@ -223,8 +253,7 @@ const BookingReservation = () => {
 
   // 今すぐ案内できるセラピスト：現在時刻がシフト時間内のキャストを自動検出
   const nowCasts = useMemo(() => {
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = getTokyoMinutesOfDay(currentTime);
     return casts.filter(cast =>
       allShifts.some(shift => {
         if (shift.cast_id !== cast.id) return false;
@@ -237,7 +266,7 @@ const BookingReservation = () => {
         return adjusted >= shiftStart && adjusted <= shiftEnd;
       })
     );
-  }, [casts, allShifts]);
+  }, [casts, allShifts, currentTime]);
 
   const goBookCast = (castId: string) => {
     setSelectedCastId(castId);
@@ -248,7 +277,7 @@ const BookingReservation = () => {
   const switchTab = (tab: BottomTab) => {
     if (tab === "now") {
       // 「今すぐ」は本日を対象にする
-      const today = new Date();
+      const today = new Date(`${tokyoToday()}T00:00:00`);
       setSelectedDate(today);
     }
     setBottomTab(tab);
@@ -259,6 +288,8 @@ const BookingReservation = () => {
     if (selectedDate) {
       fetchAvailableCasts();
       setSelectedCastId(""); // 日付変更時にセラピスト選択をリセット
+      setStartTime("");
+      setAvailableTimeSlots([]);
     }
   }, [selectedDate, storeId]);
 
@@ -287,7 +318,7 @@ const BookingReservation = () => {
     if (selectedDate && selectedCastId && shifts.length > 0) {
       calculateAvailableTimeSlots();
     }
-  }, [shifts, reservations, duration, selectedDate, selectedCastId, intervalMinutes]);
+  }, [shifts, reservations, duration, selectedDate, selectedCastId, intervalMinutes, currentTime]);
 
   // 指名タイプごとの料金を算出（指名なし=none / ネット指名 / 本指名）
   const computePrice = (nomType: string) => {
@@ -482,10 +513,15 @@ const BookingReservation = () => {
     const checkDuration = 60; // Use 60min as default check duration for overview
 
     const slots: { time: string; available: boolean }[] = [];
+    const businessDateKey = format(selectedDate, "yyyy-MM-dd");
     for (let time = shiftStart; time + checkDuration <= shiftEnd; time += 10) {
       const hour = Math.floor(time / 60) % 24;
       const minute = time % 60;
       const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+      if (isPastBookingSlot({ businessDateKey, time: timeStr, now: currentTime })) {
+        continue;
+      }
 
       const isBooked = castReservations.some(reservation => {
         const resStart = businessMinutes(reservation.start_time);
@@ -597,7 +633,12 @@ const BookingReservation = () => {
       return;
     }
 
-    const shift = shifts[0];
+    const businessDateKey = format(selectedDate, "yyyy-MM-dd");
+    // 日付・セラピスト切替直後の古いシフトを計算に使わない。
+    const shift = shifts.find(
+      (candidate) =>
+        candidate.cast_id === selectedCastId && candidate.shift_date === businessDateKey,
+    );
     if (!shift) {
       setAvailableTimeSlots([]);
       return;
@@ -621,6 +662,10 @@ const BookingReservation = () => {
       const minute = time % 60;
       const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 
+      if (isPastBookingSlot({ businessDateKey, time: timeStr, now: currentTime })) {
+        continue;
+      }
+
       // この時間帯が予約可能かチェック（インターバルを考慮）
       const isBooked = reservations.some(reservation => {
         const resStart = businessMinutes(reservation.start_time);
@@ -639,9 +684,31 @@ const BookingReservation = () => {
     }
 
     setAvailableTimeSlots(slots);
-    
-    if (slots.length > 0 && !slots.includes(startTime)) {
-      setStartTime(slots[0]);
+
+    const reconciledStartTime = reconcileBookingStartTime({
+      availableSlots: slots,
+      businessDateKey,
+      startTime,
+      now: currentTime,
+    });
+    if (reconciledStartTime.nextStartTime !== startTime) {
+      setStartTime(reconciledStartTime.nextStartTime);
+    }
+    if (reconciledStartTime.reason) {
+      setCurrentStep(2);
+      if (reconciledStartTime.reason === "expired") {
+        toast({
+          title: "選択した予約時間を過ぎました",
+          description: "現在時刻以降の時間から選び直してください",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "予約時間を選び直してください",
+          description: "選択した条件ではその時間を予約できなくなりました",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -671,6 +738,21 @@ const BookingReservation = () => {
       toast({
         title: "入力エラー",
         description: "必須項目をすべて入力してください",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isPastBookingSlot({
+      businessDateKey: format(selectedDate, "yyyy-MM-dd"),
+      time: startTime,
+      now: new Date(),
+    })) {
+      setCurrentTime(new Date());
+      setCurrentStep(2);
+      toast({
+        title: "予約時間を選び直してください",
+        description: "選択した時間を過ぎたため、現在時刻以降の時間を表示しました",
         variant: "destructive",
       });
       return;
