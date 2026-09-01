@@ -44,3 +44,7 @@ verify_jwt = false
 
 [functions.estama-reconcile-dispatch]
 verify_jwt = false
+
+[functions.submit-cleaning-report]
+# セラピストポータルの長いアクセストークンを関数内で検証する。
+verify_jwt = false

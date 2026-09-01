@@ -1748,7 +1748,11 @@ export default function TherapistPortal() {
               mode={salesDialog.mode}
               focusReservationId={salesDialog.reservationId}
               onReservationSaved={loadMenuReservations}
-              onSalesSubmitted={loadMenuReservations}
+              onSalesSubmitted={() => {
+                void loadMenuReservations();
+                setSalesDialog(null);
+                navigate(`/therapist/${token}/cleaning-report`);
+              }}
             />
           )}
         </DialogContent>
