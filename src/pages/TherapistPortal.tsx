@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy, CheckCircle2, Megaphone } from "lucide-react";
+import { Loader2, FileText, DollarSign, Receipt, Plane, CalendarPlus, LogOut, ChevronLeft, ChevronRight, Send, Calendar, Edit, Banknote, ClipboardCheck, DoorOpen, ExternalLink, ChevronDown, ChevronUp, Users, Search, Heart, PencilLine, Check, X, Copy, CheckCircle2, Megaphone, MapPin, KeyRound, ListOrdered, ImageIcon, Maximize2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format, startOfMonth, endOfMonth, isSameDay, addDays } from "date-fns";
@@ -66,6 +66,13 @@ interface Room {
   key_info: string | null;
   key_number: string | null;
   entry_photos: string[] | null;
+}
+
+interface EntryPhotoViewer {
+  roomName: string;
+  url: string;
+  index: number;
+  total: number;
 }
 
 type View = "menu" | "settlement" | "transport" | "shift" | "entry" | "customers" | "upcoming" | "promotion";
@@ -236,6 +243,8 @@ export default function TherapistPortal() {
 
   // Rooms
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [entryPhotoViewer, setEntryPhotoViewer] = useState<EntryPhotoViewer | null>(null);
+  const [entryPhotoZoom, setEntryPhotoZoom] = useState(1);
 
   // Clearance notification
 
@@ -572,6 +581,20 @@ export default function TherapistPortal() {
     pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
     approved: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
     rejected: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+  };
+
+  const copyEntryValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label}をコピーしました`);
+    } catch {
+      toast.error(`${label}をコピーできませんでした`);
+    }
+  };
+
+  const openEntryPhoto = (roomName: string, url: string, index: number, total: number) => {
+    setEntryPhotoZoom(1);
+    setEntryPhotoViewer({ roomName, url, index, total });
   };
 
   const menuItems = [
@@ -1498,39 +1521,117 @@ export default function TherapistPortal() {
         {/* ── ENTRY ── */}
         {view === "entry" && (
           <div className="space-y-4">
+            <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+              <p className="flex items-center gap-2 text-sm font-bold">
+                <DoorOpen size={17} className="text-primary" />
+                入室前に確認してください
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                住所・暗証番号・鍵の場所を確認できます。写真はタップすると大きく表示され、さらに拡大できます。
+              </p>
+            </div>
             {rooms.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-12">入室方法の情報がありません</p>
             ) : (
               rooms.map(room => (
-                <div key={room.id} className="rounded-xl border bg-card overflow-hidden">
-                  <div className="px-4 py-3 bg-muted/30 border-b">
-                    <p className="font-bold text-base">{room.name}</p>
+                <div key={room.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                  <div className="border-b bg-muted/30 px-4 py-3.5">
+                    <p className="flex items-center gap-2 text-lg font-bold">
+                      <DoorOpen size={19} className="text-primary" />
+                      {room.name}
+                    </p>
                   </div>
-                  <div className="px-4 py-4 space-y-4">
+                  <div className="space-y-4 px-4 py-4">
+                    {room.address && (
+                      <div className="rounded-lg border bg-background p-3">
+                        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                          <MapPin size={14} />住所
+                        </p>
+                        <p className="text-sm font-semibold leading-relaxed">{room.address}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => void copyEntryValue(room.address!, "住所")}
+                          >
+                            <Copy size={14} />住所をコピー
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" className="w-full" asChild>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(room.address)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink size={14} />地図を開く
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     {room.key_number && (
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">暗証番号</p>
-                        <p className="text-2xl font-mono font-bold tracking-widest text-primary">{room.key_number}</p>
+                      <div className="rounded-lg border-2 border-primary/25 bg-primary/5 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                            <KeyRound size={14} />暗証番号
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs text-primary"
+                            onClick={() => void copyEntryValue(room.key_number!, "暗証番号")}
+                          >
+                            <Copy size={13} />コピー
+                          </Button>
+                        </div>
+                        <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-primary">{room.key_number}</p>
                       </div>
                     )}
                     {room.entry_flow && (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">入室手順</p>
-                        <p className="text-sm whitespace-pre-wrap">{room.entry_flow}</p>
+                        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                          <ListOrdered size={14} />入室手順
+                        </p>
+                        <p className="whitespace-pre-wrap rounded-lg bg-muted/40 px-3 py-2.5 text-sm leading-7">{room.entry_flow}</p>
                       </div>
                     )}
                     {room.key_info && (
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">鍵の場所・補足</p>
-                        <p className="text-sm whitespace-pre-wrap">{room.key_info}</p>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/60 dark:bg-amber-950/20">
+                        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                          <KeyRound size={14} />鍵の場所・補足
+                        </p>
+                        <p className="whitespace-pre-wrap text-sm leading-6">{room.key_info}</p>
                       </div>
                     )}
                     {room.entry_photos && room.entry_photos.length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">写真</p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="mb-2.5 flex items-end justify-between gap-3">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                            <ImageIcon size={14} />写真で確認
+                          </p>
+                          <p className="text-[11px] font-medium text-primary">タップして拡大</p>
+                        </div>
+                        <div className="space-y-3">
                           {room.entry_photos.map((url, i) => (
-                            <img key={i} src={url} alt={`入室方法 ${i+1}`} className="w-full rounded-lg object-cover aspect-square" />
+                            <button
+                              key={url}
+                              type="button"
+                              onClick={() => openEntryPhoto(room.name, url, i, room.entry_photos!.length)}
+                              className="group relative block w-full overflow-hidden rounded-xl border bg-white text-left shadow-sm transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                              aria-label={`${room.name}の入室案内写真${i + 1}を拡大`}
+                            >
+                              <img
+                                src={url}
+                                alt={`${room.name}の入室案内 ${i + 1}`}
+                                loading="lazy"
+                                className="block h-auto w-full object-contain"
+                              />
+                              <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-black/75 px-2.5 py-1.5 text-xs font-semibold text-white shadow">
+                                <Maximize2 size={14} />拡大する
+                              </span>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -1545,6 +1646,92 @@ export default function TherapistPortal() {
           </div>
         )}
       </main>
+
+      {/* 入室案内写真の全画面表示 */}
+      <Dialog
+        open={!!entryPhotoViewer}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEntryPhotoViewer(null);
+            setEntryPhotoZoom(1);
+          }
+        }}
+      >
+        <DialogContent className="flex h-[100dvh] w-screen max-w-none translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden border-0 bg-black p-0 text-white shadow-none sm:h-[94dvh] sm:w-[94vw] sm:max-w-4xl sm:rounded-xl [&>button]:right-3 [&>button]:top-3 [&>button]:flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:bg-white/15 [&>button]:text-white [&>button]:opacity-100">
+          <DialogHeader className="shrink-0 border-b border-white/15 px-4 py-3 pr-16 text-left">
+            <DialogTitle className="text-base text-white">
+              {entryPhotoViewer?.roomName}の入室案内
+            </DialogTitle>
+            <p className="text-xs text-white/70">
+              写真 {entryPhotoViewer ? entryPhotoViewer.index + 1 : 0}/{entryPhotoViewer?.total ?? 0} ・ 指で拡大、または下のボタンを使用
+            </p>
+          </DialogHeader>
+
+          <div
+            className="min-h-0 flex-1 overflow-auto overscroll-contain bg-black"
+            style={{ touchAction: "pan-x pan-y pinch-zoom" }}
+          >
+            {entryPhotoViewer && (
+              <div
+                className="flex min-h-full items-center justify-center p-2 transition-[width] duration-150"
+                style={{ width: `${entryPhotoZoom * 100}%` }}
+              >
+                <img
+                  src={entryPhotoViewer.url}
+                  alt={`${entryPhotoViewer.roomName}の入室案内 ${entryPhotoViewer.index + 1}`}
+                  className="block h-auto w-full select-none object-contain"
+                  draggable={false}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-white/15 bg-black px-3 pb-4 pt-3">
+            <div className="mx-auto flex max-w-lg items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                disabled={entryPhotoZoom <= 1}
+                onClick={() => setEntryPhotoZoom((zoom) => Math.max(1, Number((zoom - 0.5).toFixed(1))))}
+                aria-label="縮小"
+              >
+                <ZoomOut size={18} />
+              </Button>
+              <span className="w-12 text-center text-xs font-semibold tabular-nums">{Math.round(entryPhotoZoom * 100)}%</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                disabled={entryPhotoZoom >= 3}
+                onClick={() => setEntryPhotoZoom((zoom) => Math.min(3, Number((zoom + 0.5).toFixed(1))))}
+                aria-label="拡大"
+              >
+                <ZoomIn size={18} />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-white/30 bg-white/10 px-3 text-white hover:bg-white/20 hover:text-white"
+                disabled={entryPhotoZoom === 1}
+                onClick={() => setEntryPhotoZoom(1)}
+              >
+                <RotateCcw size={15} />元に戻す
+              </Button>
+              {entryPhotoViewer && (
+                <Button type="button" variant="outline" size="icon" className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white" asChild>
+                  <a href={entryPhotoViewer.url} target="_blank" rel="noopener noreferrer" aria-label="元画像を開く">
+                    <ExternalLink size={18} />
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 本日の予約から直接、追加オプション入力・売上確定 */}
       <Dialog open={!!salesDialog} onOpenChange={(open) => !open && setSalesDialog(null)}>
