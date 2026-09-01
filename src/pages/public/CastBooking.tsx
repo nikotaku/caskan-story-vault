@@ -12,6 +12,10 @@ import {
   getCustomDomainBaseUrl,
   isBookingKey,
 } from "@/lib/bookingUrl";
+import {
+  hasKayamaNoaBookingPromotion,
+  KAYAMA_NOA_BOOKING_PROMOTION,
+} from "@/lib/castBookingPromotion";
 
 /**
  * セラピスト専用の予約リクエストフォーム（可愛いデザイン）。
@@ -112,6 +116,7 @@ export default function CastBooking() {
 
   // ペア名義（Wセラピスト）のフォームかどうか
   const isPairCast = !!cast?.name && /[&＆]/.test(cast.name);
+  const showsKayamaNoaPromotion = hasKayamaNoaBookingPromotion(cast?.id);
 
   useEffect(() => {
     const routeValue = castId ?? castKey;
@@ -392,6 +397,22 @@ export default function CastBooking() {
 
       <main className="max-w-md mx-auto px-5">
         <form onSubmit={handleSubmit} className="bg-white/95 backdrop-blur rounded-[2rem] shadow-lg border border-pink-100 p-6 space-y-6">
+          {showsKayamaNoaPromotion && (
+            <section
+              aria-label="香山のあ限定特典"
+              className="rounded-2xl border-2 border-rose-300 bg-gradient-to-br from-rose-50 to-pink-50 px-4 py-4 shadow-sm"
+            >
+              <p className="text-center text-base font-bold text-rose-700">
+                {KAYAMA_NOA_BOOKING_PROMOTION.title}
+              </p>
+              <div className="mt-2 space-y-1.5 text-sm font-semibold leading-relaxed text-gray-700">
+                {KAYAMA_NOA_BOOKING_PROMOTION.benefits.map((benefit) => (
+                  <p key={benefit}>・{benefit}</p>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* 希望日 */}
           <div>
             <label className="flex items-center gap-1.5 text-sm font-bold text-rose-500 mb-2">
