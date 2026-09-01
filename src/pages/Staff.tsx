@@ -1051,15 +1051,14 @@ export default function Staff() {
     }
 
     try {
-      const { error } = await supabase
-        .from('casts')
-        .delete()
-        .eq('id', id);
+      const { data: deletedIds, error } = await supabase
+        .rpc('delete_cast_with_w_groups', { p_cast_id: id });
 
       if (error) throw error;
 
-      // ローカルステートから削除されたキャストを除外
-      setCasts(prevCasts => prevCasts.filter(cast => cast.id !== id));
+      // Wセラピストの構成員だった場合は、無効になるW枠も一覧から除外する。
+      const deletedIdSet = new Set(deletedIds ?? [id]);
+      setCasts(prevCasts => prevCasts.filter(cast => !deletedIdSet.has(cast.id)));
 
       toast({
         title: "キャスト削除",

@@ -6167,6 +6167,10 @@ export type Database = {
           store_id: string
         }[]
       }
+      delete_cast_with_w_groups: {
+        Args: { p_cast_id: string }
+        Returns: string[]
+      }
       submit_dispatch_registration: {
         Args: {
           p_dispatch_end: string
