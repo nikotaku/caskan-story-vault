@@ -1056,13 +1056,33 @@ export default function Staff() {
 
       if (error) throw error;
 
-      // Wセラピストの構成員だった場合は、無効になるW枠も一覧から除外する。
+      const { data: remainingCast, error: remainingCastError } = await supabase
+        .from('casts_admin_safe')
+        .select('id, is_active, is_visible, status')
+        .eq('id', id)
+        .eq('store_id', storeId)
+        .maybeSingle();
+
+      if (remainingCastError) throw remainingCastError;
+
+      const archivedForWGroup = Boolean(remainingCast && !remainingCast.is_active);
       const deletedIdSet = new Set(deletedIds ?? [id]);
-      setCasts(prevCasts => prevCasts.filter(cast => !deletedIdSet.has(cast.id)));
+      setCasts(prevCasts => archivedForWGroup
+        ? prevCasts.map(cast => cast.id === id
+          ? {
+              ...cast,
+              is_active: false,
+              is_visible: false,
+              status: 'offline',
+            }
+          : cast)
+        : prevCasts.filter(cast => !deletedIdSet.has(cast.id)));
 
       toast({
-        title: "キャスト削除",
-        description: "キャストが削除されました",
+        title: archivedForWGroup ? "キャストをアーカイブ" : "キャスト削除",
+        description: archivedForWGroup
+          ? "Wセラピスト枠と過去の売上を残して、個人枠をアーカイブしました"
+          : "キャストが削除されました",
       });
 
       setDeleteConfirmId(null);
