@@ -8,24 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { useStore } from "@/hooks/useStore";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth } from "date-fns";
 import { ja } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Loader2, Download, MinusCircle, PlusCircle, Trash2 } from "lucide-react";
 import { downloadReferralReceipt } from "@/lib/referralReceipt";
+import {
+  aggregateReferralFees,
+  ReferralFeeRow,
+  shouldIncludeAugustLegacy3rdSb,
+  THIRD_SB_RULE_NAME,
+} from "@/lib/referralFeeAggregation";
+import { ENKA_STORE_ID, ZENRYOKU_STORE_ID } from "@/lib/storeSwitch";
 import { toast } from "sonner";
-
-interface Row {
-  castId: string;
-  castName: string;
-  ruleName: string;
-  unitAmount: number; // 予約1本あたり
-  count: number;      // 完了本数
-  sales: number;      // 対象売上
-  fee: number;        // 紹介費 = unitAmount * count
-}
 
 interface ReferralRewardOption {
   id: string;
@@ -47,7 +44,7 @@ const signedYen = (v: number) => `${v >= 0 ? "+" : "−"}¥${Math.abs(v).toLocal
 export default function SalesReferralFees() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()));
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<ReferralFeeRow[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [rewardOptions, setRewardOptions] = useState<ReferralRewardOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,8 +57,15 @@ export default function SalesReferralFees() {
   const [savingAdjustment, setSavingAdjustment] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
-  const { storeId } = useStore();
+  const { storeId, loading: storeLoading } = useAdminStore();
   const navigate = useNavigate();
+
+  const selectedMonthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
+  const includesZenryokuAugust = shouldIncludeAugustLegacy3rdSb(
+    storeId,
+    selectedMonthStart,
+    ENKA_STORE_ID,
+  );
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -70,16 +74,19 @@ export default function SalesReferralFees() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const monthStart = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
+      const monthStart = selectedMonthStart;
       const monthEnd = format(endOfMonth(selectedMonth), "yyyy-MM-dd");
+      const reportStoreIds = includesZenryokuAugust
+        ? [storeId, ZENRYOKU_STORE_ID]
+        : [storeId];
 
       const [castsRes, rewardsRes, resvRes, adjustmentsRes] = await Promise.all([
-        supabase.from("casts").select("id, name, real_name, referral_reward_id").eq("store_id", storeId).not("referral_reward_id", "is", null),
-        supabase.from("referral_rewards").select("id, name, amount").eq("store_id", storeId),
+        supabase.from("casts").select("id, name, real_name, store_id, referral_reward_id").in("store_id", reportStoreIds).not("referral_reward_id", "is", null),
+        supabase.from("referral_rewards").select("id, name, amount, store_id").in("store_id", reportStoreIds),
         supabase
           .from("reservations")
-          .select("cast_id, price, payment_fee, status, reservation_date")
-          .eq("store_id", storeId)
+          .select("cast_id, price, payment_fee, status, reservation_date, store_id")
+          .in("store_id", reportStoreIds)
           .gte("reservation_date", monthStart)
           .lte("reservation_date", monthEnd)
           .eq("status", "completed"),
@@ -96,7 +103,10 @@ export default function SalesReferralFees() {
 
       const rewardMap = new Map<string, { name: string; amount: number }>();
       for (const r of rewardsRes.data || []) rewardMap.set(r.id, { name: r.name, amount: r.amount ?? 0 });
-      setRewardOptions((rewardsRes.data || []).map((r) => ({ id: r.id, name: r.name })).sort((a, b) => a.name.localeCompare(b.name, "ja")));
+      setRewardOptions((rewardsRes.data || [])
+        .filter((r) => r.store_id === storeId)
+        .map((r) => ({ id: r.id, name: r.name }))
+        .sort((a, b) => a.name.localeCompare(b.name, "ja")));
 
       setAdjustments((adjustmentsRes.data || [])
         .filter((a) => rewardMap.has(a.referral_reward_id))
@@ -107,41 +117,16 @@ export default function SalesReferralFees() {
           amount: a.amount ?? 0,
         })));
 
-      // 紹介ルールが紐づくキャストのみ対象
-      const castInfo = new Map<string, { name: string; rule: { name: string; amount: number } }>();
-      for (const c of castsRes.data || []) {
-        if (!c.referral_reward_id) continue;
-        const rule = rewardMap.get(c.referral_reward_id);
-        if (!rule) continue;
-        castInfo.set(c.id, { name: c.real_name ? `${c.name}/${c.real_name}` : c.name, rule });
-      }
-
-      // 完了予約を対象キャストで集計
-      const agg = new Map<string, { count: number; sales: number }>();
-      for (const r of resvRes.data || []) {
-        if (!r.cast_id || !castInfo.has(r.cast_id)) continue;
-        const cur = agg.get(r.cast_id) ?? { count: 0, sales: 0 };
-        cur.count += 1;
-        cur.sales += (r.price ?? 0) + (r.payment_fee ?? 0);
-        agg.set(r.cast_id, cur);
-      }
-
-      const result: Row[] = [];
-      for (const [castId, info] of castInfo) {
-        const a = agg.get(castId) ?? { count: 0, sales: 0 };
-        if (a.count === 0) continue; // 当月実績がある紹介キャストのみ表示
-        result.push({
-          castId,
-          castName: info.name,
-          ruleName: info.rule.name,
-          unitAmount: info.rule.amount,
-          count: a.count,
-          sales: a.sales,
-          fee: info.rule.amount * a.count,
-        });
-      }
-      result.sort((x, y) => y.fee - x.fee);
-      setRows(result);
+      setRows(aggregateReferralFees(
+        castsRes.data || [],
+        rewardsRes.data || [],
+        resvRes.data || [],
+        {
+          currentStoreId: storeId,
+          legacyStoreId: includesZenryokuAugust ? ZENRYOKU_STORE_ID : undefined,
+          legacyRuleName: includesZenryokuAugust ? THIRD_SB_RULE_NAME : undefined,
+        },
+      ));
     } catch (e) {
       console.error("Error fetching referral fees:", e);
       setRows([]);
@@ -150,11 +135,11 @@ export default function SalesReferralFees() {
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth, storeId]);
+  }, [includesZenryokuAugust, selectedMonth, selectedMonthStart, storeId]);
 
   useEffect(() => {
-    if (user) fetchData();
-  }, [user, fetchData]);
+    if (user && !storeLoading) fetchData();
+  }, [user, storeLoading, fetchData]);
 
   const ruleNames = Array.from(new Set([...rows.map((r) => r.ruleName), ...adjustments.map((a) => a.ruleName)])).sort();
   const tabs = ["すべて", ...ruleNames];
@@ -270,6 +255,9 @@ export default function SalesReferralFees() {
             <div>
               <h1 className="text-2xl font-bold">紹介費管理</h1>
               <p className="text-muted-foreground text-sm">前月繰越はプラス、相殺・差引はマイナスの行として追加できます。</p>
+              {includesZenryokuAugust && (
+                <p className="text-xs text-primary mt-1">2026年8月の3rd SBは、旧「全力（過去データ）」の完了予約も合算しています。</p>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" onClick={() => setSelectedMonth((d) => subMonths(d, 1))}>
