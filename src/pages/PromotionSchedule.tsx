@@ -36,15 +36,14 @@ import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  buildPromotionCastOptions,
+  type PromotionCastOption,
+} from "@/lib/promotionScheduleCasts";
 
 type PromotionPlan = Database["public"]["Tables"]["promotion_plans"]["Row"];
 type PromotionTask = Database["public"]["Tables"]["promotion_plan_tasks"]["Row"];
 type PromotionChannel = Database["public"]["Tables"]["promotion_plan_channels"]["Row"];
-type CastOption = Pick<
-  Database["public"]["Tables"]["casts"]["Row"],
-  "id" | "name" | "photo" | "profile" | "message" | "tags" | "x_account" | "o2_url"
-> & { linkedCastIds: string[] };
-
 type PromotionChannelKey =
   | "hp_top_banner"
   | "estama_top_banner"
@@ -159,7 +158,7 @@ export default function PromotionSchedule() {
   const [channels, setChannels] = useState<PromotionChannel[]>([]);
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
   const [savingTaskIds, setSavingTaskIds] = useState<Set<string>>(new Set());
-  const [castOptions, setCastOptions] = useState<CastOption[]>([]);
+  const [castOptions, setCastOptions] = useState<PromotionCastOption[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedCastIds, setSelectedCastIds] = useState<string[]>([]);
   const [startsOn, setStartsOn] = useState(() => toLocalDateString());
@@ -204,7 +203,8 @@ export default function PromotionSchedule() {
         .order("sort_order", { ascending: true }),
       supabase
         .from("casts")
-        .select("id, name, photo, profile, message, tags, x_account, o2_url")
+        .select("id, store_id, name, photo, profile, message, tags, x_account, o2_url")
+        .eq("store_id", storeId)
         .eq("is_active", true)
         .order("display_order", { ascending: true })
         .order("name", { ascending: true }),
@@ -223,14 +223,7 @@ export default function PromotionSchedule() {
       console.error("セラピスト一覧の取得に失敗しました:", castsResult.error);
       toast.error("セラピスト一覧を読み込めませんでした");
     } else {
-      // リブランド前後で同じ人が別の店舗IDにいる場合も、選択肢は名前単位で1件にまとめる
-      const uniqueCasts = new Map<string, CastOption>();
-      for (const cast of castsResult.data || []) {
-        const existing = uniqueCasts.get(cast.name);
-        if (existing) existing.linkedCastIds.push(cast.id);
-        else uniqueCasts.set(cast.name, { ...cast, linkedCastIds: [cast.id] });
-      }
-      setCastOptions([...uniqueCasts.values()]);
+      setCastOptions(buildPromotionCastOptions(castsResult.data || [], storeId));
     }
     setLoading(false);
   }, [storeId, storeLoading, user]);
@@ -724,8 +717,11 @@ export default function PromotionSchedule() {
 
           <div className="space-y-5 py-2">
             <div className="space-y-2">
-              <Label>セラピスト</Label>
-              <div className="max-h-52 space-y-2 overflow-y-auto rounded-xl border p-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label>セラピスト</Label>
+                <span className="text-xs text-muted-foreground">在籍中 {castOptions.length}名</span>
+              </div>
+              <div className="space-y-2 rounded-xl border p-2">
                 {castOptions.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">選択できるセラピストがいません</p>
                 ) : castOptions.map((cast) => {
