@@ -1042,6 +1042,7 @@ export default function Schedule() {
     supabase.functions
       .invoke("notify-line-therapist", {
         body: {
+          reservation_id: d.id,
           cast_id: d.cast_id,
           customer_name: d.customer_name,
           cast_name: castNameMap.get(d.cast_id) ?? "未設定",

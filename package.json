@@ -15,6 +15,7 @@
     "test:booking-promotion": "node --experimental-strip-types --test tests/castBookingPromotion.test.ts",
     "test:booking-time": "node --experimental-strip-types --test tests/bookingSlotTime.test.ts",
     "test:promotion-casts": "node --experimental-strip-types --test tests/promotionScheduleCasts.test.ts",
+    "test:therapist-notification": "node --experimental-strip-types --test tests/therapistBookingNotification.test.ts",
     "test:referral-rewards": "node --experimental-strip-types --test tests/referralRewards.test.ts",
     "preview": "vite preview"
   },
