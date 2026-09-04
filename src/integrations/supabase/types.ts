@@ -6119,6 +6119,21 @@ export type Database = {
         Args: { p_report_id: string }
         Returns: number
       }
+      complete_daily_clearance: {
+        Args: {
+          p_accommodation_fee: number
+          p_cast_id: string
+          p_date: string
+          p_misc_expenses: number
+          p_other_expenses: Json
+          p_payout_amount: number
+          p_payout_method: string | null
+          p_therapist_back: number
+          p_total_sales: number
+          p_transportation_fee: number
+        }
+        Returns: number
+      }
       create_admin_multi_post: {
         Args: {
           p_body: string

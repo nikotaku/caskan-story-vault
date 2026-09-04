@@ -46,6 +46,10 @@ import {
   findNextAvailableStart,
   formatAvailabilityTime,
 } from "@/lib/availability";
+import {
+  getSubmittedCastIds,
+  getTimelineSettlementIndicator,
+} from "@/lib/settlementStatus";
 
 interface Cast {
   id: string;
@@ -94,6 +98,7 @@ interface Reservation {
   line_notification_status: string;
   email_notification_status: string;
   notification_last_error: string | null;
+  settlement_submitted?: boolean;
 }
 
 interface StoreRoom {
@@ -253,11 +258,16 @@ function StatusBox({
         ) : (
           reservations.map((res) => (
             <div key={res.id} className="bg-gray-50 rounded-md p-2 text-xs border border-gray-100">
-              <div className="font-semibold mb-0.5 flex items-center gap-1.5">
+              <div className="font-semibold mb-0.5 flex flex-wrap items-center gap-1.5">
                 <span>{res.customer_name}</span>
                 {isWebBooking(res) && (
                   <span className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-700">
                     WEB
+                  </span>
+                )}
+                {res.status === "confirmed" && res.settlement_submitted && (
+                  <span className="rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[9px] font-bold text-teal-700">
+                    精算入力済み
                   </span>
                 )}
               </div>
@@ -596,6 +606,7 @@ export default function Schedule() {
       nextResResult,
       clearanceResult,
       monthResResult,
+      salesSubmissionResult,
     ] = await Promise.all([
       // 旧店舗IDも履歴として同じタイムラインに含める
       supabase.from("shifts").select("*, cast:casts(id, name, photo)").eq("shift_date", dateStr),
@@ -606,6 +617,12 @@ export default function Schedule() {
       supabase.from("daily_clearances").select("date, cast_id, total_sales").gte("date", monthStart).lte("date", monthEnd),
       // 精算未入力のセラピスト分は、完了予約の金額と決済手数料で補完する
       supabase.from("reservations").select("cast_id, price, payment_fee, reservation_date, start_time").gte("reservation_date", monthStart).lte("reservation_date", monthEndNext).eq("status", "completed"),
+      // セラピストの当日売上入力を、予約カードの「精算入力済み」表示に使う。
+      supabase
+        .from("daily_sales_records")
+        .select("cast_id, status")
+        .eq("date", dateStr)
+        .in("status", ["pending", "confirmed"]),
     ]);
 
     const failedResult = [
@@ -614,6 +631,7 @@ export default function Schedule() {
       nextResResult,
       clearanceResult,
       monthResResult,
+      salesSubmissionResult,
     ].find((result) => result.error);
     if (failedResult?.error) {
       console.error("予約・売上データの取得に失敗しました:", failedResult.error);
@@ -627,7 +645,13 @@ export default function Schedule() {
     }
 
     setShifts((shiftsResult.data as any) || []);
-    setReservations([...(reservationsResult.data || []), ...(nextResResult.data || [])]);
+    const submittedCastIds = getSubmittedCastIds(salesSubmissionResult.data || []);
+    setReservations(
+      [...(reservationsResult.data || []), ...(nextResResult.data || [])].map((reservation) => ({
+        ...reservation,
+        settlement_submitted: submittedCastIds.has(reservation.cast_id),
+      })),
+    );
 
     // 「営業日×セラピスト」で精算を優先し、未精算分だけ完了予約で補完する。
     // 店舗IDでは分けないため、リニューアル前後のデータも重複なく合算できる。
@@ -1616,6 +1640,10 @@ export default function Schedule() {
                                 const extNames = new Set(optionRates.filter((o) => (o.extension_minutes ?? 0) > 0).map((o) => o.option_name));
                                 const otherOpts = (res.options ?? []).filter((n) => !extNames.has(n));
                                 const durLabel = extMin > 0 ? `${res.duration}分＋延長${extMin}分` : `${res.duration}分`;
+                                const settlementIndicator = getTimelineSettlementIndicator(
+                                  res.status,
+                                  Boolean(res.settlement_submitted),
+                                );
                                 return (
                                   <div
                                     key={res.id}
@@ -1629,10 +1657,16 @@ export default function Schedule() {
                                       openDetail(res);
                                     }}
                                   >
-                                    <div className="text-[10px] font-bold leading-tight pr-9">
+                                    <div className={cn(
+                                      "text-[10px] font-bold leading-tight",
+                                      settlementIndicator === "submitted" ? "pr-20" : "pr-9",
+                                    )}>
                                       {toExtTime(res.start_time)}~{endTime}
                                     </div>
-                                    <div className="text-xs font-semibold truncate leading-tight pr-9">
+                                    <div className={cn(
+                                      "text-xs font-semibold truncate leading-tight",
+                                      settlementIndicator === "submitted" ? "pr-20" : "pr-9",
+                                    )}>
                                       {res.customer_name}
                                       {res.nomination_type && res.nomination_type !== "none" && (
                                         <span className="ml-1 text-[9px] font-normal opacity-70">{res.nomination_type}</span>
@@ -1647,8 +1681,8 @@ export default function Schedule() {
                                         <div className="font-semibold">¥{res.price.toLocaleString()}</div>
                                       </div>
                                     )}
-                                    {/* 完了へ移行ボタン */}
-                                    {res.status !== "completed" && res.status !== "cancelled" && (
+                                    {/* 精算の進行状況 */}
+                                    {settlementIndicator === "action" && (
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -1659,6 +1693,16 @@ export default function Schedule() {
                                       >
                                         完了
                                       </button>
+                                    )}
+                                    {settlementIndicator === "submitted" && (
+                                      <span className="absolute top-1 right-1 rounded bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                                        精算入力済み
+                                      </span>
+                                    )}
+                                    {settlementIndicator === "completed" && (
+                                      <span className="absolute top-1 right-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                                        完了
+                                      </span>
                                     )}
                                   </div>
                                 );
