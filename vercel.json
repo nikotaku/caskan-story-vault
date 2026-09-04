@@ -32,9 +32,22 @@
           "value": "noindex, nofollow, noarchive"
         }
       ]
+    },
+    {
+      "source": "/marketing-study",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow, noarchive"
+        }
+      ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/marketing-study",
+      "destination": "/marketing-study.html"
+    },
     {
       "source": "/api/cast-posts/delete",
       "destination": "/api/automations/admin-portal-post?action=delete-failed-post"
