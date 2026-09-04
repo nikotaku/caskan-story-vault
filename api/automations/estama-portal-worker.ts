@@ -1,9 +1,7 @@
 import { chromium } from "playwright-core";
 import {
   EstamaSubmissionUncertainError,
-  getAdminClient,
   getBrowserbase,
-  getConnection,
   LoginRequiredError,
   requireSingleDiaryImageUrls,
   runPreparedEstamaDiary,
@@ -45,12 +43,8 @@ async function claimMemberWorkerToken(token: string) {
   return await response.json() === true;
 }
 
-async function discoverMemberPages() {
-  const admin = getAdminClient();
-  const connection = await getConnection(admin, STORE_ID);
-  if (!connection?.browserbase_context_id || connection.status !== "ready") {
-    throw new LoginRequiredError("エステ魂の接続が有効ではありません");
-  }
+async function discoverMemberPages(contextId: string) {
+  if (!contextId) throw new LoginRequiredError("エステ魂のブラウザ接続情報がありません");
 
   const bb = getBrowserbase();
   const projectId = process.env.BROWSERBASE_PROJECT_ID || undefined;
@@ -59,7 +53,7 @@ async function discoverMemberPages() {
     timeout: 300,
     region: "ap-southeast-1",
     browserSettings: {
-      context: { id: connection.browserbase_context_id, persist: true },
+      context: { id: contextId, persist: true },
       allowedDomains: ["estama.jp"],
       viewport: { width: 1440, height: 1000 },
       solveCaptchas: true,
@@ -105,7 +99,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         res.status(401).json({ error: "実行トークンが無効または使用済みです" });
         return;
       }
-      const result = await discoverMemberPages();
+      const result = await discoverMemberPages(stringValue(req.body?.contextId));
       res.status(200).json({ ok: true, ...result });
       return;
     }
