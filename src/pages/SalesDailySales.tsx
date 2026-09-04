@@ -317,24 +317,20 @@ export default function SalesDailySales() {
     // 投函金額 = 店舗取り分 = 売上 - セラピスト給与
     const payout = group.totalSales - salary;
     try {
-      const { error } = await supabase.from("daily_clearances" as any).upsert(
-        {
-          cast_id: group.castId,
-          date: dateStr,
-          total_sales: group.totalSales,
-          therapist_back: input.therapistBack,
-          misc_expenses: input.miscExpenses,
-          accommodation_fee: input.accommodationFee,
-          transportation_fee: input.transportationFee,
-          other_expenses: combineClearanceExtraItems(input.otherItems, input.salaryAdjustmentItems),
-          payout_amount: payout,
-          payout_method: input.payoutMethod || null,
-          status: "pending",
-          points_awarded: 0.5,
-          cleared_at: new Date().toISOString(),
-        },
-        { onConflict: "cast_id,date" }
-      );
+      // 清算保存・売上報告の承認・対象予約の完了をDB内の1処理で確定する。
+      // 途中で失敗した場合は全変更が取り消され、状態が片方だけ進むことを防ぐ。
+      const { data: completedCount, error } = await supabase.rpc("complete_daily_clearance", {
+        p_cast_id: group.castId,
+        p_date: dateStr,
+        p_total_sales: group.totalSales,
+        p_therapist_back: input.therapistBack,
+        p_misc_expenses: input.miscExpenses,
+        p_accommodation_fee: input.accommodationFee,
+        p_transportation_fee: input.transportationFee,
+        p_other_expenses: combineClearanceExtraItems(input.otherItems, input.salaryAdjustmentItems),
+        p_payout_amount: payout,
+        p_payout_method: input.payoutMethod || null,
+      });
       if (error) throw error;
 
       if (!clearances[group.castId]) {
@@ -365,7 +361,19 @@ export default function SalesDailySales() {
         });
       }
 
-      toast.success(`${group.castName} の清算が完了しました`);
+      const completedLabel = completedCount > 0 ? `（予約${completedCount}件を完了）` : "";
+      toast.success(`${group.castName} の清算が完了しました${completedLabel}`);
+      setCastGroups((groups) => groups.map((current) => (
+        current.castId === group.castId
+          ? {
+              ...current,
+              reservations: current.reservations.map((reservation) => ({
+                ...reservation,
+                status: reservation.status === "confirmed" ? "completed" : reservation.status,
+              })),
+            }
+          : current
+      )));
       const { data } = await supabase.from("daily_clearances" as any).select("*").eq("date", dateStr);
       const clearMap: Record<string, Clearance> = {};
       for (const c of (data as Clearance[]) || []) clearMap[c.cast_id] = c;
