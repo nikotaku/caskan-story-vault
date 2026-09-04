@@ -11,6 +11,9 @@ type ResponseLike = {
   setHeader(name: string, value: string): void;
 };
 
+type LinkRow = { text: string; href: string };
+type MemberRow = { email: string; phone: string };
+
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://imrxzkivwrkqbhqfbbes.supabase.co";
 const PUBLISHABLE_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_T0a9mtOIbupU5n_VAe9caw_xlnbbWfB";
 const STORE_ID = "404499ab-5350-490f-9608-5814faffda6f";
@@ -84,9 +87,15 @@ async function closeEstama(resources: Awaited<ReturnType<typeof openEstama>>) {
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
   res.setHeader("Cache-Control", "private, no-store");
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
   const token = typeof req.body?.token === "string" ? req.body.token : "";
-  if (!await claimToken(token)) return res.status(401).json({ error: "invalid token" });
+  if (!await claimToken(token)) {
+    res.status(401).json({ error: "invalid token" });
+    return;
+  }
 
   const action = req.body?.action === "import" ? "import" : "discover";
   const resources = await openEstama();
@@ -94,17 +103,23 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     await resources.page.goto("https://estama.jp/admin/cast_edit/", { waitUntil: "domcontentloaded" });
     if (await resources.page.locator("#Name").count() === 0) throw new Error("Estama login expired");
 
-    const links = await resources.page.locator("a[href]").evaluateAll((nodes) => nodes.map((node) => ({
-      text: (node.textContent || "").replace(/\s+/g, " ").trim().slice(0, 100),
-      href: (node as HTMLAnchorElement).href,
-    })).catch(() => [] as Array<{ text: string; href: string }>);
+    let links: LinkRow[] = [];
+    try {
+      links = await resources.page.locator("a[href]").evaluateAll((nodes) => nodes.map((node) => ({
+        text: (node.textContent || "").replace(/\s+/g, " ").trim().slice(0, 100),
+        href: (node as HTMLAnchorElement).href,
+      })));
+    } catch {
+      links = [];
+    }
     const candidates = links.filter((item) =>
       /会員|顧客|ユーザー|customer|member|user/i.test(`${item.text} ${item.href}`)
       && item.href.startsWith("https://estama.jp/")
     );
 
     if (action === "discover") {
-      return res.status(200).json({ ok: true, page: resources.page.url(), candidates: candidates.slice(0, 30) });
+      res.status(200).json({ ok: true, page: resources.page.url(), candidates: candidates.slice(0, 30) });
+      return;
     }
 
     const explicitUrl = typeof req.body?.memberUrl === "string" ? req.body.memberUrl : "";
@@ -112,34 +127,39 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     if (!target) throw new Error("member page not found");
     await resources.page.goto(target, { waitUntil: "domcontentloaded" });
 
-    // Do not return PII from this endpoint. Capture rows locally and merge directly into Supabase.
-    const rawRows = await resources.page.locator("tr").evaluateAll((rows) => rows.map((tr) => {
-      const text = (tr.textContent || "").replace(/\s+/g, " ").trim();
-      const email = text.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i)?.[0] || "";
-      const phone = text.match(/(?:\+?81[-\s]?(?:0)?|0)\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4}/)?.[0] || "";
-      return { email, phone };
-    })).catch(() => [] as Array<{ email: string; phone: string }>);
+    let rawRows: MemberRow[] = [];
+    try {
+      rawRows = await resources.page.locator("tr").evaluateAll((rows) => rows.map((tr) => {
+        const text = (tr.textContent || "").replace(/\s+/g, " ").trim();
+        const email = text.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i)?.[0] || "";
+        const phone = text.match(/(?:\+?81[-\s]?(?:0)?|0)\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4}/)?.[0] || "";
+        return { email, phone };
+      }));
+    } catch {
+      rawRows = [];
+    }
 
     const normalized = rawRows.map((row) => ({
       email: row.email.trim().toLowerCase().replace(/^mailto:/i, ""),
       phone: row.phone.replace(/\D/g, "").replace(/^81(?=\d{9,10}$)/, "0"),
     })).filter((row) => row.email && row.phone.length >= 10);
 
-    const uniqueByPhone = new Map<string, { email: string; phone: string }>();
+    const uniqueByPhone = new Map<string, MemberRow>();
     for (const row of normalized) if (!uniqueByPhone.has(row.phone)) uniqueByPhone.set(row.phone, row);
     const members = [...uniqueByPhone.values()];
+
+    const { data: allCustomers, error: customerError } = await resources.admin
+      .from("customers")
+      .select("id,email,phone,status,store_id")
+      .in("store_id", [STORE_ID, "00000000-0000-0000-0000-000000000001"]);
+    if (customerError) throw customerError;
 
     let matched = 0;
     let updated = 0;
     let inserted = 0;
     let conflicts = 0;
     for (const member of members) {
-      const { data: matches, error: matchError } = await resources.admin
-        .from("customers")
-        .select("id,email,phone,status,store_id")
-        .in("store_id", [STORE_ID, "00000000-0000-0000-0000-000000000001"]);
-      if (matchError) throw matchError;
-      const samePhone = (matches || []).filter((row) => String(row.phone || "").replace(/\D/g, "") === member.phone);
+      const samePhone = (allCustomers || []).filter((row) => String(row.phone || "").replace(/\D/g, "") === member.phone);
       if (samePhone.length) {
         matched += 1;
         const canonical = samePhone.find((row) => row.store_id === STORE_ID && row.status !== "newsletter_only")
@@ -168,7 +188,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       inserted += 1;
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       ok: true,
       target,
       scannedRows: rawRows.length,
@@ -179,7 +199,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       conflicts,
     });
   } catch (error) {
-    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   } finally {
     await closeEstama(resources);
   }
