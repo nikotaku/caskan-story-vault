@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow,noarchive" />
+  <title>マーケティング実践テスト</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --panel-soft: #f8f9fc;
+      --text: #172033;
+      --muted: #687188;
+      --line: #e3e7ef;
+      --primary: #5b5ce2;
+      --primary-strong: #4546c6;
+      --primary-soft: #eeefff;
+      --success: #178b64;
+      --success-soft: #e9f8f2;
+      --danger: #c44956;
+      --danger-soft: #fff0f1;
+      --warning: #a86808;
+      --warning-soft: #fff7e4;
+      --shadow: 0 18px 50px rgba(30, 37, 56, 0.08);
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background: radial-gradient(circle at 8% 0%, rgba(91, 92, 226, 0.10), transparent 28rem), var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+      line-height: 1.6;
+    }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+    .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+    .rail {
+      position: sticky; top: 0; height: 100vh; padding: 24px 18px;
+      border-right: 1px solid rgba(227, 231, 239, 0.9);
+      background: rgba(255, 255, 255, 0.86); backdrop-filter: blur(18px); z-index: 20;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 22px; border-bottom: 1px solid var(--line); }
+    .brand-mark {
+      width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px;
+      background: linear-gradient(145deg, var(--primary), #8586ff); color: #fff; font-weight: 800;
+      letter-spacing: -0.04em; box-shadow: 0 10px 24px rgba(91, 92, 226, 0.28);
+    }
+    .brand-name { font-size: 14px; font-weight: 800; line-height: 1.2; letter-spacing: 0.02em; }
+    .brand-sub { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; }
+    .rail-section { margin-top: 24px; }
+    .rail-label { margin: 0 10px 10px; color: #9299aa; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    .rail-item {
+      display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px; border: 0;
+      border-radius: 12px; background: transparent; color: #596176; text-align: left; font-size: 13px;
+      font-weight: 700; transition: 160ms ease;
+    }
+    .rail-item:hover, .rail-item.active { background: var(--primary-soft); color: var(--primary-strong); }
+    .rail-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: #f0f2f7; font-size: 13px; }
+    .rail-item.active .rail-icon { background: #dedfff; }
+    .rail-progress { position: absolute; left: 18px; right: 18px; bottom: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-soft); }
+    .rail-progress-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 11px; font-weight: 800; }
+    .rail-progress-top strong { color: var(--primary); font-size: 15px; }
+    .progress-track { height: 7px; overflow: hidden; margin-top: 10px; border-radius: 999px; background: #e7e9f1; }
+    .progress-fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--primary), #9293ff); transition: width 320ms ease; }
+    .main { min-width: 0; }
+    .topbar {
+      position: sticky; top: 0; z-index: 15; display: flex; align-items: center; justify-content: space-between;
+      min-height: 68px; padding: 12px clamp(20px, 4vw, 56px); border-bottom: 1px solid rgba(227, 231, 239, 0.86);
+      background: rgba(244, 246, 251, 0.82); backdrop-filter: blur(18px);
+    }
+    .topbar-title { font-size: 13px; font-weight: 800; letter-spacing: 0.03em; }
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .back-link, .ghost-button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 13px;
+      border: 1px solid var(--line); border-radius: 11px; background: rgba(255, 255, 255, 0.85); color: #4e566b;
+      text-decoration: none; font-size: 12px; font-weight: 750; transition: 160ms ease;
+    }
+    .back-link:hover, .ghost-button:hover { border-color: #cfd4e1; background: #fff; }
+    .content { width: min(1180px, 100%); margin: 0 auto; padding: 44px clamp(20px, 4vw, 56px) 72px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px; color: var(--primary-strong); font-size: 11px; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
+    .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 5px rgba(91, 92, 226, 0.10); }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 16px; font-size: clamp(30px, 5vw, 52px); line-height: 1.14; letter-spacing: -0.045em; }
+    .hero-copy { max-width: 720px; margin-bottom: 0; color: var(--muted); font-size: 15px; line-height: 1.9; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.7fr); gap: 24px; align-items: stretch; margin-bottom: 28px; }
+    .hero-main, .hero-score { border: 1px solid rgba(227, 231, 239, 0.88); border-radius: var(--radius-lg); background: rgba(255, 255, 255, 0.92); box-shadow: var(--shadow); }
+    .hero-main { padding: clamp(28px, 5vw, 48px); }
+    .hero-score { display: flex; flex-direction: column; justify-content: space-between; padding: 28px; background: linear-gradient(150deg, rgba(91, 92, 226, 0.97), rgba(59, 60, 178, 0.98)); color: #fff; }
+    .hero-score-label { color: rgba(255, 255, 255, 0.72); font-size: 11px; font-weight: 800; letter-spacing: 0.12em; }
+    .hero-score-number { margin: 20px 0 10px; font-size: clamp(48px, 7vw, 74px); font-weight: 850; line-height: 1; letter-spacing: -0.06em; }
+    .hero-score-number span { margin-left: 4px; font-size: 17px; font-weight: 750; letter-spacing: 0; }
+    .hero-score-copy { margin: 0; color: rgba(255, 255, 255, 0.74); font-size: 12px; line-height: 1.7; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; }
+    .stat { padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-soft); }
+    .stat-label { color: var(--muted); font-size: 11px; font-weight: 700; }
+    .stat-value { margin-top: 4px; font-size: 22px; font-weight: 850; letter-spacing: -0.03em; }
+    .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin: 42px 0 17px; }
+    .section-heading h2 { margin-bottom: 5px; font-size: 22px; line-height: 1.25; letter-spacing: -0.025em; }
+    .section-heading p { margin-bottom: 0; color: var(--muted); font-size: 12px; }
+    .weekly-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); box-shadow: 0 10px 30px rgba(30, 37, 56, 0.04); }
+    .weekly-card label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 800; }
+    .weekly-card input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; outline: none; color: var(--text); background: var(--panel-soft); transition: 160ms ease; }
+    .weekly-card input:focus { border-color: rgba(91, 92, 226, 0.55); box-shadow: 0 0 0 4px rgba(91, 92, 226, 0.09); }
+    .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 18px; border: 0; border-radius: 12px; background: var(--primary); color: #fff; font-size: 13px; font-weight: 800; box-shadow: 0 10px 20px rgba(91, 92, 226, 0.22); transition: 160ms ease; }
+    .primary-button:hover { background: var(--primary-strong); transform: translateY(-1px); }
+    .primary-button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
+    .course-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .course-card { position: relative; overflow: hidden; display: flex; flex-direction: column; min-height: 280px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); box-shadow: 0 12px 36px rgba(30, 37, 56, 0.045); transition: 180ms ease; }
+    .course-card:hover { transform: translateY(-3px); border-color: #d7dbeb; box-shadow: 0 18px 45px rgba(30, 37, 56, 0.08); }
+    .course-card.featured { color: #fff; background: linear-gradient(145deg, #1e2639, #303a55); border-color: transparent; }
+    .course-card::after { content: ""; position: absolute; top: -44px; right: -44px; width: 120px; height: 120px; border-radius: 50%; background: rgba(91, 92, 226, 0.08); }
+    .course-card.featured::after { background: rgba(255, 255, 255, 0.07); }
+    .course-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
+    .course-step { display: inline-flex; align-items: center; min-height: 26px; padding: 4px 9px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong); font-size: 10px; font-weight: 850; letter-spacing: 0.05em; }
+    .featured .course-step { background: rgba(255, 255, 255, 0.12); color: #fff; }
+    .course-best { color: var(--muted); font-size: 11px; font-weight: 750; }
+    .featured .course-best { color: rgba(255, 255, 255, 0.62); }
+    .course-card h3 { position: relative; z-index: 1; margin-bottom: 10px; font-size: 21px; letter-spacing: -0.025em; }
+    .course-card p { position: relative; z-index: 1; margin-bottom: 22px; color: var(--muted); font-size: 12px; line-height: 1.75; }
+    .featured p { color: rgba(255, 255, 255, 0.66); }
+    .course-footer { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: auto; }
+    .course-count { color: var(--muted); font-size: 11px; font-weight: 700; }
+    .featured .course-count { color: rgba(255, 255, 255, 0.62); }
+    .course-start { display: inline-flex; align-items: center; gap: 7px; min-height: 39px; padding: 8px 13px; border: 0; border-radius: 11px; background: #232b40; color: #fff; font-size: 11px; font-weight: 800; }
+    .course-start:hover { background: #101726; }
+    .featured .course-start { background: #fff; color: #222b40; }
+    .cycle { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); }
+    .cycle-step { position: relative; padding: 20px; border-right: 1px solid var(--line); }
+    .cycle-step:last-child { border-right: 0; }
+    .cycle-number { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-bottom: 14px; border-radius: 9px; background: var(--primary-soft); color: var(--primary-strong); font-size: 11px; font-weight: 850; }
+    .cycle-step strong { display: block; margin-bottom: 5px; font-size: 13px; }
+    .cycle-step span { display: block; color: var(--muted); font-size: 10px; line-height: 1.65; }
+    .quiz-wrap { width: min(820px, 100%); margin: 0 auto; }
+    .quiz-head { display: flex; justify-content: space-between; gap: 18px; align-items: start; margin-bottom: 20px; }
+    .quiz-head h1 { margin-bottom: 6px; font-size: clamp(25px, 4vw, 36px); }
+    .quiz-head p { margin-bottom: 0; color: var(--muted); font-size: 12px; }
+    .quiz-counter { flex: 0 0 auto; padding: 10px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 11px; font-weight: 800; }
+    .quiz-progress { margin-bottom: 16px; }
+    .question-card { padding: clamp(24px, 5vw, 38px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow); }
+    .question-tag { display: inline-flex; align-items: center; min-height: 27px; padding: 4px 10px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong); font-size: 10px; font-weight: 850; }
+    .question-card h2 { margin: 18px 0 10px; font-size: clamp(20px, 3.5vw, 27px); line-height: 1.55; letter-spacing: -0.025em; }
+    .question-context { margin: 0 0 22px; padding: 13px 15px; border-left: 3px solid #c9caf9; border-radius: 0 10px 10px 0; background: #f7f7fd; color: #5d6578; font-size: 12px; line-height: 1.75; }
+    .choices { display: grid; gap: 10px; }
+    .choice { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; min-height: 58px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 13px; background: #fff; color: var(--text); text-align: left; transition: 150ms ease; }
+    .choice:hover:not(:disabled) { border-color: rgba(91, 92, 226, 0.46); background: #fafaff; transform: translateY(-1px); }
+    .choice:disabled { cursor: default; }
+    .choice-letter { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #f1f3f7; color: #70788b; font-size: 11px; font-weight: 850; }
+    .choice-text { font-size: 13px; font-weight: 700; line-height: 1.55; }
+    .choice-mark { width: 22px; text-align: center; font-weight: 900; }
+    .choice.correct { border-color: rgba(23, 139, 100, 0.45); background: var(--success-soft); }
+    .choice.correct .choice-letter { background: #ccefe2; color: var(--success); }
+    .choice.wrong { border-color: rgba(196, 73, 86, 0.42); background: var(--danger-soft); }
+    .choice.wrong .choice-letter { background: #ffdadd; color: var(--danger); }
+    .feedback { margin-top: 20px; padding: 19px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-soft); animation: reveal 220ms ease; }
+    @keyframes reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .feedback-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; font-weight: 850; }
+    .feedback-title.good { color: var(--success); }
+    .feedback-title.bad { color: var(--danger); }
+    .feedback p { margin-bottom: 0; color: #555e72; font-size: 12px; line-height: 1.8; }
+    .action-box { margin-top: 13px; padding: 14px; border-radius: 11px; background: var(--warning-soft); color: #69491a; font-size: 11px; line-height: 1.75; }
+    .action-box strong { display: block; margin-bottom: 3px; color: var(--warning); }
+    .quiz-footer { display: flex; justify-content: flex-end; margin-top: 18px; }
+    .result-hero { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: center; padding: clamp(26px, 5vw, 42px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow); }
+    .score-ring { width: 170px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--primary) var(--score-angle), #ebeef4 0); position: relative; }
+    .score-ring::after { content: ""; position: absolute; inset: 13px; border-radius: 50%; background: var(--panel); }
+    .score-ring-content { position: relative; z-index: 1; text-align: center; }
+    .score-ring strong { display: block; font-size: 42px; line-height: 1; letter-spacing: -0.06em; }
+    .score-ring span { color: var(--muted); font-size: 11px; font-weight: 750; }
+    .result-copy .pass-badge, .result-copy .retry-badge { display: inline-flex; padding: 5px 10px; border-radius: 999px; font-size: 10px; font-weight: 850; }
+    .pass-badge { background: var(--success-soft); color: var(--success); }
+    .retry-badge { background: var(--warning-soft); color: var(--warning); }
+    .result-copy h1 { margin: 13px 0 8px; font-size: clamp(26px, 4vw, 38px); }
+    .result-copy p { margin-bottom: 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+    .result-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    .secondary-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: #4d5569; font-size: 12px; font-weight: 800; }
+    .secondary-button:hover { background: var(--panel-soft); }
+    .breakdown-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+    .breakdown-card { padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); }
+    .breakdown-card span { color: var(--muted); font-size: 10px; font-weight: 750; }
+    .breakdown-card strong { display: block; margin-top: 4px; font-size: 20px; }
+    .review-list { display: grid; gap: 12px; }
+    .review-item { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    .review-item h3 { margin-bottom: 8px; font-size: 14px; line-height: 1.6; }
+    .review-answer { margin-bottom: 7px; color: var(--success); font-size: 11px; font-weight: 800; }
+    .review-item p { margin-bottom: 0; color: var(--muted); font-size: 11px; line-height: 1.75; }
+    .empty-review { padding: 24px; border: 1px dashed #cfd4df; border-radius: 14px; background: rgba(255, 255, 255, 0.58); color: var(--muted); text-align: center; font-size: 12px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 100; padding: 12px 15px; border-radius: 12px; background: #1d2538; color: #fff; font-size: 12px; font-weight: 750; box-shadow: 0 14px 38px rgba(17, 24, 39, 0.24); animation: reveal 200ms ease; }
+    .mobile-title { display: none; }
+    @media (max-width: 900px) {
+      .shell { display: block; } .rail { display: none; } .mobile-title { display: block; } .topbar-title { display: none; }
+      .content { padding-top: 30px; } .hero { grid-template-columns: 1fr; } .hero-score { min-height: 220px; }
+    }
+    @media (max-width: 680px) {
+      .topbar { padding-inline: 16px; } .content { padding: 24px 16px 54px; } .back-link span { display: none; }
+      .stats { grid-template-columns: 1fr; } .course-grid { grid-template-columns: 1fr; } .weekly-card { grid-template-columns: 1fr; }
+      .weekly-card .primary-button { width: 100%; } .cycle { grid-template-columns: 1fr 1fr; } .cycle-step:nth-child(2) { border-right: 0; }
+      .cycle-step:nth-child(-n+2) { border-bottom: 1px solid var(--line); } .quiz-head { align-items: center; }
+      .question-card { padding: 22px 17px; border-radius: 18px; } .choice { grid-template-columns: 32px minmax(0, 1fr) 18px; padding-inline: 11px; }
+      .choice-text { font-size: 12px; } .quiz-footer .primary-button { width: 100%; } .result-hero { grid-template-columns: 1fr; text-align: center; }
+      .score-ring { margin: 0 auto; } .result-actions { justify-content: center; } .result-actions button { flex: 1 1 150px; }
+      .breakdown-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    (() => {
+      "use strict";
+      const STORAGE_KEY = "marketing-study-v1";
+      const WEEKLY_KEY = "marketing-study-weekly-question-v1";
+      const LETTERS = ["A", "B", "C", "D"];
+      const courses = [
+        {
+          id: "foundation", step: "STEP 1 / 1〜2週目", title: "基礎設計テスト",
+          description: "顧客、悩み、選ばれる理由、導線を整理し、施策を考える前提を固めます。",
+          questions: [
+            { id: "f1", category: "基礎", prompt: "マーケティングを身につける学習順として、最も適切なものはどれですか？", choices: ["投稿を大量保存し、知識量を増やす", "学ぶ、試す、数字を見る、人に説明する", "交流会へ毎週参加し、知り合いを増やす", "成功者の施策をそのまま再現する"], answer: 1, explanation: "知識は、実際に使って結果を確認して初めて判断できる形になります。さらに人に説明すると、理解の曖昧な部分が明確になります。", action: "今週学んだ内容から、店舗で一つだけ試せる施策を決めてください。" },
+            { id: "f2", category: "顧客理解", prompt: "「仙台で店舗型サービスを探している人」という対象設定の主な問題は何ですか？", choices: ["地域を限定している", "年齢を書いていない", "目的や選ぶ理由が異なる人を一つにまとめている", "対象人数が少なすぎる"], answer: 2, explanation: "今日すぐ利用したい人、質を重視する人、新人を試したい人では、響く写真、文章、掲載場所が変わります。対象は行動や選択理由まで分けます。", action: "直近の顧客を、来店理由の違いで3種類に分けてください。" },
+            { id: "f3", category: "導線設計", prompt: "告知を作る前に、最初に決めるべきことはどれですか？", choices: ["投稿に使う色", "投稿後に相手へ取ってほしい行動", "投稿する曜日", "文章の長さ"], answer: 1, explanation: "予約、問い合わせ、プロフィール閲覧など、求める行動が決まらないと、文章とリンクの設計を評価できません。", action: "次の告知について、最終行動を一つだけ文章にしてください。" },
+            { id: "f4", category: "価値設計", prompt: "顧客へ伝える内容として、より予約につながりやすい考え方はどれですか？", context: "単なる特徴の列挙ではなく、顧客が得る結果まで考えます。", choices: ["機能や特徴をできるだけ多く並べる", "競合より安いことだけを強調する", "顧客が選んだ後に得られる体験を示す", "業界用語を使って専門性を見せる"], answer: 2, explanation: "特徴そのものより、その特徴が顧客にどのような良い変化をもたらすかを示す方が、選ぶ理由になります。", action: "現在のおすすめ文を「特徴」ではなく「利用後に得られる体験」に書き換えてください。" },
+            { id: "f5", category: "指標", prompt: "Xの投稿効果を見るとき、最終判断に最も近い数字はどれですか？", choices: ["表示回数", "いいね数", "プロフィール閲覧数", "投稿後に発生した問い合わせ・予約数"], answer: 3, explanation: "途中の反応も参考になりますが、事業の目的が予約なら、最終的には問い合わせや予約につながったかを確認します。", action: "直近7日分について、投稿、アクセス、問い合わせ、予約を同じ表に並べてください。" },
+            { id: "f6", category: "仮説", prompt: "良い仮説の形として最も適切なものはどれですか？", choices: ["もっと魅力的な投稿にする", "競合より頑張って更新する", "最短案内時刻を冒頭に置けば、当日問い合わせ率が上がる", "毎日違う内容を試して様子を見る"], answer: 2, explanation: "良い仮説は、変更するものと期待する数字が具体的です。結果が出なかった場合も、何を学んだか判断できます。", action: "「何を変えれば、どの数字がどう動くか」の形で今週の仮説を書いてください。" }
+          ]
+        },
+        {
+          id: "analysis", step: "STEP 2 / 3〜6週目", title: "分析・検証テスト",
+          description: "成功事例の分解、数字の読み方、比較実験の基本を確認します。",
+          questions: [
+            { id: "a1", category: "数字", prompt: "1,200アクセスから36件の問い合わせが発生しました。問い合わせ率は何％ですか？", choices: ["0.3％", "3％", "30％", "33.3％"], answer: 1, explanation: "36 ÷ 1,200 × 100 = 3％です。件数だけでなく、母数に対する割合で比較します。", action: "エステ魂、HP、Xについて、アクセスから問い合わせへの割合を計算してください。" },
+            { id: "a2", category: "原因分析", prompt: "アクセス数は増えたのに予約数が増えませんでした。最初に確認することはどれですか？", choices: ["すぐに広告費を増やす", "競合の投稿数を数える", "アクセスから問い合わせ、予約までの各段階でどこが落ちているかを見る", "投稿の文字数を短くする"], answer: 2, explanation: "アクセス後の問い合わせ率が低いのか、問い合わせ後の予約率が低いのかで、直す場所が異なります。", action: "アクセス→問い合わせ→予約の3段階を、直近1週間の数字で可視化してください。" },
+            { id: "a3", category: "比較実験", prompt: "文章Aと文章Bの効果を比較するとき、適切な進め方はどれですか？", choices: ["文章、画像、投稿時間をすべて変える", "文章だけを変え、他の条件をできるだけそろえる", "反応が良さそうな方だけを投稿する", "一度の表示回数だけで勝者を決める"], answer: 1, explanation: "同時に複数を変えると、どの変更が結果を生んだのか分かりません。原則として一度に変える要素は一つです。", action: "次回の比較では、文章、画像、時間、導線のうち一つだけ変更してください。" },
+            { id: "a4", category: "事例分解", prompt: "反応の良い投稿を分析するとき、優先して分解する組み合わせはどれですか？", choices: ["投稿者の年齢、フォロワー数、使用端末", "対象、悩み、提案、信用材料、求める行動", "文字数、改行数、絵文字数、投稿時刻", "画像の色、明るさ、解像度、余白"], answer: 1, explanation: "表面的な表現より、誰に何を約束し、なぜ信じられ、何を求めているかを分解すると他の施策へ応用できます。", action: "保存済みの投稿を一つ選び、この5項目で分解してください。" },
+            { id: "a5", category: "判断", prompt: "表示回数は多い一方、予約率が低い広告をどう評価しますか？", choices: ["表示回数が多いため成功", "いいねが多ければ成功", "認知には寄与している可能性があるが、予約獲得施策としては改善が必要", "必ず停止すべき"], answer: 2, explanation: "目的によって評価は変わります。予約獲得が目的なら、表示回数だけで成功とは言えません。途中指標と最終指標を分けます。", action: "現在の広告ごとに、目的を『認知』『問い合わせ』『予約』のどれか一つに設定してください。" },
+            { id: "a6", category: "データ品質", prompt: "1日だけの結果で施策の勝敗を決める主な危険は何ですか？", choices: ["計算が難しくなる", "曜日、出勤、天気など偶然の影響を受けやすい", "投稿回数が減る", "顧客の年齢が分からない"], answer: 1, explanation: "店舗集客は曜日、空き枠、セラピスト、天候などの影響を受けます。複数回または条件の近い期間で確認します。", action: "比較期間の曜日、出勤人数、空き枠をそろえられるか確認してください。" }
+          ]
+        },
+        {
+          id: "practice", step: "STEP 3 / 7〜12週目", title: "実践・交流テスト",
+          description: "毎週の実験、交流会での質問、アウトプットの作り方を確認します。",
+          questions: [
+            { id: "p1", category: "学習習慣", prompt: "1週間の学習サイクルとして最も適切なものはどれですか？", choices: ["情報収集→情報収集→情報収集→交流会", "問いを決める→調べる→試す→数字を振り返る", "本を読む→要約する→次の本を読む", "投稿する→反応が悪ければすぐ削除する"], answer: 1, explanation: "先に問いを決めると、必要な情報だけを探せます。最後に実験と数字の確認まで行うことで、知識が自分の事例になります。", action: "月曜日に今週の問いを一つ決め、日曜日に数字と学びを一文で残してください。" },
+            { id: "p2", category: "情報収集", prompt: "Xで特に価値が高い投稿はどれですか？", choices: ["成功した結果だけを短く断定する投稿", "多くの人が拡散している投稿", "施策、考えた理由、変化した数字、失敗まで示す投稿", "最新の専門用語を多く使った投稿"], answer: 2, explanation: "前提と過程が分かる情報は、自分の事業に当てはめられるか判断できます。結果だけでは再現条件が分かりません。", action: "参考にする発信者を5〜10人に絞り、数字と失敗が書かれた投稿を優先してください。" },
+            { id: "p3", category: "実験", prompt: "当日予約を増やす最初の実験として、最も検証しやすいものはどれですか？", choices: ["画像、料金、文章、投稿時間を全面変更する", "すべての投稿回数を倍にする", "同条件の告知で、冒頭に最短案内時刻を置く場合と置かない場合を比較する", "競合と同じ文章を使う"], answer: 2, explanation: "変更点が一つで、当日問い合わせ率という確認数字も明確です。結果から次の判断につなげられます。", action: "次の2回の当日告知で、冒頭の最短案内表示だけを比較してください。" },
+            { id: "p4", category: "交流会選び", prompt: "学習目的の交流会として、優先度が高いものはどれですか？", choices: ["参加人数が最大の名刺交換会", "成功者が一方的に話す大型講演会", "実務者が少人数で、数字や失敗事例まで話す継続的な会", "業種を問わず無料で参加できる会"], answer: 2, explanation: "参加数より、具体的な施策について質問でき、継続して検証結果を共有できる環境の方が学習効果は高くなります。", action: "最初の3か月は月2回を目安に、店舗集客やSNS運用などテーマが限定された会を選んでください。" },
+            { id: "p5", category: "質問設計", prompt: "交流会で具体的な情報を得やすい質問はどれですか？", choices: ["何か良い集客方法はありますか？", "マーケティングで一番大切なことは何ですか？", "最近、予約率が変わった施策と、判断に使った数字を教えてください", "おすすめの本はありますか？"], answer: 2, explanation: "施策、結果、判断指標まで尋ねると、抽象論ではなく実務に使える情報を得やすくなります。", action: "次の交流会までに、自分の課題に沿った具体的な質問を3つ準備してください。" },
+            { id: "p6", category: "アウトプット", prompt: "交流会後の行動として、関係と学習を深めやすいものはどれですか？", choices: ["お礼だけ送り、次の交流会を待つ", "相手の話をそのままSNSへ投稿する", "参考になった点を伝え、実際に試した結果を後日共有する", "全員へ同じ営業文を送る"], answer: 2, explanation: "具体的に何を学び、どう試したかを返すと、一度の名刺交換が継続的な情報交換へ変わります。", action: "交流会翌日までに学びを一つ送り、1〜2週間後に検証結果を共有してください。" }
+          ]
+        }
+      ];
+      const allQuestions = courses.flatMap((course) => course.questions);
+      const comprehensive = { id: "comprehensive", step: "FINAL / 12週目", title: "総合実践テスト", description: "基礎、分析、実践の全18問で、3か月の学習内容を総点検します。", questions: allQuestions, featured: true };
+      const allCourses = [...courses, comprehensive];
+      const defaultHistory = () => ({ foundation: { attempts: 0, best: 0, last: 0, passed: false }, analysis: { attempts: 0, best: 0, last: 0, passed: false }, practice: { attempts: 0, best: 0, last: 0, passed: false }, comprehensive: { attempts: 0, best: 0, last: 0, passed: false } });
+      const safeParse = (value, fallback) => { try { const parsed = JSON.parse(value); return parsed && typeof parsed === "object" ? parsed : fallback; } catch { return fallback; } };
+      const savedHistory = safeParse(localStorage.getItem(STORAGE_KEY), defaultHistory());
+      const state = { view: "home", courseId: null, queue: [], index: 0, selected: null, answered: false, answers: [], reviewMode: false, history: { ...defaultHistory(), ...savedHistory } };
+      const app = document.getElementById("app");
+      const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+      const completedCount = () => courses.filter((course) => state.history[course.id]?.passed).length;
+      const bestComprehensive = () => state.history.comprehensive?.best || 0;
+      const totalAttempts = () => Object.values(state.history).reduce((sum, item) => sum + (item.attempts || 0), 0);
+      const overallProgress = () => Math.round((completedCount() / courses.length) * 100);
+      const saveHistory = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state.history));
+      const showToast = (message) => { document.querySelector(".toast")?.remove(); const toast = document.createElement("div"); toast.className = "toast"; toast.textContent = message; document.body.appendChild(toast); window.setTimeout(() => toast.remove(), 2200); };
+      const shuffle = (items) => { const copy = [...items]; for (let index = copy.length - 1; index > 0; index -= 1) { const swapIndex = Math.floor(Math.random() * (index + 1)); [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]]; } return copy; };
+      const getCurrentCourse = () => allCourses.find((course) => course.id === state.courseId) || comprehensive;
+      const shell = (content, active = "home") => `
+        <div class="shell">
+          <aside class="rail">
+            <div class="brand"><div class="brand-mark">M</div><div class="brand-name">MARKETING LAB<span class="brand-sub">PRACTICE TEST</span></div></div>
+            <div class="rail-section"><div class="rail-label">学習メニュー</div>
+              <button class="rail-item ${active === "home" ? "active" : ""}" data-action="home"><span class="rail-icon">⌂</span><span>学習ダッシュボード</span></button>
+              ${courses.map((course, index) => `<button class="rail-item ${active === course.id ? "active" : ""}" data-action="start" data-course="${course.id}"><span class="rail-icon">${index + 1}</span><span>${course.title}</span></button>`).join("")}
+              <button class="rail-item ${active === "comprehensive" ? "active" : ""}" data-action="start" data-course="comprehensive"><span class="rail-icon">✓</span><span>総合実践テスト</span></button>
+            </div>
+            <div class="rail-progress"><div class="rail-progress-top"><span>基礎課程</span><strong>${overallProgress()}%</strong></div><div class="progress-track"><div class="progress-fill" style="width:${overallProgress()}%"></div></div></div>
+          </aside>
+          <main class="main"><header class="topbar"><div><div class="mobile-title brand-name">MARKETING LAB</div><div class="topbar-title">マーケティング実践学習</div></div><div class="topbar-actions">${state.view !== "home" ? '<button class="ghost-button" data-action="home">学習一覧へ</button>' : ""}<a class="back-link" href="/marketing/media"><span>管理画面へ戻る</span><b>↗</b></a></div></header><div class="content">${content}</div></main>
+        </div>`;
+      const renderHome = () => {
+        const weeklyQuestion = localStorage.getItem(WEEKLY_KEY) || "";
+        const cards = allCourses.map((course) => { const history = state.history[course.id] || { attempts: 0, best: 0, passed: false }; return `<article class="course-card ${course.featured ? "featured" : ""}"><div class="course-meta"><span class="course-step">${escapeHtml(course.step)}</span><span class="course-best">${history.attempts ? `最高 ${history.best}%` : "未受験"}</span></div><h3>${escapeHtml(course.title)}</h3><p>${escapeHtml(course.description)}</p><div class="course-footer"><span class="course-count">全${course.questions.length}問・合格80％</span><button class="course-start" data-action="start" data-course="${course.id}">${history.attempts ? "再受験" : "開始する"} <span>→</span></button></div></article>`; }).join("");
+        app.innerHTML = shell(`
+          <section class="hero"><div class="hero-main"><div class="eyebrow">Learn by testing</div><h1>知識を、使える判断力に変える。</h1><p class="hero-copy">問題を解き、解説を読み、すぐに自店舗で試す。3か月の学習計画を、基礎・分析・実践の順に進めます。</p><div class="stats"><div class="stat"><div class="stat-label">合格した基礎課程</div><div class="stat-value">${completedCount()} / ${courses.length}</div></div><div class="stat"><div class="stat-label">総受験回数</div><div class="stat-value">${totalAttempts()}回</div></div><div class="stat"><div class="stat-label">総合最高得点</div><div class="stat-value">${bestComprehensive()}%</div></div></div></div><div class="hero-score"><div><div class="hero-score-label">CURRENT PROGRESS</div><div class="hero-score-number">${overallProgress()}<span>%</span></div></div><p class="hero-score-copy">3つの基礎課程を80％以上で合格すると、学習の土台が完成します。</p></div></section>
+          <div class="section-heading"><div><h2>今週の問い</h2><p>情報収集を始める前に、今週解決する課題を一つに絞ります。</p></div></div>
+          <section class="weekly-card"><div><label for="weeklyQuestion">例：アクセス数はあるのに、予約につながらない日は何が違うのか</label><input id="weeklyQuestion" value="${escapeHtml(weeklyQuestion)}" placeholder="今週、数字で答えを出したい問いを入力" /></div><button class="primary-button" data-action="save-weekly">保存する</button></section>
+          <div class="section-heading"><div><h2>テストを選ぶ</h2><p>基礎から順に進め、最後に総合テストで定着を確認します。</p></div></div><section class="course-grid">${cards}</section>
+          <div class="section-heading"><div><h2>毎週回す学習サイクル</h2><p>情報を保存するだけで終わらせず、実験と説明まで行います。</p></div></div>
+          <section class="cycle"><div class="cycle-step"><span class="cycle-number">1</span><strong>問いを決める</strong><span>今週解決する課題を一つに絞る</span></div><div class="cycle-step"><span class="cycle-number">2</span><strong>調べる</strong><span>X、本、交流会から必要な情報だけ集める</span></div><div class="cycle-step"><span class="cycle-number">3</span><strong>試す</strong><span>変更点を一つにして、自店舗で検証する</span></div><div class="cycle-step"><span class="cycle-number">4</span><strong>数字で説明する</strong><span>結果、理由、次の改善を文章に残す</span></div></section>`, "home");
+      };
+      const startQuiz = (courseId, customQuestions = null, reviewMode = false) => { const course = allCourses.find((item) => item.id === courseId); if (!course) return; state.view = "quiz"; state.courseId = courseId; state.queue = customQuestions ? [...customQuestions] : (courseId === "comprehensive" ? shuffle(course.questions) : [...course.questions]); state.index = 0; state.selected = null; state.answered = false; state.answers = []; state.reviewMode = reviewMode; renderQuiz(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+      const renderQuiz = () => {
+        const course = getCurrentCourse(); const question = state.queue[state.index]; const progress = Math.round(((state.index + (state.answered ? 1 : 0)) / state.queue.length) * 100); const selectedIsCorrect = state.selected === question.answer;
+        const choices = question.choices.map((choice, index) => { let className = "choice"; let mark = ""; if (state.answered && index === question.answer) { className += " correct"; mark = "✓"; } else if (state.answered && index === state.selected) { className += " wrong"; mark = "×"; } return `<button class="${className}" data-action="answer" data-index="${index}" ${state.answered ? "disabled" : ""}><span class="choice-letter">${LETTERS[index]}</span><span class="choice-text">${escapeHtml(choice)}</span><span class="choice-mark">${mark}</span></button>`; }).join("");
+        const feedback = state.answered ? `<div class="feedback"><div class="feedback-title ${selectedIsCorrect ? "good" : "bad"}">${selectedIsCorrect ? "正解です" : "正解を確認してください"}</div><p>${escapeHtml(question.explanation)}</p><div class="action-box"><strong>実務課題</strong>${escapeHtml(question.action)}</div></div>` : "";
+        app.innerHTML = shell(`<div class="quiz-wrap"><div class="quiz-head"><div><div class="eyebrow">${state.reviewMode ? "Wrong answer review" : escapeHtml(course.step)}</div><h1>${state.reviewMode ? "誤答復習" : escapeHtml(course.title)}</h1><p>回答すると、理由と自店舗での実務課題が表示されます。</p></div><div class="quiz-counter">${state.index + 1} / ${state.queue.length}</div></div><div class="progress-track quiz-progress"><div class="progress-fill" style="width:${progress}%"></div></div><section class="question-card"><span class="question-tag">${escapeHtml(question.category)}</span><h2>${escapeHtml(question.prompt)}</h2>${question.context ? `<p class="question-context">${escapeHtml(question.context)}</p>` : ""}<div class="choices">${choices}</div>${feedback}</section><div class="quiz-footer"><button class="primary-button" data-action="next" ${state.answered ? "" : "disabled"}>${state.index === state.queue.length - 1 ? "結果を見る" : "次の問題へ"} <span>→</span></button></div></div>`, course.id);
+      };
+      const answerQuestion = (selectedIndex) => { if (state.answered) return; const question = state.queue[state.index]; state.selected = selectedIndex; state.answered = true; state.answers.push({ questionId: question.id, selected: selectedIndex, correct: selectedIndex === question.answer, question }); renderQuiz(); };
+      const nextQuestion = () => { if (!state.answered) return; if (state.index >= state.queue.length - 1) { finishQuiz(); return; } state.index += 1; state.selected = null; state.answered = false; renderQuiz(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+      const finishQuiz = () => { state.view = "result"; const correct = state.answers.filter((answer) => answer.correct).length; const percentage = Math.round((correct / state.answers.length) * 100); if (!state.reviewMode) { const current = state.history[state.courseId] || { attempts: 0, best: 0, last: 0, passed: false }; state.history[state.courseId] = { attempts: current.attempts + 1, best: Math.max(current.best, percentage), last: percentage, passed: current.passed || percentage >= 80, completedAt: new Date().toISOString() }; saveHistory(); } renderResult(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+      const renderResult = () => {
+        const course = getCurrentCourse(); const correct = state.answers.filter((answer) => answer.correct).length; const total = state.answers.length; const percentage = Math.round((correct / total) * 100); const passed = percentage >= 80; const wrongAnswers = state.answers.filter((answer) => !answer.correct); const categoryMap = {};
+        state.answers.forEach((answer) => { const key = answer.question.category; if (!categoryMap[key]) categoryMap[key] = { correct: 0, total: 0 }; categoryMap[key].total += 1; if (answer.correct) categoryMap[key].correct += 1; });
+        const breakdown = Object.entries(categoryMap).map(([category, value]) => `<div class="breakdown-card"><span>${escapeHtml(category)}</span><strong>${value.correct} / ${value.total}</strong></div>`).join("");
+        const review = wrongAnswers.length ? wrongAnswers.map((answer) => `<article class="review-item"><h3>${escapeHtml(answer.question.prompt)}</h3><div class="review-answer">正解：${escapeHtml(answer.question.choices[answer.question.answer])}</div><p>${escapeHtml(answer.question.explanation)}</p></article>`).join("") : '<div class="empty-review">全問正解です。実務課題へ進んでください。</div>';
+        const resultTitle = passed ? (percentage === 100 ? "判断基準が定着しています" : "合格基準を達成しました") : "誤答を実務課題に変えます";
+        app.innerHTML = shell(`<div class="quiz-wrap"><section class="result-hero"><div class="score-ring" style="--score-angle:${percentage * 3.6}deg"><div class="score-ring-content"><strong>${percentage}</strong><span>POINT</span></div></div><div class="result-copy"><span class="${passed ? "pass-badge" : "retry-badge"}">${passed ? "合格" : "復習推奨"}</span><h1>${resultTitle}</h1><p>${escapeHtml(course.title)}：${correct}問正解 / 全${total}問。合格基準は80％です。</p><div class="result-actions">${wrongAnswers.length ? '<button class="primary-button" data-action="retry-wrong">間違えた問題だけ解く</button>' : ""}<button class="secondary-button" data-action="restart">同じテストをやり直す</button><button class="secondary-button" data-action="home">学習一覧へ戻る</button></div></div></section><div class="section-heading"><div><h2>分野別の結果</h2><p>正答数が少ない分野を、次の学習テーマにします。</p></div></div><section class="breakdown-grid">${breakdown}</section><div class="section-heading"><div><h2>復習する問題</h2><p>正解を覚えるだけでなく、解説の実務課題を一つ試します。</p></div></div><section class="review-list">${review}</section></div>`, course.id);
+      };
+      const goHome = () => { if (state.view === "quiz" && state.answers.length > 0 && state.answers.length < state.queue.length) { const leave = window.confirm("回答途中の内容は保存されません。学習一覧へ戻りますか？"); if (!leave) return; } state.view = "home"; state.courseId = null; state.queue = []; state.answers = []; renderHome(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+      app.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-action]"); if (!button) return; const action = button.dataset.action;
+        if (action === "home") goHome();
+        if (action === "start") startQuiz(button.dataset.course);
+        if (action === "answer") answerQuestion(Number(button.dataset.index));
+        if (action === "next") nextQuestion();
+        if (action === "restart") startQuiz(state.courseId);
+        if (action === "retry-wrong") { const wrongQuestions = state.answers.filter((answer) => !answer.correct).map((answer) => answer.question); startQuiz(state.courseId, wrongQuestions, true); }
+        if (action === "save-weekly") { const input = document.getElementById("weeklyQuestion"); localStorage.setItem(WEEKLY_KEY, input?.value.trim() || ""); showToast("今週の問いを保存しました"); }
+      });
+      renderHome();
+    })();
+  </script>
+</body>
+</html>
