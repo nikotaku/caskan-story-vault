@@ -111,6 +111,9 @@
     .weekly-card label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 800; }
     .weekly-card input { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; outline: none; color: var(--text); background: var(--panel-soft); transition: 160ms ease; }
     .weekly-card input:focus { border-color: rgba(91, 92, 226, 0.55); box-shadow: 0 0 0 4px rgba(91, 92, 226, 0.09); }
+    .review-bank { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 18px 22px; border: 1px solid #f0d9aa; border-radius: var(--radius-md); background: var(--warning-soft); }
+    .review-bank strong { display: block; margin-bottom: 2px; color: #704b12; font-size: 13px; }
+    .review-bank span { color: #8a672f; font-size: 11px; }
     .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 18px; border: 0; border-radius: 12px; background: var(--primary); color: #fff; font-size: 13px; font-weight: 800; box-shadow: 0 10px 20px rgba(91, 92, 226, 0.22); transition: 160ms ease; }
     .primary-button:hover { background: var(--primary-strong); transform: translateY(-1px); }
     .primary-button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
@@ -203,7 +206,7 @@
     @media (max-width: 680px) {
       .topbar { padding-inline: 16px; } .content { padding: 24px 16px 54px; } .back-link span { display: none; }
       .stats { grid-template-columns: 1fr; } .course-grid { grid-template-columns: 1fr; } .weekly-card { grid-template-columns: 1fr; }
-      .weekly-card .primary-button { width: 100%; } .cycle { grid-template-columns: 1fr 1fr; } .cycle-step:nth-child(2) { border-right: 0; }
+      .weekly-card .primary-button, .review-bank .primary-button { width: 100%; } .review-bank { align-items: stretch; flex-direction: column; } .cycle { grid-template-columns: 1fr 1fr; } .cycle-step:nth-child(2) { border-right: 0; }
       .cycle-step:nth-child(-n+2) { border-bottom: 1px solid var(--line); } .quiz-head { align-items: center; }
       .question-card { padding: 22px 17px; border-radius: 18px; } .choice { grid-template-columns: 32px minmax(0, 1fr) 18px; padding-inline: 11px; }
       .choice-text { font-size: 12px; } .quiz-footer .primary-button { width: 100%; } .result-hero { grid-template-columns: 1fr; text-align: center; }
@@ -220,6 +223,7 @@
       "use strict";
       const STORAGE_KEY = "marketing-study-v1";
       const WEEKLY_KEY = "marketing-study-weekly-question-v1";
+      const MISSED_KEY = "marketing-study-missed-v1";
       const LETTERS = ["A", "B", "C", "D"];
       const courses = [
         {
@@ -231,7 +235,16 @@
             { id: "f3", category: "導線設計", prompt: "告知を作る前に、最初に決めるべきことはどれですか？", choices: ["投稿に使う色", "投稿後に相手へ取ってほしい行動", "投稿する曜日", "文章の長さ"], answer: 1, explanation: "予約、問い合わせ、プロフィール閲覧など、求める行動が決まらないと、文章とリンクの設計を評価できません。", action: "次の告知について、最終行動を一つだけ文章にしてください。" },
             { id: "f4", category: "価値設計", prompt: "顧客へ伝える内容として、より予約につながりやすい考え方はどれですか？", context: "単なる特徴の列挙ではなく、顧客が得る結果まで考えます。", choices: ["機能や特徴をできるだけ多く並べる", "競合より安いことだけを強調する", "顧客が選んだ後に得られる体験を示す", "業界用語を使って専門性を見せる"], answer: 2, explanation: "特徴そのものより、その特徴が顧客にどのような良い変化をもたらすかを示す方が、選ぶ理由になります。", action: "現在のおすすめ文を「特徴」ではなく「利用後に得られる体験」に書き換えてください。" },
             { id: "f5", category: "指標", prompt: "Xの投稿効果を見るとき、最終判断に最も近い数字はどれですか？", choices: ["表示回数", "いいね数", "プロフィール閲覧数", "投稿後に発生した問い合わせ・予約数"], answer: 3, explanation: "途中の反応も参考になりますが、事業の目的が予約なら、最終的には問い合わせや予約につながったかを確認します。", action: "直近7日分について、投稿、アクセス、問い合わせ、予約を同じ表に並べてください。" },
-            { id: "f6", category: "仮説", prompt: "良い仮説の形として最も適切なものはどれですか？", choices: ["もっと魅力的な投稿にする", "競合より頑張って更新する", "最短案内時刻を冒頭に置けば、当日問い合わせ率が上がる", "毎日違う内容を試して様子を見る"], answer: 2, explanation: "良い仮説は、変更するものと期待する数字が具体的です。結果が出なかった場合も、何を学んだか判断できます。", action: "「何を変えれば、どの数字がどう動くか」の形で今週の仮説を書いてください。" }
+            { id: "f6", category: "仮説", prompt: "良い仮説の形として最も適切なものはどれですか？", choices: ["もっと魅力的な投稿にする", "競合より頑張って更新する", "最短案内時刻を冒頭に置けば、当日問い合わせ率が上がる", "毎日違う内容を試して様子を見る"], answer: 2, explanation: "良い仮説は、変更するものと期待する数字が具体的です。結果が出なかった場合も、何を学んだか判断できます。", action: "「何を変えれば、どの数字がどう動くか」の形で今週の仮説を書いてください。" },
+            { id: "f7", category: "きっかけ", prompt: "ターゲット理解で『何がきっかけで今探し始めたか』を確認する最大の理由はどれですか？", choices: ["年齢を推定するため", "検索を始めた状況に合う訴求と情報の順番を決めるため", "文章を長くするため", "競合の価格を決めるため"], answer: 1, explanation: "急に予定が空いた、出張中、Xで気になる人を見たなど、きっかけによって最初に必要な情報が変わります。", action: "直近の問い合わせ3件について、探し始めたきっかけを仮説で書き出してください。" },
+            { id: "f8", category: "期限", prompt: "『今日すぐ行きたい人』の期限をさらに深掘りする質問はどれですか？", choices: ["普段何時に寝るか", "今すぐ決めたいのか、数時間後でもよいのか", "月収はいくらか", "何色が好きか"], answer: 1, explanation: "同じ当日客でも、30分以内に決めたい人と数時間待てる人では、最短案内や予約方法の見せ方が変わります。", action: "当日客を『30分以内』『3時間以内』『今夜中』の3つに分け、必要情報を書いてください。" },
+            { id: "f9", category: "満足条件", prompt: "顧客の満足条件を具体化できている表現はどれですか？", choices: ["とにかく満足したい", "良い店に行きたい", "好みのセラピストに、予算内で、落ち着いて施術してもらいたい", "人気店を選びたい"], answer: 2, explanation: "満足条件は、誰に・何を・どの条件で得たいかまで具体化すると、訴求や提案に使えます。", action: "優先顧客1人の満足条件を、体験・予算・時間の3点で一文にしてください。" },
+            { id: "f10", category: "避けたい失敗", prompt: "『今日すぐ行きたい人』が特に避けたい失敗として考えやすいものはどれですか？", choices: ["店の沿革を知らないこと", "問い合わせ後に返信が遅く、空き枠を逃すこと", "投稿の色が好みでないこと", "フォロワー数が少ないこと"], answer: 1, explanation: "期限が短い顧客は、返信の遅さ、満枠、料金不明、面倒な手続きを強く避けます。", action: "予約までの導線で顧客が失敗だと感じる点を5つ挙げ、最優先で一つ直してください。" },
+            { id: "f11", category: "比較軸", prompt: "店を比較するときの『比較軸』を把握する質問として最も有効なのはどれですか？", choices: ["SNSを何時間見るか", "最初に空き、写真、料金、口コミ、場所のどれを見るか", "広告を何色にするか", "店名を覚えているか"], answer: 1, explanation: "顧客が最初に比べる項目を知ると、ページ上部や投稿冒頭に置くべき情報を決められます。", action: "優先ターゲットが比較する5項目を、重要な順に並べてください。" },
+            { id: "f12", category: "予約直前の不安", prompt: "予約直前の不安を減らす情報の組み合わせとして最も適切なものはどれですか？", choices: ["店の理念、創業年、投稿数", "総額、空き枠、終了時刻、場所、予約方法", "フォロワー数、いいね数、絵文字", "競合批判、割引、長い紹介文"], answer: 1, explanation: "決める直前に必要なのは、予約後に想定外が起きないと確認できる具体情報です。", action: "予約直前ページに、総額・空き枠・終了時刻・場所・方法が揃っているか確認してください。" },
+            { id: "f13", category: "最終決定要因", prompt: "比較中の顧客を『ここにしよう』と動かす最終決定要因の例はどれですか？", choices: ["抽象的な人気No.1", "残り1枠、具体的な口コミ、総額表示、担当者の推薦", "長い会社概要", "毎日同じ投稿"], answer: 1, explanation: "最終決定要因は、信用・明確さ・今動く理由を補い、迷いを行動へ変えます。", action: "現在の告知に『信用材料』『明確な条件』『今予約する理由』を一つずつ追加してください。" },
+            { id: "f14", category: "探索チャネル", prompt: "探索チャネルを理解すると何を変えられますか？", choices: ["すべての媒体へ同じ文章を出す", "Google、X、ポータル、HPなど、顧客の探し方に合う情報と導線を設計する", "店舗の営業時間を短くする", "競合の投稿を削除する"], answer: 1, explanation: "検索意図の強いGoogle、発見が起きるX、比較されるポータルでは、入口の心理と必要情報が異なります。", action: "優先ターゲットが使う上位2チャネルと、それぞれで最初に見せる情報を書いてください。" },
+            { id: "f15", category: "選ばれる理由", prompt: "『競合ではなく艶華を選ぶ理由』として最も具体的なのはどれですか？", choices: ["地域で一番頑張っている", "なんとなく安心できる", "最短案内・総額・終了時刻が一目で分かり、LINEの返信も速い", "セラピストが多数いる"], answer: 2, explanation: "選ばれる理由は、顧客が比較時に確認できる具体的な違いである必要があります。", action: "競合2店と比べ、顧客が確認できる艶華の具体的な違いを3つ書いてください。" }
           ]
         },
         {
@@ -243,7 +256,16 @@
             { id: "a3", category: "比較実験", prompt: "文章Aと文章Bの効果を比較するとき、適切な進め方はどれですか？", choices: ["文章、画像、投稿時間をすべて変える", "文章だけを変え、他の条件をできるだけそろえる", "反応が良さそうな方だけを投稿する", "一度の表示回数だけで勝者を決める"], answer: 1, explanation: "同時に複数を変えると、どの変更が結果を生んだのか分かりません。原則として一度に変える要素は一つです。", action: "次回の比較では、文章、画像、時間、導線のうち一つだけ変更してください。" },
             { id: "a4", category: "事例分解", prompt: "反応の良い投稿を分析するとき、優先して分解する組み合わせはどれですか？", choices: ["投稿者の年齢、フォロワー数、使用端末", "対象、悩み、提案、信用材料、求める行動", "文字数、改行数、絵文字数、投稿時刻", "画像の色、明るさ、解像度、余白"], answer: 1, explanation: "表面的な表現より、誰に何を約束し、なぜ信じられ、何を求めているかを分解すると他の施策へ応用できます。", action: "保存済みの投稿を一つ選び、この5項目で分解してください。" },
             { id: "a5", category: "判断", prompt: "表示回数は多い一方、予約率が低い広告をどう評価しますか？", choices: ["表示回数が多いため成功", "いいねが多ければ成功", "認知には寄与している可能性があるが、予約獲得施策としては改善が必要", "必ず停止すべき"], answer: 2, explanation: "目的によって評価は変わります。予約獲得が目的なら、表示回数だけで成功とは言えません。途中指標と最終指標を分けます。", action: "現在の広告ごとに、目的を『認知』『問い合わせ』『予約』のどれか一つに設定してください。" },
-            { id: "a6", category: "データ品質", prompt: "1日だけの結果で施策の勝敗を決める主な危険は何ですか？", choices: ["計算が難しくなる", "曜日、出勤、天気など偶然の影響を受けやすい", "投稿回数が減る", "顧客の年齢が分からない"], answer: 1, explanation: "店舗集客は曜日、空き枠、セラピスト、天候などの影響を受けます。複数回または条件の近い期間で確認します。", action: "比較期間の曜日、出勤人数、空き枠をそろえられるか確認してください。" }
+            { id: "a6", category: "データ品質", prompt: "1日だけの結果で施策の勝敗を決める主な危険は何ですか？", choices: ["計算が難しくなる", "曜日、出勤、天気など偶然の影響を受けやすい", "投稿回数が減る", "顧客の年齢が分からない"], answer: 1, explanation: "店舗集客は曜日、空き枠、セラピスト、天候などの影響を受けます。複数回または条件の近い期間で確認します。", action: "比較期間の曜日、出勤人数、空き枠をそろえられるか確認してください。" },
+            { id: "a7", category: "広告分解", prompt: "成功している広告を30件分析するとき、最初に記録すべきものはどれですか？", choices: ["見た日と感想だけ", "対象、きっかけ、訴求、信用材料、導線、反応したくなる理由", "画像サイズだけ", "投稿者のフォロワー数だけ"], answer: 1, explanation: "成功事例を再利用できる知識にするには、表面ではなく顧客と設計の関係を同じ項目で比較します。", action: "分析表を作り、今日見つけた広告1件を6項目で分解してください。" },
+            { id: "a8", category: "訴求分析", prompt: "『本日最短21:20、総額25,000円』という投稿が主に解消しているものはどれですか？", choices: ["店舗の認知不足", "当日客の時間と料金の不確実性", "採用応募の不安", "リピーターの飽き"], answer: 1, explanation: "具体的な案内時刻と総額は、急いで比較している顧客の判断コストを下げます。", action: "当日告知を見て、時間・料金・空き・予約方法の不足を点検してください。" },
+            { id: "a9", category: "導線分析", prompt: "反応の良い投稿なのに予約が少ない場合、投稿の次に分解すべきものはどれですか？", choices: ["投稿者のプロフィール写真", "クリック後のページ、問い合わせ方法、返信、予約完了までの導線", "競合の投稿頻度", "過去1年の全投稿"], answer: 1, explanation: "投稿が入口として機能しても、次のページや問い合わせ対応に不安・手間があれば予約前に離脱します。", action: "投稿から予約完了までを実際にたどり、離脱しそうな箇所を3つ記録してください。" },
+            { id: "a10", category: "セグメント比較", prompt: "同じ広告でも『今日すぐ客』と『質重視客』で評価を分ける理由は何ですか？", choices: ["年齢が必ず違うから", "重視する情報と期待する行動が異なるから", "媒体の色が違うから", "必ず料金が違うから"], answer: 1, explanation: "今日すぐ客は空きや速さ、質重視客は口コミや体験の根拠を重視しやすく、平均値だけでは反応の違いを見落とします。", action: "直近の問い合わせを2つの層に分け、問い合わせ率と予約率を比較してください。" },
+            { id: "a11", category: "仮説検証", prompt: "『残り枠表示で予約が増える』を検証する指標の組み合わせはどれですか？", choices: ["いいね数だけ", "表示回数とフォロワー数", "対象投稿からの問い合わせ数・予約数・予約率", "競合の投稿数"], answer: 2, explanation: "仮説が予約行動への影響を扱うなら、途中反応だけでなく問い合わせと予約まで測ります。", action: "仮説ごとに主指標を1つ、補助指標を2つ決めてください。" },
+            { id: "a12", category: "数値判断", prompt: "施策後、アクセスは1000→1200、問い合わせは30→30でした。最も適切な判断はどれですか？", choices: ["アクセスが増えたので全面成功", "問い合わせ率が3%→2.5%に低下しており、流入の質かページを確認する", "問い合わせ件数が同じなので何も見る必要はない", "すぐ広告費を倍にする"], answer: 1, explanation: "件数だけでなく率を見ると、増えたアクセスが問い合わせにつながっていないことが分かります。", action: "前後比較では件数と率を必ず同じ表に記録してください。" },
+            { id: "a13", category: "改善設計", prompt: "検証結果が悪かったとき、次に取るべき行動はどれですか？", choices: ["仮説を隠す", "すべて元に戻して忘れる", "前提・対象・導線・数値を振り返り、次に変える一要素を決める", "同じ施策を条件を変えず永遠に続ける"], answer: 2, explanation: "失敗は、なぜ期待と違ったかを整理して次の仮説へつなげることで学習になります。", action: "失敗した施策を『予想・実施・結果・学び・次の一手』でまとめてください。" },
+            { id: "a14", category: "信用材料", prompt: "質重視客向け広告を分解するとき、信用材料として強いものはどれですか？", choices: ["安いという主張だけ", "具体的な口コミ、動画、施術の特徴、担当者の推薦", "絵文字の多さ", "投稿頻度"], answer: 1, explanation: "高い料金を払う根拠になる具体的な証拠が、品質への不安を減らします。", action: "質を主張している箇所ごとに、その根拠となる証拠を一つ対応させてください。" },
+            { id: "a15", category: "探索分析", prompt: "Google検索とX投稿から来た顧客を分けて見るべき理由はどれですか？", choices: ["端末が必ず違うから", "検索中の人と偶然発見した人では意欲や必要情報が異なるから", "料金を変えるため", "どちらかを停止するため"], answer: 1, explanation: "チャネルごとの顧客心理を分けると、同じアクセス数でも予約率が違う理由を考えやすくなります。", action: "流入元別にアクセス、問い合わせ、予約、予約率を並べてください。" }
           ]
         },
         {
@@ -255,17 +277,27 @@
             { id: "p3", category: "実験", prompt: "当日予約を増やす最初の実験として、最も検証しやすいものはどれですか？", choices: ["画像、料金、文章、投稿時間を全面変更する", "すべての投稿回数を倍にする", "同条件の告知で、冒頭に最短案内時刻を置く場合と置かない場合を比較する", "競合と同じ文章を使う"], answer: 2, explanation: "変更点が一つで、当日問い合わせ率という確認数字も明確です。結果から次の判断につなげられます。", action: "次の2回の当日告知で、冒頭の最短案内表示だけを比較してください。" },
             { id: "p4", category: "交流会選び", prompt: "学習目的の交流会として、優先度が高いものはどれですか？", choices: ["参加人数が最大の名刺交換会", "成功者が一方的に話す大型講演会", "実務者が少人数で、数字や失敗事例まで話す継続的な会", "業種を問わず無料で参加できる会"], answer: 2, explanation: "参加数より、具体的な施策について質問でき、継続して検証結果を共有できる環境の方が学習効果は高くなります。", action: "最初の3か月は月2回を目安に、店舗集客やSNS運用などテーマが限定された会を選んでください。" },
             { id: "p5", category: "質問設計", prompt: "交流会で具体的な情報を得やすい質問はどれですか？", choices: ["何か良い集客方法はありますか？", "マーケティングで一番大切なことは何ですか？", "最近、予約率が変わった施策と、判断に使った数字を教えてください", "おすすめの本はありますか？"], answer: 2, explanation: "施策、結果、判断指標まで尋ねると、抽象論ではなく実務に使える情報を得やすくなります。", action: "次の交流会までに、自分の課題に沿った具体的な質問を3つ準備してください。" },
-            { id: "p6", category: "アウトプット", prompt: "交流会後の行動として、関係と学習を深めやすいものはどれですか？", choices: ["お礼だけ送り、次の交流会を待つ", "相手の話をそのままSNSへ投稿する", "参考になった点を伝え、実際に試した結果を後日共有する", "全員へ同じ営業文を送る"], answer: 2, explanation: "具体的に何を学び、どう試したかを返すと、一度の名刺交換が継続的な情報交換へ変わります。", action: "交流会翌日までに学びを一つ送り、1〜2週間後に検証結果を共有してください。" }
+            { id: "p6", category: "アウトプット", prompt: "交流会後の行動として、関係と学習を深めやすいものはどれですか？", choices: ["お礼だけ送り、次の交流会を待つ", "相手の話をそのままSNSへ投稿する", "参考になった点を伝え、実際に試した結果を後日共有する", "全員へ同じ営業文を送る"], answer: 2, explanation: "具体的に何を学び、どう試したかを返すと、一度の名刺交換が継続的な情報交換へ変わります。", action: "交流会翌日までに学びを一つ送り、1〜2週間後に検証結果を共有してください。" },
+            { id: "p7", category: "ターゲット実践", prompt: "『今日すぐ行きたい人』への投稿で最初に出す情報として適切なのはどれですか？", choices: ["創業ストーリー", "最短案内時刻、空いている人、総額、場所、簡単な予約方法", "長い施術理論", "全セラピストの経歴"], answer: 1, explanation: "期限が迫る人には、今予約できるかと想定外がないかを最短で判断できる情報が必要です。", action: "本日の空き告知を、5秒で予約可否を判断できる順番に書き換えてください。" },
+            { id: "p8", category: "ターゲット実践", prompt: "特定のセラピストを探している人へ優先して見せるものはどれですか？", choices: ["店舗全体の沿革", "その人の動画、具体的な口コミ、出勤日、残り枠", "最安コースだけ", "他店の欠点"], answer: 1, explanation: "指名候補が決まっている人には、そのセラピストを選ぶ根拠と予約可能性を集中して見せます。", action: "対象セラピスト1人のページで、魅力・信用・空き・行動が揃っているか確認してください。" },
+            { id: "p9", category: "ターゲット実践", prompt: "料金より質を重視する人への訴求で避けたいものはどれですか？", choices: ["体験の具体化", "具体的な口コミ", "安さと割引だけを強調する", "接客や施術の根拠を示す"], answer: 2, explanation: "割引だけを強く出すと、質を重視する人には品質への不安を与えることがあります。", action: "質重視向け投稿から価格だけの表現を減らし、体験と根拠を追加してください。" },
+            { id: "p10", category: "ターゲット実践", prompt: "新人を試したい人の不安を減らす施策はどれですか？", choices: ["新人という言葉だけを繰り返す", "動画、担当者の推薦、合う人の説明、限定枠を示す", "情報が揃うまで告知しない", "最安値だけを出す"], answer: 1, explanation: "口コミが少ない新人は、別の信用材料と『誰に合うか』『なぜ今か』を補う必要があります。", action: "新人告知に、魅力・合う人・信用材料・今予約する理由を一つずつ入れてください。" },
+            { id: "p11", category: "実験記録", prompt: "艶華で週1回の実験を残す形式として最も適切なのはどれですか？", choices: ["良かった・悪かったの感想だけ", "仮説→施策→数値→学び→次の改善", "投稿文だけを保存", "売上だけを記録"], answer: 1, explanation: "考え、行動、結果、次の判断を一続きで残すと、自分で再現できる事例になります。", action: "今週の実験を5項目で一枚にまとめてください。" },
+            { id: "p12", category: "説明力", prompt: "人に説明できず言葉に詰まった部分をどう扱うべきですか？", choices: ["専門用語で補う", "相手の理解不足と考える", "自分の理解が浅い箇所として、根拠と数字を調べ直す", "説明するのをやめる"], answer: 2, explanation: "説明できない部分は、前提・因果・証拠のどこが曖昧かを見つける機会です。", action: "実験結果を3分で説明し、詰まった箇所を次の学習テーマにしてください。" },
+            { id: "p13", category: "交流会アウトプット", prompt: "交流会で自分の取り組みを伝える順番として最も良いものはどれですか？", choices: ["肩書き→自慢→営業", "課題→仮説→実施内容→数字→次の改善", "知った用語を列挙", "成功結果だけを断定"], answer: 1, explanation: "検証の流れを数字とともに示すと、具体的な助言や情報交換を得やすくなります。", action: "直近の実験をこの5項目で60秒の説明にしてください。" },
+            { id: "p14", category: "学習計画", prompt: "3〜6週目の成功広告・投稿の分解を続ける目安はどれですか？", choices: ["気が向いた日に1件", "合計30件ほどを同じ観点で分析する", "一番人気の1件だけ暗記する", "毎日100件を眺める"], answer: 1, explanation: "同じ型で一定数を分析すると、業種や投稿を越えた共通点と違いが見えるようになります。", action: "週7〜8件のペースで4週間、合計30件の分析予定を作ってください。" },
+            { id: "p15", category: "再テスト", prompt: "間違えた問題を再テストする目的として最も適切なのはどれですか？", choices: ["正解の位置だけ覚える", "曖昧な判断基準を見つけ、解説の実務課題と結びつけて定着させる", "受験回数を増やす", "全問を毎回最初から解く"], answer: 1, explanation: "誤答は弱点の一覧です。理由を理解し、実務で使ってから解き直すと判断基準として定着します。", action: "誤答の中から一つ実務課題を実行し、その後に復習テストを受けてください。" }
           ]
         }
       ];
       const allQuestions = courses.flatMap((course) => course.questions);
-      const comprehensive = { id: "comprehensive", step: "FINAL / 12週目", title: "総合実践テスト", description: "基礎、分析、実践の全18問で、3か月の学習内容を総点検します。", questions: allQuestions, featured: true };
+      const comprehensive = { id: "comprehensive", step: "FINAL / 12週目", title: "総合実践テスト", description: "基礎、分析、実践の全45問で、3か月の学習内容を総点検します。", questions: allQuestions, featured: true };
       const allCourses = [...courses, comprehensive];
       const defaultHistory = () => ({ foundation: { attempts: 0, best: 0, last: 0, passed: false }, analysis: { attempts: 0, best: 0, last: 0, passed: false }, practice: { attempts: 0, best: 0, last: 0, passed: false }, comprehensive: { attempts: 0, best: 0, last: 0, passed: false } });
       const safeParse = (value, fallback) => { try { const parsed = JSON.parse(value); return parsed && typeof parsed === "object" ? parsed : fallback; } catch { return fallback; } };
       const savedHistory = safeParse(localStorage.getItem(STORAGE_KEY), defaultHistory());
-      const state = { view: "home", courseId: null, queue: [], index: 0, selected: null, answered: false, answers: [], reviewMode: false, history: { ...defaultHistory(), ...savedHistory } };
+      const savedMissed = safeParse(localStorage.getItem(MISSED_KEY), []);
+      const state = { view: "home", courseId: null, queue: [], index: 0, selected: null, answered: false, answers: [], reviewMode: false, history: { ...defaultHistory(), ...savedHistory }, missedIds: Array.isArray(savedMissed) ? savedMissed.filter((id) => allQuestions.some((question) => question.id === id)) : [] };
       const app = document.getElementById("app");
       const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
       const completedCount = () => courses.filter((course) => state.history[course.id]?.passed).length;
@@ -273,6 +305,7 @@
       const totalAttempts = () => Object.values(state.history).reduce((sum, item) => sum + (item.attempts || 0), 0);
       const overallProgress = () => Math.round((completedCount() / courses.length) * 100);
       const saveHistory = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state.history));
+      const saveMissed = () => localStorage.setItem(MISSED_KEY, JSON.stringify(state.missedIds));
       const showToast = (message) => { document.querySelector(".toast")?.remove(); const toast = document.createElement("div"); toast.className = "toast"; toast.textContent = message; document.body.appendChild(toast); window.setTimeout(() => toast.remove(), 2200); };
       const shuffle = (items) => { const copy = [...items]; for (let index = copy.length - 1; index > 0; index -= 1) { const swapIndex = Math.floor(Math.random() * (index + 1)); [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]]; } return copy; };
       const getCurrentCourse = () => allCourses.find((course) => course.id === state.courseId) || comprehensive;
@@ -296,6 +329,7 @@
           <section class="hero"><div class="hero-main"><div class="eyebrow">Learn by testing</div><h1>知識を、使える判断力に変える。</h1><p class="hero-copy">問題を解き、解説を読み、すぐに自店舗で試す。3か月の学習計画を、基礎・分析・実践の順に進めます。</p><div class="stats"><div class="stat"><div class="stat-label">合格した基礎課程</div><div class="stat-value">${completedCount()} / ${courses.length}</div></div><div class="stat"><div class="stat-label">総受験回数</div><div class="stat-value">${totalAttempts()}回</div></div><div class="stat"><div class="stat-label">総合最高得点</div><div class="stat-value">${bestComprehensive()}%</div></div></div></div><div class="hero-score"><div><div class="hero-score-label">CURRENT PROGRESS</div><div class="hero-score-number">${overallProgress()}<span>%</span></div></div><p class="hero-score-copy">3つの基礎課程を80％以上で合格すると、学習の土台が完成します。</p></div></section>
           <div class="section-heading"><div><h2>今週の問い</h2><p>情報収集を始める前に、今週解決する課題を一つに絞ります。</p></div></div>
           <section class="weekly-card"><div><label for="weeklyQuestion">例：アクセス数はあるのに、予約につながらない日は何が違うのか</label><input id="weeklyQuestion" value="${escapeHtml(weeklyQuestion)}" placeholder="今週、数字で答えを出したい問いを入力" /></div><button class="primary-button" data-action="save-weekly">保存する</button></section>
+          ${state.missedIds.length ? `<section class="review-bank"><div><strong>復習待ちの問題が ${state.missedIds.length}問あります</strong><span>過去の受験で間違えた問題だけを、まとめて解き直せます。</span></div><button class="primary-button" data-action="review-missed">復習テストを始める</button></section>` : ""}
           <div class="section-heading"><div><h2>テストを選ぶ</h2><p>基礎から順に進め、最後に総合テストで定着を確認します。</p></div></div><section class="course-grid">${cards}</section>
           <div class="section-heading"><div><h2>毎週回す学習サイクル</h2><p>情報を保存するだけで終わらせず、実験と説明まで行います。</p></div></div>
           <section class="cycle"><div class="cycle-step"><span class="cycle-number">1</span><strong>問いを決める</strong><span>今週解決する課題を一つに絞る</span></div><div class="cycle-step"><span class="cycle-number">2</span><strong>調べる</strong><span>X、本、交流会から必要な情報だけ集める</span></div><div class="cycle-step"><span class="cycle-number">3</span><strong>試す</strong><span>変更点を一つにして、自店舗で検証する</span></div><div class="cycle-step"><span class="cycle-number">4</span><strong>数字で説明する</strong><span>結果、理由、次の改善を文章に残す</span></div></section>`, "home");
@@ -307,7 +341,7 @@
         const feedback = state.answered ? `<div class="feedback"><div class="feedback-title ${selectedIsCorrect ? "good" : "bad"}">${selectedIsCorrect ? "正解です" : "正解を確認してください"}</div><p>${escapeHtml(question.explanation)}</p><div class="action-box"><strong>実務課題</strong>${escapeHtml(question.action)}</div></div>` : "";
         app.innerHTML = shell(`<div class="quiz-wrap"><div class="quiz-head"><div><div class="eyebrow">${state.reviewMode ? "Wrong answer review" : escapeHtml(course.step)}</div><h1>${state.reviewMode ? "誤答復習" : escapeHtml(course.title)}</h1><p>回答すると、理由と自店舗での実務課題が表示されます。</p></div><div class="quiz-counter">${state.index + 1} / ${state.queue.length}</div></div><div class="progress-track quiz-progress"><div class="progress-fill" style="width:${progress}%"></div></div><section class="question-card"><span class="question-tag">${escapeHtml(question.category)}</span><h2>${escapeHtml(question.prompt)}</h2>${question.context ? `<p class="question-context">${escapeHtml(question.context)}</p>` : ""}<div class="choices">${choices}</div>${feedback}</section><div class="quiz-footer"><button class="primary-button" data-action="next" ${state.answered ? "" : "disabled"}>${state.index === state.queue.length - 1 ? "結果を見る" : "次の問題へ"} <span>→</span></button></div></div>`, course.id);
       };
-      const answerQuestion = (selectedIndex) => { if (state.answered) return; const question = state.queue[state.index]; state.selected = selectedIndex; state.answered = true; state.answers.push({ questionId: question.id, selected: selectedIndex, correct: selectedIndex === question.answer, question }); renderQuiz(); };
+      const answerQuestion = (selectedIndex) => { if (state.answered) return; const question = state.queue[state.index]; const correct = selectedIndex === question.answer; state.selected = selectedIndex; state.answered = true; state.answers.push({ questionId: question.id, selected: selectedIndex, correct, question }); if (correct) { state.missedIds = state.missedIds.filter((id) => id !== question.id); } else if (!state.missedIds.includes(question.id)) { state.missedIds.push(question.id); } saveMissed(); renderQuiz(); };
       const nextQuestion = () => { if (!state.answered) return; if (state.index >= state.queue.length - 1) { finishQuiz(); return; } state.index += 1; state.selected = null; state.answered = false; renderQuiz(); window.scrollTo({ top: 0, behavior: "smooth" }); };
       const finishQuiz = () => { state.view = "result"; const correct = state.answers.filter((answer) => answer.correct).length; const percentage = Math.round((correct / state.answers.length) * 100); if (!state.reviewMode) { const current = state.history[state.courseId] || { attempts: 0, best: 0, last: 0, passed: false }; state.history[state.courseId] = { attempts: current.attempts + 1, best: Math.max(current.best, percentage), last: percentage, passed: current.passed || percentage >= 80, completedAt: new Date().toISOString() }; saveHistory(); } renderResult(); window.scrollTo({ top: 0, behavior: "smooth" }); };
       const renderResult = () => {
@@ -327,6 +361,7 @@
         if (action === "next") nextQuestion();
         if (action === "restart") startQuiz(state.courseId);
         if (action === "retry-wrong") { const wrongQuestions = state.answers.filter((answer) => !answer.correct).map((answer) => answer.question); startQuiz(state.courseId, wrongQuestions, true); }
+        if (action === "review-missed") { const missedQuestions = state.missedIds.map((id) => allQuestions.find((question) => question.id === id)).filter(Boolean); if (missedQuestions.length) startQuiz("comprehensive", shuffle(missedQuestions), true); }
         if (action === "save-weekly") { const input = document.getElementById("weeklyQuestion"); localStorage.setItem(WEEKLY_KEY, input?.value.trim() || ""); showToast("今週の問いを保存しました"); }
       });
       renderHome();
