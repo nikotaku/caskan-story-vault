@@ -460,6 +460,9 @@ export default function Schedule() {
     ? `https://${adminStore.custom_domain}`
     : "https://zenryokuesthe.com";
 
+  // エスたま限定1万円クーポンの案内ページ（公開LP）
+  const estamaCouponGuideUrl = `${reviewBaseUrl}/estama-coupon.html`;
+
   // 旧「全力」のマスタは履歴編集用に保持し、新規予約では艶華のマスタだけを使う。
   const activeCasts = useMemo(() => casts.filter((cast) => cast.is_active), [casts]);
   const enkaCasts = useMemo(() => forStore(activeCasts, ENKA_STORE_ID), [activeCasts]);
@@ -1132,6 +1135,26 @@ export default function Schedule() {
     openSmsApp(d.customer_phone, body);
   };
 
+  // 予約フォームの割引欄にある「エスたま限定1万円クーポン」ボタン。
+  // 案内ページへのリンクをSMS本文にセットして送信画面を開く。
+  const openEstamaCouponSms = (phone: string, customerName: string) => {
+    if (!phone.trim()) {
+      toast({ title: "電話番号を入力してください", variant: "destructive" });
+      return;
+    }
+    const body = [
+      `${customerName.trim() || "お客様"} 様`,
+      "",
+      "エスたま限定1万円クーポンのご案内です。",
+      "",
+      "▼1万円クーポンの受け取り方法はこちら",
+      estamaCouponGuideUrl,
+    ].join("\n");
+    navigator.clipboard.writeText(body).catch(() => {});
+    toast({ title: "SMS送信画面を開きます", description: "本文はコピー済みです" });
+    openSmsApp(phone, body);
+  };
+
   const openDetail = (res: Reservation) => {
     setDetailRes(res);
     setEditStatus(res.status);
@@ -1337,6 +1360,7 @@ export default function Schedule() {
                       discounts={enkaDiscounts}
                       storeId={ENKA_STORE_ID}
                       onSubmit={handleAddReservation}
+                      onEstamaCouponSms={() => openEstamaCouponSms(formData.customer_phone, formData.customer_name)}
                     />
                   </div>
                 </SheetContent>
@@ -1795,6 +1819,7 @@ export default function Schedule() {
                     storeId={detailRes.store_id}
                     onSubmit={handleSaveEdit}
                     submitLabel="変更を保存"
+                    onEstamaCouponSms={() => openEstamaCouponSms(editFormData.customer_phone, editFormData.customer_name)}
                   />
                   <Button variant="outline" className="w-full" onClick={() => setEditMode(false)}>編集をやめる</Button>
                 </>

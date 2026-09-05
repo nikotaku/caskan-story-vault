@@ -22,6 +22,7 @@ export interface ReservationLineContext {
   price: number;
   payment_fee?: number | null;
   nomination_type?: string | null;
+  discount_names?: string[] | null;
   store_visit_count?: number | null;
   cast_visit_count?: number | null;
   cast_history?: ReservationLineHistoryEntry[] | null;
@@ -162,6 +163,17 @@ export function buildReservationLineMessage(context: ReservationLineContext): st
   if (context.notes?.trim()) {
     lines.push("");
     lines.push(`📝 ${context.notes.trim()}`);
+  }
+
+  // エスたま限定1万円クーポン（総額10,000円クーポン）適用時は、
+  // 口コミのその場確認でセラピストへ5,000円キャッシュバックする旨を追記する
+  const hasEstamaCoupon = (context.discount_names ?? []).some(
+    (name) => typeof name === "string" && name.includes("総額10,000円クーポン"),
+  );
+  if (hasEstamaCoupon) {
+    lines.push("");
+    lines.push("🎁 エスたま限定1万円クーポン適用の予約です");
+    lines.push("施術後にお客様の口コミ投稿をその場で確認できたら、5,000円キャッシュバックされます。完了画面を必ず確認してください。");
   }
 
   return lines.join("\n");

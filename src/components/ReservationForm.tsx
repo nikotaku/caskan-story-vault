@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CalendarIcon, UserCheck, Clock, Plus, Trash2 } from "lucide-react";
+import { CalendarIcon, UserCheck, Clock, Plus, Ticket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,6 +95,8 @@ interface ReservationFormProps {
   storeId?: string;
   onSubmit: (data: ReservationFormData) => void | Promise<void>;
   submitLabel?: string;
+  // エスたま限定1万円クーポン案内のSMSを開くボタン（Schedule側から注入）
+  onEstamaCouponSms?: () => void;
 }
 
 interface NgCast {
@@ -150,6 +152,7 @@ export function ReservationForm({
   storeId,
   onSubmit,
   submitLabel = "予約を追加",
+  onEstamaCouponSms,
 }: ReservationFormProps) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [recentReservations, setRecentReservations] = useState<RecentReservation[]>([]);
@@ -1033,6 +1036,18 @@ export function ReservationForm({
               <span className="text-sm">{d.name}（{d.discount_type === "percentage" ? `-${d.discount_value}%` : `-¥${d.discount_value.toLocaleString()}`}）</span>
             </label>
           ))}
+          {/* エスたま限定1万円クーポン案内SMS（店舗側の案内送付用。割引額には影響しない） */}
+          {onEstamaCouponSms && (
+            <button
+              type="button"
+              onClick={onEstamaCouponSms}
+              className="w-full flex items-center justify-center gap-1.5 p-2 border rounded-lg border-pink-300 bg-pink-50 text-pink-700 text-sm font-medium hover:bg-pink-100 transition-colors"
+            >
+              <Ticket size={15} />
+              エスたま限定1万円クーポン
+              <span className="text-[10px] font-normal text-pink-500">案内SMSを開く</span>
+            </button>
+          )}
           {/* 割引額（ラジオ選択：なし / ¥1,000〜¥5,000） */}
           <div className="p-2 border rounded-lg">
             <div className="flex items-center gap-2 mb-2">
