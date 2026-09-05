@@ -43,7 +43,8 @@ export function splitClearanceExtraItems(value: unknown): {
 
 export function combineClearanceExtraItems(
   deductions: ClearanceExtraItem[],
-  salaryAdditions: ClearanceExtraItem[]
+  salaryAdditions: ClearanceExtraItem[],
+  options?: { keepZeroAmount?: boolean }
 ): ClearanceExtraItem[] {
   const normalize = (
     items: ClearanceExtraItem[],
@@ -55,7 +56,8 @@ export function combineClearanceExtraItems(
       amount: toAmount(item.amount),
       kind,
     }))
-    .filter((item) => item.amount > 0);
+    // keepZeroAmount=true のときは金額未入力（0円）の入力途中項目も保持する
+    .filter((item) => options?.keepZeroAmount || item.amount > 0);
 
   return [
     ...normalize(deductions, "deduction", "その他控除"),

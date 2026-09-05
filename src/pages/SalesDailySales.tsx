@@ -14,7 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, subDays, addDays, isToday } from "date-fns";
 import { toExtTime } from "@/lib/timeFormat";
 import { ja } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, CheckCircle, Loader2, CreditCard, Download, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle, Loader2, CreditCard, Download, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadClearanceReceipt } from "@/lib/clearanceReceipt";
 import {
@@ -70,6 +70,7 @@ interface Clearance {
   payout_method: string | null;
   status: string;
   cleared_at: string | null;
+  created_at?: string | null;
   other_expenses: unknown;
 }
 
@@ -82,6 +83,7 @@ interface ClearanceInput {
   salaryAdjustmentItems: ClearanceExtraItem[];
   payoutMethod: string;
   submitting: boolean;
+  saving: boolean;
 }
 
 const yen = (v: number) => v === 0 ? "¥0" : `¥${v.toLocaleString()}`;
@@ -105,6 +107,7 @@ export default function SalesDailySales() {
   const [castGroups, setCastGroups] = useState<CastGroup[]>([]);
   const [clearances, setClearances] = useState<Record<string, Clearance>>({});
   const [clearanceInputs, setClearanceInputs] = useState<Record<string, ClearanceInput>>({});
+  const [draftSavedAt, setDraftSavedAt] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const { user, loading: authLoading } = useAuth();
@@ -263,9 +266,17 @@ export default function SalesDailySales() {
           salaryAdjustmentItems: salaryAdditions,
           payoutMethod: ex?.payout_method ?? "",
           submitting: false,
+          saving: false,
         };
       }
       setClearanceInputs(inputs);
+      // 途中保存(draft)が残っているキャストは保存済み時刻を表示する
+      const draftMap: Record<string, string> = {};
+      for (const g of groupList) {
+        const ex = clearMap[g.castId];
+        if (ex?.status === "draft" && ex.created_at) draftMap[g.castId] = ex.created_at;
+      }
+      setDraftSavedAt(draftMap);
     } catch (e) {
       console.error(e);
     } finally {
@@ -275,6 +286,42 @@ export default function SalesDailySales() {
 
   const updateInput = (castId: string, field: keyof ClearanceInput, value: any) => {
     setClearanceInputs((prev) => ({ ...prev, [castId]: { ...prev[castId], [field]: value } }));
+  };
+
+  // 入力途中の項目（給与の不足分・追加支給など）を清算せずに部分保存する。
+  // 金額0円の入力途中項目も保持し、予約の完了・ポイント加算・清算確定は行わない。
+  const handleSaveDraft = async (group: CastGroup) => {
+    const input = clearanceInputs[group.castId];
+    if (!input) return;
+    updateInput(group.castId, "saving", true);
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    try {
+      const { error } = await supabase.rpc("partial_update_daily_clearance" as any, {
+        p_cast_id: group.castId,
+        p_date: dateStr,
+        p_total_sales: group.totalSales,
+        p_therapist_back: input.therapistBack,
+        p_misc_expenses: input.miscExpenses,
+        p_accommodation_fee: input.accommodationFee,
+        p_transportation_fee: input.transportationFee,
+        p_other_expenses: combineClearanceExtraItems(input.otherItems, input.salaryAdjustmentItems, { keepZeroAmount: true }) as any,
+        p_payout_method: input.payoutMethod || null,
+      });
+      if (error) throw error;
+      toast.success(`${group.castName} の入力内容を保存しました（清算はまだです）`);
+      const { data } = await supabase.from("daily_clearances" as any).select("*").eq("date", dateStr);
+      const clearMap: Record<string, Clearance> = {};
+      for (const c of (data as unknown as Clearance[]) || []) clearMap[c.cast_id] = c;
+      setClearances(clearMap);
+      const draftRow = clearMap[group.castId];
+      if (draftRow?.status === "draft") {
+        setDraftSavedAt((prev) => ({ ...prev, [group.castId]: new Date().toISOString() }));
+      }
+    } catch (e: any) {
+      toast.error(`途中保存に失敗しました: ${e?.message ?? "不明なエラー"}`);
+    } finally {
+      updateInput(group.castId, "saving", false);
+    }
   };
 
   const handleDownloadReceipt = (group: CastGroup) => {
@@ -486,7 +533,7 @@ export default function SalesDailySales() {
                       </thead>
                       <tbody className="divide-y">
                         {castGroups.map((g) => {
-                          const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], salaryAdjustmentItems: [], payoutMethod: "", submitting: false };
+                          const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], salaryAdjustmentItems: [], payoutMethod: "", submitting: false, saving: false };
                           const cleared = clearances[g.castId];
                           const { salary } = getClearanceAmounts(input);
                           const storeShare = g.totalSales - salary;
@@ -535,7 +582,7 @@ export default function SalesDailySales() {
 
               {/* ── 個別清算フォーム ── */}
               {castGroups.map((g) => {
-                const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], salaryAdjustmentItems: [], payoutMethod: "", submitting: false };
+                const input = clearanceInputs[g.castId] ?? { therapistBack: 0, miscExpenses: 0, accommodationFee: 0, transportationFee: 0, otherItems: [], salaryAdjustmentItems: [], payoutMethod: "", submitting: false, saving: false };
                 const cleared = clearances[g.castId];
                 const { otherTotal, salaryAdjustmentTotal, salary } = getClearanceAmounts(input);
                 // 店落ち（店舗取り分）= 売上 - セラピスト給与
@@ -812,6 +859,26 @@ export default function SalesDailySales() {
                               ))}
                             </div>
                           )}
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <p className="text-[10px] text-emerald-800/70">
+                              {draftSavedAt[g.castId]
+                                ? `途中保存済み ${format(new Date(draftSavedAt[g.castId]), "M/d HH:mm")}`
+                                : "途中保存すると、あとで続きから入力できます"}
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50"
+                              onClick={() => handleSaveDraft(g)}
+                              disabled={input.saving || input.submitting}
+                            >
+                              {input.saving
+                                ? <Loader2 size={12} className="mr-1 animate-spin" />
+                                : <Save size={12} className="mr-1" />}
+                              {input.saving ? "保存中..." : "途中保存"}
+                            </Button>
+                          </div>
                         </div>
                         <div className="col-span-2">
                           <div className="w-full p-3 bg-primary/5 rounded-md space-y-1.5">
