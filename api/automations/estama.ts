@@ -26,7 +26,7 @@ const stringValue = (value: unknown) => typeof value === "string" ? value : "";
 
 export default async function handler(req: RequestLike, res: ResponseLike) {
   res.setHeader("Cache-Control", "private, no-store");
-  if (!['GET', 'POST'].includes(req.method || '')) {
+  if (!["GET", "POST"].includes(req.method || "")) {
     res.setHeader("Allow", "GET, POST");
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -43,7 +43,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       const [connection, jobsResult] = await Promise.all([
         getConnection(admin, storeId),
         admin.from("automation_jobs").select("id,job_type,status,cast_id,error_message,created_at,finished_at")
-          .eq("store_id", storeId).eq("provider", "estama").order("created_at", { ascending: false }).limit(10),
+          .eq("store_id", storeId).eq("provider", "estama").order("created_at", { ascending: false }).limit(50),
       ]);
       res.status(200).json({ connection, jobs: jobsResult.data || [] });
       return;
