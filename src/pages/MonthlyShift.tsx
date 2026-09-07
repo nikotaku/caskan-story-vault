@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, startOfWeek, addDays, isSameMonth, isToday, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Plus, ChevronLeft, ChevronRight, Trash2, LayoutGrid, CalendarDays, Check, WandSparkles } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Trash2, LayoutGrid, CalendarDays, Check, WandSparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/hooks/useStore";
@@ -53,12 +53,18 @@ interface DummyShift {
   casts: { name: string };
 }
 
+type DummyShiftPattern = Record<number, [string, string]>;
+
 const ROOMS = ["インルーム", "ラスルーム"];
-const DUMMY_CAST_NAMES = ["蒼井かずは", "華咲れみ"] as const;
-const DUMMY_SHIFT_PATTERNS: Record<(typeof DUMMY_CAST_NAMES)[number], Record<number, [string, string]>> = {
+const DUMMY_SHIFT_PATTERNS_BY_NAME: Record<string, DummyShiftPattern> = {
   蒼井かずは: { 1: ["12:00", "20:00"], 3: ["14:00", "22:00"], 6: ["12:00", "23:00"] },
   華咲れみ: { 0: ["12:00", "20:00"], 2: ["13:00", "21:00"], 4: ["15:00", "23:00"] },
 };
+const DEFAULT_DUMMY_SHIFT_PATTERNS: DummyShiftPattern[] = [
+  { 1: ["12:00", "20:00"], 3: ["14:00", "22:00"], 6: ["12:00", "23:00"] },
+  { 0: ["12:00", "20:00"], 2: ["13:00", "21:00"], 4: ["15:00", "23:00"] },
+  { 1: ["13:00", "21:00"], 4: ["12:00", "20:00"], 5: ["15:00", "23:00"] },
+];
 const DUMMY_PALETTE = [
   { chip: "bg-sky-100 dark:bg-sky-900/30", text: "text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
   { chip: "bg-fuchsia-100 dark:bg-fuchsia-900/30", text: "text-fuchsia-700 dark:text-fuchsia-300", dot: "bg-fuchsia-500" },
@@ -95,6 +101,9 @@ export default function MonthlyShift() {
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<"calendar" | "dummy">("calendar");
   const [showDialog, setShowDialog] = useState(false);
+  const [showDummyCastDialog, setShowDummyCastDialog] = useState(false);
+  const [dummyCastSelection, setDummyCastSelection] = useState<string[]>([]);
+  const [savingDummyCasts, setSavingDummyCasts] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDummyId, setEditingDummyId] = useState<string | null>(null);
   const [formKind, setFormKind] = useState<"regular" | "dummy">("regular");
@@ -208,15 +217,52 @@ export default function MonthlyShift() {
   }, [selectedMonth, storeId]);
 
   const fetchCasts = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("casts")
       .select("id, name, is_estama_dummy")
       .eq("store_id", storeId)
       .eq("is_active", true)
       .order("display_order", { ascending: true })
       .order("name");
+    if (error) {
+      console.error(error);
+      return;
+    }
     setCasts(data || []);
   }, [storeId]);
+
+  const openDummyCastSelector = () => {
+    setDummyCastSelection(casts.filter(cast => cast.is_estama_dummy).map(cast => cast.id));
+    setShowDummyCastDialog(true);
+  };
+
+  const handleSaveDummyCasts = async () => {
+    setSavingDummyCasts(true);
+    const selected = new Set(dummyCastSelection);
+    const changedCasts = casts.filter(cast => cast.is_estama_dummy !== selected.has(cast.id));
+
+    const results = await Promise.all(
+      changedCasts.map(cast =>
+        supabase
+          .from("casts")
+          .update({ is_estama_dummy: selected.has(cast.id) })
+          .eq("id", cast.id)
+          .eq("store_id", storeId),
+      ),
+    );
+    const failed = results.find(result => result.error);
+    setSavingDummyCasts(false);
+
+    if (failed?.error) {
+      console.error(failed.error);
+      toast.error("対象セラピストの保存に失敗しました");
+      return;
+    }
+
+    await fetchCasts();
+    setShowDummyCastDialog(false);
+    toast.success(`ダミーシフト対象を${dummyCastSelection.length}名に更新しました`);
+  };
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/login");
@@ -234,6 +280,9 @@ export default function MonthlyShift() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "estama_dummy_shifts", filter: `store_id=eq.${storeId}` }, () => {
         fetchMonthlyShifts();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "casts", filter: `store_id=eq.${storeId}` }, () => {
+        fetchCasts();
       })
       .subscribe();
 
@@ -328,17 +377,17 @@ export default function MonthlyShift() {
   };
 
   const handleGenerateDummyShifts = async () => {
-    const missingNames = DUMMY_CAST_NAMES.filter(name => !casts.some(cast => cast.is_estama_dummy && cast.name === name));
-    if (missingNames.length) {
-      toast.error(`ダミー用セラピストが見つかりません: ${missingNames.join("、")}`);
+    const dummyCastsForGeneration = casts.filter(cast => cast.is_estama_dummy);
+    if (!dummyCastsForGeneration.length) {
+      toast.error("ダミーシフト対象セラピストを選択してください");
       return;
     }
 
     const today = format(new Date(), "yyyy-MM-dd");
     const monthDays = eachDayOfInterval({ start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) });
-    const rows = DUMMY_CAST_NAMES.flatMap((name) => {
-      const cast = casts.find(item => item.is_estama_dummy && item.name === name)!;
-      const pattern = DUMMY_SHIFT_PATTERNS[name];
+    const rows = dummyCastsForGeneration.flatMap((cast, index) => {
+      const pattern = DUMMY_SHIFT_PATTERNS_BY_NAME[cast.name]
+        ?? DEFAULT_DUMMY_SHIFT_PATTERNS[index % DEFAULT_DUMMY_SHIFT_PATTERNS.length];
       return monthDays.flatMap((day) => {
         const shiftDate = format(day, "yyyy-MM-dd");
         const times = pattern[getDay(day)];
@@ -356,7 +405,7 @@ export default function MonthlyShift() {
     const existing = new Set(dummyShifts.map(shift => `${shift.cast_id}:${shift.shift_date}`));
     const missingRows = rows.filter(row => !existing.has(`${row.cast_id}:${row.shift_date}`));
     if (!missingRows.length) {
-      toast.info("この月のお任せシフトは作成済みです");
+      toast.info("この月のダミーシフトは作成済みです");
       return;
     }
 
@@ -365,8 +414,8 @@ export default function MonthlyShift() {
       .from("estama_dummy_shifts")
       .upsert(missingRows, { onConflict: "cast_id,shift_date", ignoreDuplicates: true });
     setGeneratingDummy(false);
-    if (error) { toast.error("お任せシフトの作成に失敗しました"); return; }
-    toast.success(`${missingRows.length}件のお任せシフトを作成しました`);
+    if (error) { toast.error("ダミーシフトの自動作成に失敗しました"); return; }
+    toast.success(`${missingRows.length}件のダミーシフトを自動作成しました`);
     fetchMonthlyShifts();
     triggerEstamaSync();
   };
@@ -419,9 +468,7 @@ export default function MonthlyShift() {
     .sort((a, b) => (a.shift_date < b.shift_date ? -1 : a.shift_date > b.shift_date ? 1 : a.start_time.localeCompare(b.start_time)));
 
   const regularCasts = casts.filter(c => !c.is_estama_dummy);
-  const dummyCasts = DUMMY_CAST_NAMES
-    .map(name => casts.find(cast => cast.is_estama_dummy && cast.name === name))
-    .filter((cast): cast is Cast => Boolean(cast));
+  const dummyCasts = casts.filter(c => c.is_estama_dummy);
 
   const roomOccupancy = useMemo(
     () => calculateMonthlyRoomOccupancy(shifts, selectedMonth, ROOMS),
@@ -681,31 +728,42 @@ export default function MonthlyShift() {
             {/* ===== ダミー用ビュー ===== */}
             <div className={viewMode === "dummy" ? "" : "hidden"}>
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <div className="mr-auto">
+                <div className="mr-auto min-w-0">
                   <p className="text-xs text-muted-foreground">
                     エスたま専用の予定です。通常シフトと店舗HPには表示されません。
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                     {dummyCasts.map((cast, index) => (
                       <span key={cast.id} className="flex items-center gap-1">
-                        <span className={cn("h-2.5 w-2.5 rounded-full", DUMMY_PALETTE[index]?.dot)} />
+                        <span className={cn("h-2.5 w-2.5 rounded-full", DUMMY_PALETTE[index % DUMMY_PALETTE.length]?.dot)} />
                         {cast.name}
                       </span>
                     ))}
+                    {dummyCasts.length === 0 && <span>対象セラピスト未選択</span>}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleGenerateDummyShifts}
-                  disabled={generatingDummy || dummyCasts.length !== DUMMY_CAST_NAMES.length}
-                >
-                  <WandSparkles size={14} className="mr-1" />
-                  {generatingDummy ? "作成中..." : "お任せシフト作成"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={openDummyCastSelector}>
+                    <Users size={14} className="mr-1" />対象セラピスト選択
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleGenerateDummyShifts}
+                    disabled={generatingDummy || dummyCasts.length === 0}
+                  >
+                    <WandSparkles size={14} className="mr-1" />
+                    {generatingDummy ? "作成中..." : "ダミーシフト自動作成"}
+                  </Button>
+                </div>
               </div>
-              {dummyCasts.length !== DUMMY_CAST_NAMES.length ? (
-                <div className="text-center text-muted-foreground py-12">指定されたダミー用セラピスト3名を確認できません</div>
+              {dummyCasts.length === 0 ? (
+                <div className="rounded-lg border py-12 text-center">
+                  <p className="text-sm text-muted-foreground">ダミーシフト対象セラピストが未選択です。</p>
+                  <Button size="sm" variant="outline" className="mt-3" onClick={openDummyCastSelector}>
+                    <Users size={14} className="mr-1" />対象セラピストを選択
+                  </Button>
+                </div>
               ) : (
                 <div className="overflow-x-auto rounded-lg border">
                   <div className="min-w-[700px]">
@@ -754,8 +812,9 @@ export default function MonthlyShift() {
                             </div>
                             <div className="space-y-1">
                               {dayDummyShifts.map((shift) => {
-                                const castIndex = Math.max(0, dummyCasts.findIndex(cast => cast.id === shift.cast_id));
-                                const palette = DUMMY_PALETTE[castIndex] || DUMMY_PALETTE[0];
+                                const foundCastIndex = dummyCasts.findIndex(cast => cast.id === shift.cast_id);
+                                const castIndex = foundCastIndex >= 0 ? foundCastIndex : 0;
+                                const palette = DUMMY_PALETTE[castIndex % DUMMY_PALETTE.length] || DUMMY_PALETTE[0];
                                 return (
                                   <button
                                     key={shift.id}
@@ -948,6 +1007,60 @@ export default function MonthlyShift() {
                 </Button>
               )}
               <Button variant="outline" className="flex-1" onClick={() => { setShowDialog(false); setEditingId(null); setEditingDummyId(null); }}>キャンセル</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDummyCastDialog} onOpenChange={setShowDummyCastDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>ダミーシフト対象セラピスト</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-1">
+            <p className="text-sm text-muted-foreground">
+              自動作成・手動追加の対象にするセラピストを選択してください。
+            </p>
+            <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+              {casts.map(cast => {
+                const selected = dummyCastSelection.includes(cast.id);
+                return (
+                  <button
+                    key={cast.id}
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                      selected ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+                    )}
+                    onClick={() => setDummyCastSelection(prev =>
+                      prev.includes(cast.id) ? prev.filter(id => id !== cast.id) : [...prev, cast.id],
+                    )}
+                  >
+                    <span className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                      selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+                    )}>
+                      {selected && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                    </span>
+                    <span className="font-medium">{cast.name}</span>
+                    {cast.is_estama_dummy && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">現在の対象</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{dummyCastSelection.length}名選択中</span>
+              {dummyCastSelection.length > 0 && (
+                <button type="button" className="underline" onClick={() => setDummyCastSelection([])}>選択解除</button>
+              )}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setShowDummyCastDialog(false)}>キャンセル</Button>
+              <Button className="flex-1" onClick={handleSaveDummyCasts} disabled={savingDummyCasts}>
+                {savingDummyCasts ? "保存中..." : "対象を保存"}
+              </Button>
             </div>
           </div>
         </DialogContent>
