@@ -436,6 +436,7 @@ export default function SalesDailySales() {
   const allCleared = castGroups.length > 0 && castGroups.every((g) => clearances[g.castId]);
 
   // 当日合計
+  const dayTotalReservations = castGroups.reduce((s, g) => s + g.reservations.length, 0);
   const dayTotalSales = castGroups.reduce((s, g) => s + g.totalSales, 0);
   const dayTotalBack = castGroups.reduce((s, g) => s + (clearanceInputs[g.castId]?.therapistBack ?? 0), 0);
   const dayTotalMisc = castGroups.reduce((s, g) => s + (clearanceInputs[g.castId]?.miscExpenses ?? 0), 0);
@@ -480,19 +481,20 @@ export default function SalesDailySales() {
           {!loading && castGroups.length > 0 && (
             <Card className="mb-4">
               <CardContent className="py-3 px-4">
-                <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 text-center">
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 text-center">
                   {[
-                    { label: "売上", value: dayTotalSales, className: "font-bold" },
-                    { label: "報酬", value: dayTotalBack, className: "font-bold text-blue-700" },
-                    { label: "雑費", value: dayTotalMisc, className: "font-bold text-orange-600" },
-                    { label: "宿泊費", value: dayTotalAccom, className: "font-bold text-orange-600" },
-                    { label: "交通費", value: dayTotalTransport, className: "font-bold text-green-700" },
-                    { label: "その他", value: dayTotalOther, className: "font-bold text-rose-600" },
-                    { label: "給与調整", value: dayTotalSalaryAdjustments, className: "font-bold text-emerald-700" },
-                  ].map(({ label, value, className }) => (
+                    { label: "売上", displayValue: yen(dayTotalSales), className: "font-bold" },
+                    { label: "本数", displayValue: `${dayTotalReservations}本`, className: "font-bold text-violet-700" },
+                    { label: "報酬", displayValue: yen(dayTotalBack), className: "font-bold text-blue-700" },
+                    { label: "雑費", displayValue: yen(dayTotalMisc), className: "font-bold text-orange-600" },
+                    { label: "宿泊費", displayValue: yen(dayTotalAccom), className: "font-bold text-orange-600" },
+                    { label: "交通費", displayValue: yen(dayTotalTransport), className: "font-bold text-green-700" },
+                    { label: "その他", displayValue: yen(dayTotalOther), className: "font-bold text-rose-600" },
+                    { label: "給与調整", displayValue: yen(dayTotalSalaryAdjustments), className: "font-bold text-emerald-700" },
+                  ].map(({ label, displayValue, className }) => (
                     <div key={label}>
                       <p className="text-[11px] text-muted-foreground mb-0.5">{label}</p>
-                      <p className={`text-sm tabular-nums ${className}`}>{yen(value)}</p>
+                      <p className={`text-sm tabular-nums ${className}`}>{displayValue}</p>
                     </div>
                   ))}
                 </div>
@@ -525,6 +527,7 @@ export default function SalesDailySales() {
                       <thead>
                         <tr className="border-b bg-muted/30">
                           <th className="text-left px-3 py-2.5 font-semibold text-xs text-muted-foreground">セラピスト</th>
+                          <th className="text-right px-3 py-2.5 font-semibold text-xs text-muted-foreground">本数</th>
                           <th className="text-right px-3 py-2.5 font-semibold text-xs text-muted-foreground">売上</th>
                           <th className="text-right px-3 py-2.5 font-semibold text-xs text-muted-foreground">給与</th>
                           <th className="text-right px-3 py-2.5 font-semibold text-xs text-muted-foreground">店舗</th>
@@ -540,6 +543,7 @@ export default function SalesDailySales() {
                           return (
                             <tr key={g.castId} className="hover:bg-muted/20 transition-colors">
                               <td className="px-3 py-2.5 font-medium">{g.castName}</td>
+                              <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-violet-700">{g.reservations.length}本</td>
                               <td className="px-3 py-2.5 text-right tabular-nums">{yen(g.totalSales)}</td>
                               <td className="px-3 py-2.5 text-right tabular-nums text-blue-700 font-semibold">{yen(salary)}</td>
                               <td className="px-3 py-2.5 text-right tabular-nums text-green-700 font-semibold">{yen(storeShare)}</td>
@@ -555,6 +559,9 @@ export default function SalesDailySales() {
                       <tfoot>
                         <tr className="border-t bg-muted/30 font-bold">
                           <td className="px-3 py-2.5 text-xs">合計</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums text-xs text-violet-700">
+                            {dayTotalReservations}本
+                          </td>
                           <td className="px-3 py-2.5 text-right tabular-nums text-xs">
                             {yen(castGroups.reduce((s, g) => s + g.totalSales, 0))}
                           </td>
