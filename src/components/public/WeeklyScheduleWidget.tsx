@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { driveImgUrl } from "@/lib/drive";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 import { useStore } from "@/hooks/useStore";
 import { format, addDays, startOfDay } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -130,7 +131,7 @@ export function WeeklyScheduleWidget() {
         {loading ? (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
             {[1,2,3,4,5,6].map(i => (
-              <div key={i} className="aspect-[3/4] bg-white/10 rounded animate-pulse" />
+              <div key={i} className="bg-white/10 rounded animate-pulse" style={ESTAMA_CAST_PHOTO_STYLE} />
             ))}
           </div>
         ) : shifts.length === 0 ? (
@@ -148,7 +149,7 @@ export function WeeklyScheduleWidget() {
                 >
                   <div className="relative rounded overflow-hidden bg-[#2a2320]">
                     {/* Photo */}
-                    <div className="aspect-[3/4]">
+                    <div style={ESTAMA_CAST_PHOTO_STYLE}>
                       {c.photo ? (
                         <img
                           src={driveImgUrl(c.photo, 300)}

@@ -15,6 +15,7 @@ import {
   findNextAvailableStart,
   formatAvailabilityTime,
 } from "@/lib/availability";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 
 /**
  * 艶華専用トップページ（デフォルト店舗以外で "/" に表示）。
@@ -287,7 +288,7 @@ export default function EnkaHome() {
         className="rounded-xl overflow-hidden border"
         style={{ borderColor: "var(--pub-border,#4a2740)", backgroundColor: "var(--pub-card,#211320)" }}
       >
-        <div className="relative aspect-[3/4] overflow-hidden">
+        <div className="relative overflow-hidden" style={ESTAMA_CAST_PHOTO_STYLE}>
           {photo ? (
             <img src={driveImgUrl(photo, 400)} alt={name} loading="lazy" className="w-full h-full object-cover" />
           ) : (

@@ -12,6 +12,7 @@ import { useStore } from "@/hooks/useStore";
 import { getBookingKey } from "@/lib/bookingUrl";
 import { ReviewStars } from "@/components/public/ReviewStars";
 import { ReviewCategoryScores } from "@/components/public/ReviewCategoryScores";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 
 interface Cast {
   id: string;
@@ -262,49 +263,50 @@ const CastDetail = () => {
           <div className="bg-[var(--pub-card,#1a150f)] rounded-lg overflow-hidden shadow-md">
 
             {/* ── Photo carousel ── */}
-            <div className="relative bg-black">
-              {allPhotos.length > 0 ? (
-                <>
-                  <div className="overflow-hidden" ref={emblaRef}>
-                    <div className="flex">
-                      {allPhotos.map((photo, i) => (
-                        <div key={i} className="flex-[0_0_100%] min-w-0">
-                          <img
-                            src={driveImgUrl(photo, 1200)}
-                            alt={`${cast.name} ${i + 1}`}
-                            className="w-full object-cover"
-                            style={{ maxHeight: "520px", objectPosition: "top" }}
+            <div className="bg-black">
+              <div className="relative mx-auto w-full max-w-[357px]">
+                {allPhotos.length > 0 ? (
+                  <>
+                    <div className="overflow-hidden" ref={emblaRef} style={ESTAMA_CAST_PHOTO_STYLE}>
+                      <div className="flex h-full">
+                        {allPhotos.map((photo, i) => (
+                          <div key={i} className="h-full flex-[0_0_100%] min-w-0">
+                            <img
+                              src={driveImgUrl(photo, 1200)}
+                              alt={`${cast.name} ${i + 1}`}
+                              className="h-full w-full object-cover object-top"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {allPhotos.length > 1 && (
+                      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                        {allPhotos.map((_, i) => (
+                          <button key={i} onClick={() => emblaApi?.scrollTo(i)}
+                            className="w-1.5 h-1.5 rounded-full transition-all"
+                            style={{ background: i === selectedIndex ? "#fff" : "rgba(255,255,255,0.4)" }}
                           />
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full flex items-center justify-center" style={{ ...ESTAMA_CAST_PHOTO_STYLE, background: "linear-gradient(135deg, var(--pub-border,#3a2f1c), var(--pub-card2,#221b12))" }}>
+                    <span className="text-7xl font-bold text-white/60">{cast.name.charAt(0)}</span>
                   </div>
-                  {allPhotos.length > 1 && (
-                    <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                      {allPhotos.map((_, i) => (
-                        <button key={i} onClick={() => emblaApi?.scrollTo(i)}
-                          className="w-1.5 h-1.5 rounded-full transition-all"
-                          style={{ background: i === selectedIndex ? "#fff" : "rgba(255,255,255,0.4)" }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="w-full h-72 flex items-center justify-center" style={{ background: "linear-gradient(135deg, var(--pub-border,#3a2f1c), var(--pub-card2,#221b12))" }}>
-                  <span className="text-7xl font-bold text-white/60">{cast.name.charAt(0)}</span>
-                </div>
-              )}
-              {cast.tags && cast.tags.filter(t => !INTERNAL_TAGS.includes(t)).length > 0 && (
-                <div className="absolute top-3 left-3 flex flex-col gap-1">
-                  {cast.tags.filter(t => !INTERNAL_TAGS.includes(t)).map((tag, i) => (
-                    <span key={i} className="text-white text-xs font-bold px-2 py-0.5 rounded shadow"
-                      style={{ background: tag === "人気セラピスト" ? "#ef4444" : tag === "新人" ? "#ec4899" : "#3b82f6" }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+                )}
+                {cast.tags && cast.tags.filter(t => !INTERNAL_TAGS.includes(t)).length > 0 && (
+                  <div className="absolute top-3 left-3 flex flex-col gap-1">
+                    {cast.tags.filter(t => !INTERNAL_TAGS.includes(t)).map((tag, i) => (
+                      <span key={i} className="text-white text-xs font-bold px-2 py-0.5 rounded shadow"
+                        style={{ background: tag === "人気セラピスト" ? "#ef4444" : tag === "新人" ? "#ec4899" : "#3b82f6" }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Thumbnail strip */}

@@ -10,6 +10,7 @@ import o2LogoUrl from "@/assets/o2-logo.png";
 import o2BlogLogoUrl from "@/assets/o2-blog-logo.png";
 import { useStore } from "@/hooks/useStore";
 import { CastTitleBadge, useTitleBadges } from "@/components/public/CastTitleBadge";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 
 interface Cast {
   id: string;
@@ -185,9 +186,9 @@ const Casts = () => {
                             <CastTitleBadge badge={titleBadgeMap.get(cast.title_badge_id ?? "")} />
                           </div>
                           {cast.photo ? (
-                            <img src={driveImgUrl(cast.photo)} alt={cast.name} className="w-full aspect-[3/4] object-cover group-hover:scale-105 transition-transform duration-500" />
+                            <img src={driveImgUrl(cast.photo)} alt={cast.name} className="w-full object-cover group-hover:scale-105 transition-transform duration-500" style={ESTAMA_CAST_PHOTO_STYLE} />
                           ) : (
-                            <div className="w-full aspect-[3/4] bg-gradient-to-br from-[var(--pub-accent,#c6a15b)] to-[var(--pub-accent-deep,#a87c2a)] flex items-center justify-center">
+                            <div className="w-full bg-gradient-to-br from-[var(--pub-accent,#c6a15b)] to-[var(--pub-accent-deep,#a87c2a)] flex items-center justify-center" style={ESTAMA_CAST_PHOTO_STYLE}>
                               <span className="text-4xl text-white">{cast.name.charAt(0)}</span>
                             </div>
                           )}
