@@ -29,6 +29,11 @@ import {
   clickWithScopedConfirmation,
   isConfirmedEstamaSubmission,
 } from "./playwright-actions.js";
+import {
+  estamaIndividualShiftAdminUrl,
+  estamaScheduleExpectation,
+  type EstamaShiftAction,
+} from "./estama-shift-schedule.js";
 
 type QrDecoder = (
   data: Uint8ClampedArray,
@@ -1605,9 +1610,12 @@ async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, con
     admin.from("external_cast_profiles").select("*").eq("cast_id", castId).eq("provider", "estama").maybeSingle(),
   ]);
   if (!external || external.sync_status !== "synced") throw new Error("先にセラピストをエステ魂へ登録する必要があります");
-  const action = payload.action || (dummyShiftId
+  const inferredAction: EstamaShiftAction = dummyShiftId
     ? "upsert"
-    : shift?.approval_status === "approved" && shift?.status !== "cancelled" ? "upsert" : "delete");
+    : shift?.approval_status === "approved" && shift?.status !== "cancelled" ? "upsert" : "delete";
+  const action: EstamaShiftAction = payload.action === "upsert" || payload.action === "delete"
+    ? payload.action
+    : inferredAction;
   const date = String(desired.shift_date || "").slice(0, 10);
   if (!date) throw new Error("シフト日がありません");
   const window = estamaShiftWindow();
@@ -1622,33 +1630,56 @@ async function syncShift(admin: AdminClient, page: Page, job: AutomationJob, con
       range: window,
     };
   }
-  const shiftUrl = await discoverShiftAdminUrl(page, connection.configuration);
-  await page.goto(shiftUrl, { waitUntil: "domcontentloaded" });
-  await ensureAdminLogin(page);
-  await setField(page, 'input[type="date"], input[name*="date" i], select[name*="date" i]', date);
-  await page.waitForTimeout(500);
-
-  const row = await findEstamaCastRow(page, {
-    externalId: external.external_cast_id,
-    remoteName: external.remote_name,
-    localName: cast.name,
-  });
-  if (action === "delete") {
-    const off = row.getByText(/休み|非出勤|削除/, { exact: false }).first();
-    if (await off.count()) await off.click();
-    else {
-      const checkbox = row.locator('input[type="checkbox"]').first();
-      if (await checkbox.count() && await checkbox.isChecked()) await checkbox.uncheck();
-      const timeInputs = row.locator('input[type="time"], input[name*="time" i]');
-      for (let i = 0; i < await timeInputs.count(); i += 1) await timeInputs.nth(i).fill("");
-    }
-  } else {
-    const checkbox = row.locator('input[type="checkbox"]').first();
-    if (await checkbox.count() && !await checkbox.isChecked()) await checkbox.check();
-    await setTimeInRow(row, "start", String(desired.start_time));
-    await setTimeInRow(row, "end", String(desired.end_time));
+  const batchItem: EstamaShiftBatchItem = {
+    jobId: job.id,
+    shiftId: String(job.shift_id || dummyShiftId || desired.id || ""),
+    castId,
+    castName: cast.name,
+    externalId: external.external_cast_id || null,
+    remoteName: external.remote_name || null,
+    reportToken: "",
+    action,
+    shiftDate: date,
+    startTime: String(desired.start_time || ""),
+    endTime: String(desired.end_time || ""),
+  };
+  const individualShiftUrl = estamaIndividualShiftAdminUrl(external.external_cast_id);
+  let usedIndividualSchedule = false;
+  if (individualShiftUrl) {
+    await page.goto(individualShiftUrl, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    usedIndividualSchedule = await syncEstamaIndividualScheduleForm(page, batchItem);
   }
-  await clickSave(page);
+
+  if (!usedIndividualSchedule) {
+    const shiftUrl = await discoverShiftAdminUrl(page, connection.configuration);
+    await page.goto(shiftUrl, { waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    await setField(page, 'input[type="date"], input[name*="date" i], select[name*="date" i]', date);
+    await page.waitForTimeout(500);
+
+    const row = await findEstamaCastRow(page, {
+      externalId: external.external_cast_id,
+      remoteName: external.remote_name,
+      localName: cast.name,
+    });
+    if (action === "delete") {
+      const off = row.getByText(/休み|非出勤|削除/, { exact: false }).first();
+      if (await off.count()) await off.click();
+      else {
+        const checkbox = row.locator('input[type="checkbox"]').first();
+        if (await checkbox.count() && await checkbox.isChecked()) await checkbox.uncheck();
+        const timeInputs = row.locator('input[type="time"], input[name*="time" i]');
+        for (let i = 0; i < await timeInputs.count(); i += 1) await timeInputs.nth(i).fill("");
+      }
+    } else {
+      const checkbox = row.locator('input[type="checkbox"]').first();
+      if (await checkbox.count() && !await checkbox.isChecked()) await checkbox.check();
+      await setTimeInRow(row, "start", String(desired.start_time));
+      await setTimeInRow(row, "end", String(desired.end_time));
+    }
+    await clickSave(page);
+  }
   if (job.shift_id) await admin.from("shifts").update({ estama_registered: action !== "delete" }).eq("id", job.shift_id);
   if (dummyShiftId) {
     await admin.from("estama_dummy_shifts").update({ estama_registered: action !== "delete" }).eq("id", dummyShiftId);
@@ -2138,16 +2169,6 @@ export type EstamaShiftBatchInput = {
   onEvidence?: (report: EstamaShiftEvidenceReport) => Promise<void>;
 };
 
-const estamaEndTime = (startTime: string, endTime: string) => {
-  const startHour = Number(startTime.slice(0, 2));
-  const endHour = Number(endTime.slice(0, 2));
-  if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || endHour > startHour) {
-    return endTime.slice(0, 5);
-  }
-  const overnightHour = Math.min(endHour + 24, 25);
-  return `${String(overnightHour).padStart(2, "0")}:${endTime.slice(3, 5)}`;
-};
-
 async function setEstamaScheduleSelect(
   locator: Locator,
   value: string,
@@ -2387,6 +2408,27 @@ async function clickEstamaScheduleSave(page: Page, scheduleField: Locator) {
   await page.waitForTimeout(1_200);
 }
 
+async function syncEstamaIndividualScheduleForm(page: Page, item: EstamaShiftBatchItem) {
+  const scheduleName = `column[${item.shiftDate}][select]`;
+  const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
+  const end = page.locator(`select[name="${scheduleName}[select_end]"]`).first();
+  if (!await start.count() || !await end.count()) return false;
+
+  const expected = estamaScheduleExpectation(item.action, item.startTime, item.endTime);
+  const [currentStart, currentEnd] = await Promise.all([start.inputValue(), end.inputValue()]);
+  if (currentStart !== expected.start || currentEnd !== expected.end) {
+    await setEstamaScheduleSelect(start, expected.start, `${item.shiftDate}の出勤時刻`);
+    await setEstamaScheduleSelect(end, expected.end, `${item.shiftDate}の退勤時刻`);
+    await setEstamaSchedulePeriods(start, item.shiftDate, expected.start, expected.end);
+    await clickEstamaScheduleSave(page, start);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await ensureAdminLogin(page);
+    await page.waitForTimeout(600);
+  }
+  await verifyEstamaAdminSchedule(page, item);
+  return true;
+}
+
 async function verifyEstamaAdminSchedule(page: Page, item: EstamaShiftBatchItem) {
   const scheduleName = `column[${item.shiftDate}][select]`;
   const start = page.locator(`select[name="${scheduleName}[select_start]"]`).first();
@@ -2395,13 +2437,12 @@ async function verifyEstamaAdminSchedule(page: Page, item: EstamaShiftBatchItem)
     throw new Error(`保存後の${item.shiftDate}の出退勤欄が見つかりません`);
   }
 
-  const expectedStart = item.action === "delete" ? "" : item.startTime.slice(0, 5);
-  const expectedEnd = item.action === "delete" ? "" : estamaEndTime(item.startTime, item.endTime);
+  const expected = estamaScheduleExpectation(item.action, item.startTime, item.endTime);
   const [actualStart, actualEnd] = await Promise.all([start.inputValue(), end.inputValue()]);
-  if (actualStart !== expectedStart || actualEnd !== expectedEnd) {
+  if (actualStart !== expected.start || actualEnd !== expected.end) {
     throw new Error(
       `管理画面への保存不一致: ${item.shiftDate} `
-      + `${expectedStart || "未出勤"}～${expectedEnd || "未出勤"} `
+      + `${expected.start || "未出勤"}～${expected.end || "未出勤"} `
       + `(保存値 ${actualStart || "未出勤"}～${actualEnd || "未出勤"})`,
     );
   }
@@ -2490,7 +2531,7 @@ function verifyPublicScheduleText(text: string, item: EstamaShiftBatchItem) {
   }
 
   const start = item.startTime.slice(0, 5);
-  const end = estamaEndTime(item.startTime, item.endTime);
+  const end = estamaScheduleExpectation(item.action, item.startTime, item.endTime).end;
   const expected = new RegExp(`${escapeRegExp(start)}\\s*～\\s*${escapeRegExp(end)}`);
   return expected.test(dateBlock)
     ? { verified: true }
@@ -2810,9 +2851,7 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
     let stopAfterGroup = false;
     for (const group of grouped.values()) {
       const first = group[0];
-      const itemShiftUrl = first.externalId
-        ? `https://estama.jp/admin/schedule/${encodeURIComponent(first.externalId)}/`
-        : shiftUrl;
+      const itemShiftUrl = estamaIndividualShiftAdminUrl(first.externalId) || shiftUrl;
       const prepared: EstamaShiftBatchItem[] = [];
       let requiresSave = false;
       let adminError: unknown = null;
@@ -2847,30 +2886,27 @@ export async function syncEstamaShiftBatch(input: EstamaShiftBatchInput) {
             if (!await start.count() || !await end.count()) {
               throw new Error(`エステ魂の${item.shiftDate}の出退勤欄が見つかりません`);
             }
-            const expectedStart = item.action === "delete" ? "" : item.startTime.slice(0, 5);
-            const expectedEnd = item.action === "delete"
-              ? ""
-              : estamaEndTime(item.startTime, item.endTime);
+            const expected = estamaScheduleExpectation(item.action, item.startTime, item.endTime);
             const [currentStart, currentEnd] = await Promise.all([
               start.inputValue(),
               end.inputValue(),
             ]);
-            if (currentStart !== expectedStart || currentEnd !== expectedEnd) {
+            if (currentStart !== expected.start || currentEnd !== expected.end) {
               await setEstamaScheduleSelect(
                 start,
-                expectedStart,
+                expected.start,
                 `${item.shiftDate}の出勤時刻`,
               );
               await setEstamaScheduleSelect(
                 end,
-                expectedEnd,
+                expected.end,
                 `${item.shiftDate}の退勤時刻`,
               );
               await setEstamaSchedulePeriods(
                 start,
                 item.shiftDate,
-                expectedStart,
-                expectedEnd,
+                expected.start,
+                expected.end,
               );
               requiresSave = true;
             }
