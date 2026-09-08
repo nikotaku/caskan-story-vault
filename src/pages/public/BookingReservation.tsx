@@ -4,6 +4,7 @@ import { addDays, format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { User, Copy, Check, Zap, Users, LayoutGrid } from "lucide-react";
 import { driveImgUrl } from "@/lib/drive";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1023,7 +1024,7 @@ const BookingReservation = () => {
                   {nowCasts.map((cast) => (
                     <Card key={cast.id} className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => goBookCast(cast.id)}>
                       <CardContent className="p-0">
-                        <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted">
+                        <div className="overflow-hidden rounded-t-md bg-muted" style={ESTAMA_CAST_PHOTO_STYLE}>
                           {cast.photo ? (
                             <img src={driveImgUrl(cast.photo)} alt={cast.name} className="w-full h-full object-cover" />
                           ) : (
@@ -1157,7 +1158,7 @@ const BookingReservation = () => {
                           onClick={() => setSelectedCastId("none")}
                         >
                           <CardContent className="p-0">
-                            <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted flex items-center justify-center">
+                            <div className="overflow-hidden rounded-t-md bg-muted flex items-center justify-center" style={ESTAMA_CAST_PHOTO_STYLE}>
                               <User className="h-16 w-16 text-muted-foreground" />
                             </div>
                             <div className="p-4">
@@ -1188,7 +1189,7 @@ const BookingReservation = () => {
                             onClick={() => setSelectedCastId(cast.id)}
                           >
                             <CardContent className="p-0">
-                              <div className="aspect-[3/4] overflow-hidden rounded-t-md bg-muted">
+                              <div className="overflow-hidden rounded-t-md bg-muted" style={ESTAMA_CAST_PHOTO_STYLE}>
                                 {cast.photo ? (
                                   <img 
                                     src={cast.photo} 

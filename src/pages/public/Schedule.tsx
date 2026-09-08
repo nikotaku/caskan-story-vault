@@ -9,6 +9,7 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { FixedBottomBar } from "@/components/public/FixedBottomBar";
 import { useStore } from "@/hooks/useStore";
 import { CastTitleBadge, useTitleBadges } from "@/components/public/CastTitleBadge";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 import {
   DEFAULT_RESERVATION_INTERVAL_MINUTES,
   findNextAvailableStart,
@@ -277,7 +278,7 @@ const Schedule = () => {
                   className="bg-[var(--pub-card,#1a150f)] rounded shadow-sm border border-[var(--pub-border,#3a2f1c)] overflow-hidden flex flex-col"
                 >
                   {/* Photo with X icon overlay & next time */}
-                  <div className="relative aspect-[3/4] bg-[var(--pub-card2,#221b12)]">
+                  <div className="relative bg-[var(--pub-card2,#221b12)]" style={ESTAMA_CAST_PHOTO_STYLE}>
                     {shift.casts.photo ? (
                       <img
                         src={shift.casts.photo}

@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import { driveImgUrl } from "@/lib/drive";
+import { ESTAMA_CAST_PHOTO_STYLE } from "@/lib/publicCastPhoto";
 import { useStoreContact } from "@/hooks/useStoreContact";
 import { CastTitleBadge, useTitleBadges } from "@/components/public/CastTitleBadge";
 import { useStore } from "@/hooks/useStore";
@@ -265,10 +266,11 @@ const Home = () => {
                         <img
                           src={driveImgUrl(shift.casts.photo)}
                           alt={shift.casts.name}
-                          className="w-full aspect-[3/4] object-cover"
+                          className="w-full object-cover"
+                          style={ESTAMA_CAST_PHOTO_STYLE}
                         />
                       ) : (
-                        <div className="w-full aspect-[3/4] bg-gradient-to-br from-[var(--pub-light-photo,#d4b5a8)] to-[var(--pub-light-photo2,#c5a89b)] flex items-center justify-center">
+                        <div className="w-full bg-gradient-to-br from-[var(--pub-light-photo,#d4b5a8)] to-[var(--pub-light-photo2,#c5a89b)] flex items-center justify-center" style={ESTAMA_CAST_PHOTO_STYLE}>
                           <span className="text-4xl text-white">
                             {shift.casts.name.charAt(0)}
                           </span>
@@ -464,10 +466,11 @@ const TherapistCard = ({ cast }: { cast: Cast }) => {
             <img
               src={driveImgUrl(cast.photo)}
               alt={cast.name}
-              className="w-full aspect-[3/4] object-cover"
+              className="w-full object-cover"
+              style={ESTAMA_CAST_PHOTO_STYLE}
             />
           ) : (
-            <div className="w-full aspect-[3/4] bg-gradient-to-br from-[var(--pub-light-photo,#d4b5a8)] to-[var(--pub-light-photo2,#c5a89b)] flex items-center justify-center">
+            <div className="w-full bg-gradient-to-br from-[var(--pub-light-photo,#d4b5a8)] to-[var(--pub-light-photo2,#c5a89b)] flex items-center justify-center" style={ESTAMA_CAST_PHOTO_STYLE}>
               <span className="text-4xl text-white">
                 {cast.name.charAt(0)}
               </span>
